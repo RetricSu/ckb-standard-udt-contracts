@@ -2,7 +2,7 @@ use alloc::vec::Vec;
 
 use ckb_std::{
     ckb_constants::Source,
-    ckb_types::{core::ScriptHashType, prelude::*},
+    ckb_types::{core::ScriptHashType, packed::Script, prelude::*},
     error::SysError,
     high_level::{load_cell_data, load_cell_type, load_script, load_script_hash},
     type_id::check_type_id,
@@ -233,14 +233,20 @@ fn parse_script_attr_opt(data: &[u8]) -> Result<Option<ScriptAttr>, Error> {
 fn parse_script_attr(data: &[u8]) -> Result<ScriptAttr, Error> {
     let offsets = table_offsets(data, 3)?;
     let location = single_byte_field(data, offsets[0], offsets[1])?;
-    if location > 2 {
-        return Err(Error::InvalidMetaData);
-    }
-
     let script_hash = byte32_field(data, offsets[1], offsets[2])?;
     let script_opt = &data[offsets[2]..offsets[3]];
-    if location <= 2 && !script_opt.is_empty() {
-        return Err(Error::InvalidMetaData);
+
+    match location {
+        0..=2 if script_opt.is_empty() => {}
+        3 | 4 if !script_opt.is_empty() => {
+            let script = Script::from_slice(script_opt).map_err(|_| Error::InvalidMetaData)?;
+            let parsed_hash: [u8; 32] = script.calc_script_hash().unpack();
+            if parsed_hash != script_hash {
+                return Err(Error::InvalidMetaData);
+            }
+        }
+        0..=4 => return Err(Error::InvalidMetaData),
+        _ => return Err(Error::InvalidMetaData),
     }
 
     Ok(ScriptAttr {

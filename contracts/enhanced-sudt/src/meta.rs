@@ -2,7 +2,7 @@ use alloc::vec::Vec;
 
 use ckb_std::{
     ckb_constants::Source,
-    ckb_types::prelude::*,
+    ckb_types::{packed::Script, prelude::*},
     error::SysError,
     high_level::{
         load_cell_data, load_cell_lock, load_cell_lock_hash, load_cell_type_hash, load_script,
@@ -15,6 +15,7 @@ const UDT_AMOUNT_LEN: usize = 16;
 const SUDT_META_FIELDS: usize = 9;
 const CONFIG_SUPPLY_TRACKED: u8 = 0b0000_0001;
 const SUDT_ALLOWED_CONFIG_MASK: u8 = CONFIG_SUPPLY_TRACKED;
+// Current compatibility whitelist is by lock code_hash, matching the legacy implementation.
 const META_LOCK_CODE_HASH_WHITELIST: [[u8; 32]; 2] = [
     [
         0x3b, 0x52, 0x1c, 0xc4, 0xb5, 0x52, 0xf1, 0x09, 0xd0, 0x92, 0xd8, 0xcc, 0x46, 0x8a, 0x80,
@@ -183,6 +184,9 @@ fn find_meta_in_source(
 }
 
 fn parse_meta(data: &[u8]) -> Result<SudtMeta, Error> {
+    // `standard_udt_types::metadata::SudtMeta::from_slice` is intentionally not
+    // used in this RISC-V binary: it links ckb-std 0.16.x beside this contract's
+    // ckb-std 1.1.0, which produces duplicate `__atomic_*` dummy symbols.
     let offsets = table_offsets(data, SUDT_META_FIELDS)?;
     let config_flags = single_byte_field(data, offsets[0], offsets[1])?;
     if config_flags & !SUDT_ALLOWED_CONFIG_MASK != 0 {
@@ -320,17 +324,22 @@ fn parse_script_attr(data: &[u8]) -> Result<ScriptAttr, Error> {
     let script_opt = &data[offsets[2]..offsets[3]];
 
     match location {
-        0..=2 if script_opt.is_empty() => Ok(ScriptAttr {
-            location,
-            script_hash,
-        }),
-        3 | 4 if !script_opt.is_empty() => Ok(ScriptAttr {
-            location,
-            script_hash,
-        }),
-        0..=4 => Err(Error::InvalidMetaData),
-        _ => Err(Error::InvalidMetaData),
+        0..=2 if script_opt.is_empty() => {}
+        3 | 4 if !script_opt.is_empty() => {
+            let script = Script::from_slice(script_opt).map_err(|_| Error::InvalidMetaData)?;
+            let parsed_hash: [u8; 32] = script.calc_script_hash().unpack();
+            if parsed_hash != script_hash {
+                return Err(Error::InvalidMetaData);
+            }
+        }
+        0..=4 => return Err(Error::InvalidMetaData),
+        _ => return Err(Error::InvalidMetaData),
     }
+
+    Ok(ScriptAttr {
+        location,
+        script_hash,
+    })
 }
 
 fn byte32_field(data: &[u8], start: usize, end: usize) -> Result<[u8; 32], Error> {

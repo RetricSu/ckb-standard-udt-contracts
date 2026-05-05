@@ -2250,6 +2250,7 @@ name = "tests"
 version = "0.1.0"
 dependencies = [
  "ckb-testtool",
+ "ckb-types 0.120.0",
  "serde_json",
  "standard-udt-types",
 ]

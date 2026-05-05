@@ -86,6 +86,10 @@ build:
 			$(MAKE) -e -C contracts/enhanced-sudt build; \
 			enhanced_sudt_hash=$$(python3 $(TOP)/scripts/ckb-data-hash $(BUILD_DIR)/enhanced-sudt); \
 			ENHANCED_SUDT_CODE_HASH=$$enhanced_sudt_hash $(MAKE) -e -C contracts/enhanced-sudt-meta build; \
+		elif [ "$(CONTRACT)" = "enhanced-sudt" ]; then \
+			$(MAKE) -e -C contracts/enhanced-sudt build; \
+			enhanced_sudt_hash=$$(python3 $(TOP)/scripts/ckb-data-hash $(BUILD_DIR)/enhanced-sudt); \
+			ENHANCED_SUDT_CODE_HASH=$$enhanced_sudt_hash $(MAKE) -e -C contracts/enhanced-sudt-meta build; \
 		else \
 			$(MAKE) -e -C contracts/$(CONTRACT) build; \
 		fi; \

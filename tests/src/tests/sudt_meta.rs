@@ -14,12 +14,13 @@ use ckb_testtool::{
     ckb_types::{
         bytes::Bytes,
         core::{ScriptHashType, TransactionBuilder, TransactionView},
-        packed::CellInput,
+        packed::{CellInput, Script},
         prelude::*,
     },
     context::Context,
 };
-use standard_udt_types::metadata::{ScriptAttr, SudtMeta, CONFIG_SUPPLY_TRACKED};
+use ckb_types_120::{packed::Script as MetadataScript, prelude::Entity};
+use standard_udt_types::metadata::{ScriptAttr, ScriptLocation, SudtMeta, CONFIG_SUPPLY_TRACKED};
 
 fn deploy_data2_script(context: &mut Context, binary_name: &str, args: Bytes) -> DeployedScript {
     let out_point = context.deploy_cell(Loader::default().load_binary(binary_name));
@@ -105,6 +106,16 @@ fn sudt_meta_data(
     )
 }
 
+fn dynamic_linking_authority(script: Script) -> ScriptAttr {
+    let metadata_script =
+        MetadataScript::from_slice(script.as_slice()).expect("convert script bytes");
+    ScriptAttr {
+        location: ScriptLocation::DynamicLinking,
+        script_hash: script_hash(&script),
+        script: Some(metadata_script),
+    }
+}
+
 fn untracked_nonzero_meta_data(current_supply: u128) -> Bytes {
     let mut data = tracked_meta_data(current_supply).to_vec();
     let config_offset = u32::from_le_bytes(data[4..8].try_into().expect("config offset")) as usize;
@@ -119,30 +130,6 @@ fn calculate_type_id(input: &CellInput, output_index: u64) -> [u8; 32] {
     hasher.update(&output_index.to_le_bytes());
     hasher.finalize(&mut type_id);
     type_id
-}
-
-fn table_field_offsets(data: &[u8], fields: usize) -> Vec<usize> {
-    let mut offsets = Vec::with_capacity(fields + 1);
-    for index in 0..fields {
-        let start = 4 + index * 4;
-        offsets
-            .push(u32::from_le_bytes(data[start..start + 4].try_into().expect("offset")) as usize);
-    }
-    offsets.push(data.len());
-    offsets
-}
-
-fn set_metadata_authority_location(mut data: Vec<u8>, location: u8) -> Bytes {
-    let meta_offsets = table_field_offsets(&data, 9);
-    let metadata_authority_start = meta_offsets[8];
-    let metadata_authority_end = meta_offsets[9];
-    assert!(metadata_authority_end > metadata_authority_start);
-
-    let attr_offsets =
-        table_field_offsets(&data[metadata_authority_start..metadata_authority_end], 3);
-    let location_offset = metadata_authority_start + attr_offsets[0];
-    data[location_offset] = location;
-    Bytes::from(data)
 }
 
 fn create_meta_tx(
@@ -214,16 +201,16 @@ fn create_meta_tx(
 }
 
 fn update_meta_tx(input_meta_data: Bytes, output_meta_data: Bytes) -> (Context, TransactionView) {
-    update_meta_tx_with_data(|_| (input_meta_data, output_meta_data))
+    update_meta_tx_with_data(|_, _| (input_meta_data, output_meta_data))
 }
 
 fn update_meta_tx_with_data<F>(build_data: F) -> (Context, TransactionView)
 where
-    F: FnOnce([u8; 32]) -> (Bytes, Bytes),
+    F: FnOnce([u8; 32], Script) -> (Bytes, Bytes),
 {
     let mut context = Context::default();
     let lock = always_success_lock(&mut context);
-    let (input_meta_data, output_meta_data) = build_data(lock.script_hash);
+    let (input_meta_data, output_meta_data) = build_data(lock.script_hash, lock.script.clone());
     let meta = meta_script(&mut context, Bytes::from(vec![2u8; 32]));
     let input_out_point = create_typed_cell(
         &mut context,
@@ -338,7 +325,7 @@ fn sudt_meta_update_metadata_change_requires_metadata_authority() {
 
 #[test]
 fn sudt_meta_update_metadata_change_with_input_lock_authority_passes() {
-    let (context, tx) = update_meta_tx_with_data(|lock_hash| {
+    let (context, tx) = update_meta_tx_with_data(|lock_hash, _| {
         let authority = input_lock_authority(lock_hash);
         (
             sudt_meta_data(
@@ -365,7 +352,7 @@ fn sudt_meta_update_metadata_change_with_input_lock_authority_passes() {
 
 #[test]
 fn sudt_meta_update_rejects_metadata_authority_recreation() {
-    let (context, tx) = update_meta_tx_with_data(|lock_hash| {
+    let (context, tx) = update_meta_tx_with_data(|lock_hash, _| {
         (
             tracked_meta_data(0),
             sudt_meta_data(
@@ -384,7 +371,7 @@ fn sudt_meta_update_rejects_metadata_authority_recreation() {
 
 #[test]
 fn sudt_meta_update_supply_change_with_input_lock_mint_authority_passes() {
-    let (context, tx) = update_meta_tx_with_data(|lock_hash| {
+    let (context, tx) = update_meta_tx_with_data(|lock_hash, _| {
         let authority = input_lock_authority(lock_hash);
         (
             sudt_meta_data(
@@ -411,7 +398,7 @@ fn sudt_meta_update_supply_change_with_input_lock_mint_authority_passes() {
 
 #[test]
 fn sudt_meta_update_rejects_mint_authority_recreation() {
-    let (context, tx) = update_meta_tx_with_data(|lock_hash| {
+    let (context, tx) = update_meta_tx_with_data(|lock_hash, _| {
         (
             tracked_meta_data(0),
             sudt_meta_data(
@@ -430,8 +417,8 @@ fn sudt_meta_update_rejects_mint_authority_recreation() {
 
 #[test]
 fn sudt_meta_update_rejects_dynamic_linking_authority_for_now() {
-    let (context, tx) = update_meta_tx_with_data(|_| {
-        let authority = input_lock_authority([9u8; 32]);
+    let (context, tx) = update_meta_tx_with_data(|_, lock_script| {
+        let authority = dynamic_linking_authority(lock_script);
         let input_meta = sudt_meta_data(
             CONFIG_SUPPLY_TRACKED,
             0,
@@ -441,7 +428,7 @@ fn sudt_meta_update_rejects_dynamic_linking_authority_for_now() {
             Vec::new(),
         );
         (
-            set_metadata_authority_location(input_meta.to_vec(), 3),
+            input_meta,
             sudt_meta_data(
                 CONFIG_SUPPLY_TRACKED,
                 0,
@@ -453,5 +440,5 @@ fn sudt_meta_update_rejects_dynamic_linking_authority_for_now() {
         )
     });
 
-    expect_tx_fail_with_code(&context, &tx, "error code 3");
+    expect_tx_fail_with_code(&context, &tx, "error code 7");
 }
