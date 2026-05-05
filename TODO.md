@@ -12,7 +12,7 @@
 - [x] Implement enhanced xUDT.
 - [x] Implement dynamic-linking and spawn extension tests.
 - [x] Publish project docs and final standard draft.
-- [ ] Run final debug and release verification.
+- [x] Run final debug and release verification.
 
 ## Open Deployment Constants
 
