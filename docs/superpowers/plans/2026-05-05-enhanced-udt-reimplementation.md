@@ -111,7 +111,7 @@ make generate CRATE=enhanced-xudt
 make generate CRATE=access-list
 ```
 
-Expected: each command creates a contract crate under `contracts/` using `ckb-script-templates`, with its own generated `Makefile`, `Cargo.toml`, and `src/entry.rs` / `src/main.rs` structure. Root `Cargo.toml` is updated by the existing `make generate` insertion point.
+Expected: each command creates a contract crate under `contracts/` using `ckb-script-templates`, with its own generated `Makefile`, `Cargo.toml`, and `src/main.rs` / `src/main.rs` structure. Root `Cargo.toml` is updated by the existing `make generate` insertion point.
 
 - [ ] **Step 3: Generate test plugin script crates via template**
 
@@ -267,9 +267,9 @@ Run:
 
 ```bash
 test -f contracts/enhanced-sudt/Makefile
-test -f contracts/enhanced-sudt/src/entry.rs
+test -f contracts/enhanced-sudt/src/main.rs
 test -f tests/plugins/spawn-allow/Makefile
-test -f tests/plugins/spawn-allow/src/entry.rs
+test -f tests/plugins/spawn-allow/src/main.rs
 ```
 
 Expected: all commands pass, proving the script crates were generated from the template shape.
@@ -994,7 +994,7 @@ git commit -m "test: add enhanced udt fixtures"
 ### Task 5: Implement sUDT Meta Contract
 
 **Files:**
-- Modify: `contracts/enhanced-sudt-meta/src/entry.rs`
+- Modify: `contracts/enhanced-sudt-meta/src/main.rs`
 - Create: `contracts/enhanced-sudt-meta/src/error.rs`
 - Create: `contracts/enhanced-sudt-meta/src/meta_cell.rs`
 - Create: `contracts/enhanced-sudt-meta/src/update.rs`
@@ -1082,7 +1082,7 @@ git commit -m "feat: implement enhanced sudt meta"
 ### Task 6: Implement sUDT Contract
 
 **Files:**
-- Modify: `contracts/enhanced-sudt/src/entry.rs`
+- Modify: `contracts/enhanced-sudt/src/main.rs`
 - Create: `contracts/enhanced-sudt/src/error.rs`
 - Create: `contracts/enhanced-sudt/src/meta.rs`
 - Test: `tests/src/tests/sudt.rs`
@@ -1126,7 +1126,7 @@ Expected: FAIL because the contract is still a stub.
 
 - [ ] **Step 3: Implement sUDT operation flow**
 
-In `contracts/enhanced-sudt/src/entry.rs`, implement:
+In `contracts/enhanced-sudt/src/main.rs`, implement:
 
 ```rust
 sum_in == sum_out => pass
@@ -1162,7 +1162,7 @@ git commit -m "feat: implement enhanced sudt"
 ### Task 7: Implement xUDT Meta Contract
 
 **Files:**
-- Modify: `contracts/enhanced-xudt-meta/src/entry.rs`
+- Modify: `contracts/enhanced-xudt-meta/src/main.rs`
 - Create: `contracts/enhanced-xudt-meta/src/error.rs`
 - Create: `contracts/enhanced-xudt-meta/src/config.rs`
 - Create: `contracts/enhanced-xudt-meta/src/access.rs`
@@ -1239,7 +1239,7 @@ git commit -m "feat: implement enhanced xudt meta"
 ### Task 8: Implement AccessList Contract
 
 **Files:**
-- Modify: `contracts/access-list/src/entry.rs`
+- Modify: `contracts/access-list/src/main.rs`
 - Create: `contracts/access-list/src/error.rs`
 - Create: `contracts/access-list/src/mode.rs`
 - Create: `contracts/access-list/src/shards.rs`
@@ -1310,16 +1310,16 @@ git commit -m "feat: implement access list"
 ### Task 9: Implement xUDT Contract and Extensions
 
 **Files:**
-- Modify: `contracts/enhanced-xudt/src/entry.rs`
+- Modify: `contracts/enhanced-xudt/src/main.rs`
 - Create: `contracts/enhanced-xudt/src/error.rs`
 - Create: `contracts/enhanced-xudt/src/config.rs`
 - Create: `contracts/enhanced-xudt/src/access.rs`
 - Create: `contracts/enhanced-xudt/src/extensions.rs`
 - Create: `contracts/enhanced-xudt/src/meta.rs`
-- Modify: `tests/plugins/dl-allow/src/entry.rs`
-- Modify: `tests/plugins/dl-deny/src/entry.rs`
-- Modify: `tests/plugins/spawn-allow/src/entry.rs`
-- Modify: `tests/plugins/spawn-deny/src/entry.rs`
+- Modify: `tests/plugins/dl-allow/src/main.rs`
+- Modify: `tests/plugins/dl-deny/src/main.rs`
+- Modify: `tests/plugins/spawn-allow/src/main.rs`
+- Modify: `tests/plugins/spawn-deny/src/main.rs`
 - Test: `tests/src/tests/xudt.rs`
 - Test: `tests/src/tests/plugin_runtime.rs`
 
@@ -1387,7 +1387,7 @@ Expected: FAIL because the xUDT contract and test plugins are stubs.
 
 - [ ] **Step 4: Implement dynamic-linking plugins**
 
-`tests/plugins/dl-allow/src/entry.rs` exports the dynamic-linking ABI and returns success:
+`tests/plugins/dl-allow/src/main.rs` exports the dynamic-linking ABI and returns success:
 
 ```rust
 #![no_std]
@@ -1412,7 +1412,7 @@ fn program_entry() -> i8 {
 ckb_std::entry!(program_entry);
 ```
 
-`tests/plugins/dl-deny/src/entry.rs` exports the same ABI and returns failure:
+`tests/plugins/dl-deny/src/main.rs` exports the same ABI and returns failure:
 
 ```rust
 #![no_std]
@@ -1439,7 +1439,7 @@ ckb_std::entry!(program_entry);
 
 - [ ] **Step 5: Implement spawn plugins**
 
-`tests/plugins/spawn-allow/src/entry.rs` exits successfully:
+`tests/plugins/spawn-allow/src/main.rs` exits successfully:
 
 ```rust
 #![no_std]
@@ -1461,7 +1461,7 @@ fn program_entry() -> i8 {
 ckb_std::entry!(program_entry);
 ```
 
-`tests/plugins/spawn-deny/src/entry.rs` exits with failure:
+`tests/plugins/spawn-deny/src/main.rs` exits with failure:
 
 ```rust
 #![no_std]
