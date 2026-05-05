@@ -121,6 +121,30 @@ fn calculate_type_id(input: &CellInput, output_index: u64) -> [u8; 32] {
     type_id
 }
 
+fn table_field_offsets(data: &[u8], fields: usize) -> Vec<usize> {
+    let mut offsets = Vec::with_capacity(fields + 1);
+    for index in 0..fields {
+        let start = 4 + index * 4;
+        offsets
+            .push(u32::from_le_bytes(data[start..start + 4].try_into().expect("offset")) as usize);
+    }
+    offsets.push(data.len());
+    offsets
+}
+
+fn set_metadata_authority_location(mut data: Vec<u8>, location: u8) -> Bytes {
+    let meta_offsets = table_field_offsets(&data, 9);
+    let metadata_authority_start = meta_offsets[8];
+    let metadata_authority_end = meta_offsets[9];
+    assert!(metadata_authority_end > metadata_authority_start);
+
+    let attr_offsets =
+        table_field_offsets(&data[metadata_authority_start..metadata_authority_end], 3);
+    let location_offset = metadata_authority_start + attr_offsets[0];
+    data[location_offset] = location;
+    Bytes::from(data)
+}
+
 fn create_meta_tx(
     current_supply: u128,
     udt_amount: Option<u128>,
@@ -402,4 +426,32 @@ fn sudt_meta_update_rejects_mint_authority_recreation() {
     });
 
     expect_tx_fail_with_code(&context, &tx, "error code 6");
+}
+
+#[test]
+fn sudt_meta_update_rejects_dynamic_linking_authority_for_now() {
+    let (context, tx) = update_meta_tx_with_data(|_| {
+        let authority = input_lock_authority([9u8; 32]);
+        let input_meta = sudt_meta_data(
+            CONFIG_SUPPLY_TRACKED,
+            0,
+            None,
+            Some(authority),
+            Vec::new(),
+            Vec::new(),
+        );
+        (
+            set_metadata_authority_location(input_meta.to_vec(), 3),
+            sudt_meta_data(
+                CONFIG_SUPPLY_TRACKED,
+                0,
+                None,
+                None,
+                b"new name".to_vec(),
+                Vec::new(),
+            ),
+        )
+    });
+
+    expect_tx_fail_with_code(&context, &tx, "error code 3");
 }

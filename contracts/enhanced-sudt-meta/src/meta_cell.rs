@@ -233,7 +233,7 @@ fn parse_script_attr_opt(data: &[u8]) -> Result<Option<ScriptAttr>, Error> {
 fn parse_script_attr(data: &[u8]) -> Result<ScriptAttr, Error> {
     let offsets = table_offsets(data, 3)?;
     let location = single_byte_field(data, offsets[0], offsets[1])?;
-    if location > 4 {
+    if location > 2 {
         return Err(Error::InvalidMetaData);
     }
 

@@ -3,10 +3,18 @@ use std::{env, fs, path::PathBuf};
 fn main() {
     println!("cargo:rerun-if-env-changed=ENHANCED_SUDT_CODE_HASH");
 
-    let raw = env::var("ENHANCED_SUDT_CODE_HASH").expect(
-        "ENHANCED_SUDT_CODE_HASH must be set to the 64-character enhanced-sudt Data2 code hash",
-    );
-    let bytes = parse_code_hash(&raw);
+    let bytes = match env::var("ENHANCED_SUDT_CODE_HASH") {
+        Ok(raw) => parse_code_hash(&raw),
+        Err(_) if is_contract_target() => panic!(
+            "ENHANCED_SUDT_CODE_HASH must be set to the 64-character enhanced-sudt Data2 code hash"
+        ),
+        Err(_) => {
+            println!(
+                "cargo:warning=ENHANCED_SUDT_CODE_HASH not set; using zero code hash for host/library/test build"
+            );
+            [0u8; 32]
+        }
+    };
 
     let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR is set by Cargo"));
     let constants = format!(
@@ -15,6 +23,12 @@ fn main() {
     );
     fs::write(out_dir.join("generated_constants.rs"), constants)
         .expect("write generated enhanced-sudt-meta constants");
+}
+
+fn is_contract_target() -> bool {
+    env::var("TARGET")
+        .map(|target| target == "riscv64imac-unknown-none-elf")
+        .unwrap_or(false)
 }
 
 fn parse_code_hash(raw: &str) -> [u8; 32] {

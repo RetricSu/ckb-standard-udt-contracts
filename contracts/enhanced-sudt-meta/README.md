@@ -1,7 +1,12 @@
 # enhanced-sudt-meta
 
-TODO: Write this readme
+Type script for enhanced sUDT metadata cells.
 
-*This contract was bootstrapped with [ckb-script-templates].*
+The contract validates sUDT Meta creation and updates, including type-id
+creation, immutable supply-tracking mode, initial tracked supply, and metadata
+or mint authority checks.
 
-[ckb-script-templates]: https://github.com/cryptape/ckb-script-templates
+Contract builds require `ENHANCED_SUDT_CODE_HASH`, the 32-byte Data2 code hash
+of the matching `enhanced-sudt` binary. The root `Makefile` builds
+`enhanced-sudt` first and passes this value automatically for
+`make build CONTRACT=enhanced-sudt-meta`.
