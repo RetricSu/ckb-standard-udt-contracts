@@ -1,0 +1,11 @@
+array Byte32 [byte; 32];
+vector Bytes <byte>;
+vector Byte32Vec <Byte32>;
+
+table Script {
+    code_hash: Byte32,
+    hash_type: byte,
+    args: Bytes,
+}
+
+option ScriptOpt (Script);
