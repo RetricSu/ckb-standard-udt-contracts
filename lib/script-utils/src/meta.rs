@@ -14,21 +14,27 @@ pub struct VisibleMeta {
     pub data: Vec<u8>,
 }
 
+/// Finds one metadata cell visible to type scripts through cell deps or inputs.
+///
+/// This helper intentionally scans only `Source::CellDep` and `Source::Input`.
+/// Those are the stable locations used by normal metadata read/update flows:
+/// immutable reads load metadata from deps, while update transactions can expose
+/// the previous metadata cell in inputs. Outputs are excluded so a newly created
+/// or replacement metadata output does not make an otherwise valid update look
+/// non-unique. Call `find_input_meta_by_type_hash` or
+/// `find_output_meta_by_type_hash` when a contract needs location-specific
+/// state comparisons.
 pub fn find_unique_meta_by_type_hash(
     meta_type_hash: &[u8; 32],
 ) -> Result<VisibleMeta, ScriptError> {
-    let mut found = None;
+    find_unique_meta_in_sources(meta_type_hash, &[Source::CellDep, Source::Input])?
+        .ok_or(ScriptError::MetaMissing)
+}
 
-    for source in [Source::CellDep, Source::Input] {
-        if let Some(meta) = find_meta_in_source(meta_type_hash, source)? {
-            if found.is_some() {
-                return Err(ScriptError::MetaNotUnique);
-            }
-            found = Some(meta);
-        }
-    }
-
-    found.ok_or(ScriptError::MetaMissing)
+pub fn find_cell_dep_meta_by_type_hash(
+    meta_type_hash: &[u8; 32],
+) -> Result<VisibleMeta, ScriptError> {
+    find_meta_in_source(meta_type_hash, Source::CellDep)?.ok_or(ScriptError::MetaMissing)
 }
 
 pub fn find_input_meta_by_type_hash(meta_type_hash: &[u8; 32]) -> Result<VisibleMeta, ScriptError> {
@@ -39,6 +45,24 @@ pub fn find_output_meta_by_type_hash(
     meta_type_hash: &[u8; 32],
 ) -> Result<VisibleMeta, ScriptError> {
     find_meta_in_source(meta_type_hash, Source::Output)?.ok_or(ScriptError::MetaOutputMissing)
+}
+
+fn find_unique_meta_in_sources(
+    meta_type_hash: &[u8; 32],
+    sources: &[Source],
+) -> Result<Option<VisibleMeta>, ScriptError> {
+    let mut found = None;
+
+    for source in sources {
+        if let Some(meta) = find_meta_in_source(meta_type_hash, *source)? {
+            if found.is_some() {
+                return Err(ScriptError::MetaNotUnique);
+            }
+            found = Some(meta);
+        }
+    }
+
+    Ok(found)
 }
 
 fn find_meta_in_source(
