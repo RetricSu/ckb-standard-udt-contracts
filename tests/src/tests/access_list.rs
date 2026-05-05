@@ -6,7 +6,7 @@ use crate::{
         build_access_list_shard_bytes, build_xudt_meta_bytes, input_lock_authority, script_hash,
         DeployedScript,
     },
-    Loader,
+    verify_and_dump_failed_tx, Loader,
 };
 use ckb_testtool::{
     builtin::ALWAYS_SUCCESS,
@@ -87,6 +87,10 @@ fn tail_shard(start_last: u8, entries: Vec<[u8; 32]>) -> Bytes {
     build_access_list_shard_bytes(start, [0xffu8; 32], entries)
 }
 
+fn custom_shard(start: [u8; 32], end: [u8; 32], entries: Vec<[u8; 32]>) -> Bytes {
+    build_access_list_shard_bytes(start, end, entries)
+}
+
 fn full_domain_shard(entries: Vec<[u8; 32]>) -> Bytes {
     build_access_list_shard_bytes([0u8; 32], [0xffu8; 32], entries)
 }
@@ -97,9 +101,23 @@ fn entry(last: u8) -> [u8; 32] {
     value
 }
 
+fn numbered_entries(count: u16) -> Vec<[u8; 32]> {
+    (0..count)
+        .map(|number| {
+            let mut value = [0u8; 32];
+            value[..2].copy_from_slice(&number.to_be_bytes());
+            value
+        })
+        .collect()
+}
+
 struct AccessListCase {
     context: Context,
     tx: TransactionView,
+}
+
+fn expect_tx_pass_with_cycles(context: &Context, tx: &TransactionView, max_cycles: u64) {
+    verify_and_dump_failed_tx(context, tx, max_cycles).expect("tx should pass");
 }
 
 fn access_list_update_tx(
@@ -283,4 +301,25 @@ fn access_list_blacklist_rejects_boundary_rewrite_with_entry_changes() {
     );
 
     expect_tx_fail(&case.context, &case.tx);
+}
+
+#[test]
+fn access_list_blacklist_allows_large_split_preserving_entries() {
+    let entries = numbered_entries(4096);
+    let mut first_half_end = [0xffu8; 32];
+    first_half_end[0] = 0x7f;
+    let mut second_half_start = [0u8; 32];
+    second_half_start[0] = 0x80;
+
+    let case = access_list_update_tx(
+        CONFIG_ACCESS_ENABLED,
+        true,
+        vec![full_domain_shard(entries.clone())],
+        vec![
+            custom_shard([0u8; 32], first_half_end, entries),
+            custom_shard(second_half_start, [0xffu8; 32], Vec::new()),
+        ],
+    );
+
+    expect_tx_pass_with_cycles(&case.context, &case.tx, 100_000_000);
 }

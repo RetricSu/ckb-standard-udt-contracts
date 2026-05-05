@@ -14,7 +14,6 @@ pub struct AccessListShard {
     pub start: [u8; 32],
     pub end: [u8; 32],
     pub entries: Vec<[u8; 32]>,
-    raw: Vec<u8>,
 }
 
 pub fn collect_group_shards(source: Source) -> Result<Vec<AccessListShard>, Error> {
@@ -74,7 +73,7 @@ fn validate_blacklist_diff(
         return Ok(());
     }
 
-    if flatten_entries(input_shards) != flatten_entries(output_shards) {
+    if !entries_equal(input_shards, output_shards) {
         return Err(Error::InvalidShardSet);
     }
 
@@ -92,12 +91,46 @@ fn have_identical_ranges(
             .all(|(input, output)| input.start == output.start && input.end == output.end)
 }
 
-fn flatten_entries(shards: &[AccessListShard]) -> Vec<[u8; 32]> {
-    let mut entries = Vec::new();
-    for shard in shards {
-        entries.extend_from_slice(&shard.entries);
+fn entries_equal(input_shards: &[AccessListShard], output_shards: &[AccessListShard]) -> bool {
+    let mut input_shard_index = 0;
+    let mut input_entry_index = 0;
+    let mut output_shard_index = 0;
+    let mut output_entry_index = 0;
+
+    loop {
+        let input = next_entry(input_shards, &mut input_shard_index, &mut input_entry_index);
+        let output = next_entry(
+            output_shards,
+            &mut output_shard_index,
+            &mut output_entry_index,
+        );
+
+        match (input, output) {
+            (Some(input), Some(output)) if input == output => {}
+            (None, None) => return true,
+            _ => return false,
+        }
     }
-    entries
+}
+
+fn next_entry<'a>(
+    shards: &'a [AccessListShard],
+    shard_index: &mut usize,
+    entry_index: &mut usize,
+) -> Option<&'a [u8; 32]> {
+    while *shard_index < shards.len() {
+        let entries = &shards[*shard_index].entries;
+        if *entry_index < entries.len() {
+            let entry = &entries[*entry_index];
+            *entry_index += 1;
+            return Some(entry);
+        }
+
+        *shard_index += 1;
+        *entry_index = 0;
+    }
+
+    None
 }
 
 fn validate_split_merge_boundaries(
@@ -185,7 +218,6 @@ fn parse_access_list_shard(data: &[u8]) -> Result<AccessListShard, Error> {
         start,
         end,
         entries,
-        raw: data.to_vec(),
     })
 }
 
