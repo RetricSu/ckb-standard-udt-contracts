@@ -29,7 +29,8 @@ CLEAN_BUILD_DIR_FIRST := true
 BUILD_DIR := build/$(MODE)
 CONTRACTS := enhanced-sudt enhanced-sudt-meta access-list enhanced-xudt enhanced-xudt-meta
 TEST_PLUGINS := dl-allow dl-deny spawn-allow spawn-deny
-TEST_REQUIRED_BINARIES := $(addprefix $(BUILD_DIR)/,$(CONTRACTS) $(TEST_PLUGINS))
+TEST_SHARED_PLUGINS := dl-shared-allow dl-shared-deny
+TEST_REQUIRED_BINARIES := $(addprefix $(BUILD_DIR)/,$(CONTRACTS) $(TEST_PLUGINS) $(TEST_SHARED_PLUGINS))
 
 ifeq (release,$(MODE))
 	MODE_ARGS := --release
@@ -69,6 +70,9 @@ build:
 			fi; \
 		done; \
 		for plugin in $(TEST_PLUGINS); do \
+			$(MAKE) -e -C tests/plugins/$$plugin build; \
+		done; \
+		for plugin in $(TEST_SHARED_PLUGINS); do \
 			$(MAKE) -e -C tests/plugins/$$plugin build; \
 		done; \
 		for crate in $(wildcard crates/*); do \

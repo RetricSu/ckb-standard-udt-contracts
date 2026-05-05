@@ -59,6 +59,23 @@ fn xudt_script(context: &mut Context, meta_type_hash: [u8; 32]) -> DeployedScrip
     )
 }
 
+fn dynamic_library_script(context: &mut Context, binary_name: &str, args: Bytes) -> DeployedScript {
+    deploy_data_script(context, binary_name, args)
+}
+
+fn deploy_data_script(context: &mut Context, binary_name: &str, args: Bytes) -> DeployedScript {
+    let out_point = context.deploy_cell(Loader::default().load_binary(binary_name));
+    let script = context
+        .build_script_with_hash_type(&out_point, ScriptHashType::Data, args)
+        .expect("build deployed Data script");
+    let script_hash = script_hash(&script);
+    DeployedScript {
+        out_point,
+        script,
+        script_hash,
+    }
+}
+
 fn extension_attr(location: ScriptLocation, deployed: &DeployedScript) -> ScriptAttr {
     let script = MetadataScript::from_slice(deployed.script.as_slice()).expect("convert script");
     ScriptAttr {
@@ -199,11 +216,28 @@ impl PluginFixture {
 }
 
 #[test]
-fn xudt_extension_allow_plugin_fails_closed_without_shared_object() {
+fn xudt_extension_allow_plugin_passes() {
     let mut fixture = PluginFixture::new();
-    let plugin = deploy_script_with_args(&mut fixture.context, "dl-allow", Bytes::new());
+    let plugin = dynamic_library_script(&mut fixture.context, "dl-shared-allow", Bytes::new());
     let extension = extension_attr(ScriptLocation::DynamicLinking, &plugin);
     let meta_input = fixture.live_meta_input(0, 0, vec![extension.clone()]);
+    let udt_input = fixture.live_udt_input(100);
+
+    let tx = fixture
+        .transfer_tx(meta_input, udt_input)
+        .as_advanced_builder()
+        .cell_dep(cell_dep_for_script(&plugin))
+        .build();
+
+    expect_tx_pass(&fixture.context, &tx);
+}
+
+#[test]
+fn xudt_extension_deny_plugin_rejects() {
+    let mut fixture = PluginFixture::new();
+    let plugin = dynamic_library_script(&mut fixture.context, "dl-shared-deny", Bytes::new());
+    let extension = extension_attr(ScriptLocation::DynamicLinking, &plugin);
+    let meta_input = fixture.live_meta_input(0, 0, vec![extension]);
     let udt_input = fixture.live_udt_input(100);
 
     let tx = fixture
@@ -216,7 +250,7 @@ fn xudt_extension_allow_plugin_fails_closed_without_shared_object() {
 }
 
 #[test]
-fn xudt_extension_deny_plugin_rejects_without_spawn_fallback() {
+fn xudt_executable_dynamic_linking_fixture_fails_closed() {
     let mut fixture = PluginFixture::new();
     let plugin = deploy_script_with_args(&mut fixture.context, "dl-deny", Bytes::new());
     let extension = extension_attr(ScriptLocation::DynamicLinking, &plugin);
@@ -269,12 +303,12 @@ fn xudt_spawn_extension_deny_plugin_rejects() {
 #[test]
 fn xudt_mint_extension_receives_mint_authority_checked() {
     let mut fixture = PluginFixture::new();
-    let plugin = deploy_script_with_args(
+    let plugin = dynamic_library_script(
         &mut fixture.context,
-        "spawn-allow",
+        "dl-shared-allow",
         Bytes::from_static(b"require_mint_checked"),
     );
-    let extension = extension_attr(ScriptLocation::Spawn, &plugin);
+    let extension = extension_attr(ScriptLocation::DynamicLinking, &plugin);
     let meta_input = fixture.live_meta_input(CONFIG_SUPPLY_TRACKED, 0, vec![extension.clone()]);
 
     let tx = fixture
