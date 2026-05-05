@@ -376,6 +376,43 @@ fn xudt_protocol_burn_requires_mint_authority_and_updates_supply() {
 }
 
 #[test]
+fn xudt_protocol_burn_rejects_duplicate_visible_meta_dep() {
+    let mut fixture = XudtFixture::new();
+    let meta_input = fixture.live_meta_input(CONFIG_SUPPLY_TRACKED, 100, true);
+    let duplicate_meta_dep = fixture.live_meta_dep(CONFIG_SUPPLY_TRACKED, 100, true);
+    let udt_input = fixture.live_udt_input(100);
+
+    let tx = TransactionBuilder::default()
+        .input(meta_input)
+        .input(udt_input)
+        .cell_dep(cell_dep(duplicate_meta_dep.previous_output()))
+        .output(typed_output(
+            &fixture.lock.script,
+            &fixture.meta.script,
+            100_000_000_000,
+        ))
+        .output(typed_output(
+            &fixture.lock.script,
+            &fixture.xudt.script,
+            100_000_000_000,
+        ))
+        .output_data(
+            xudt_meta_data(
+                CONFIG_SUPPLY_TRACKED,
+                40,
+                Some(input_lock_authority(fixture.lock.script_hash)),
+                Vec::new(),
+            )
+            .pack(),
+        )
+        .output_data(udt_amount_bytes(40).pack())
+        .build();
+    let tx = fixture.complete(tx);
+
+    expect_tx_fail_with_code(&fixture.context, &tx, "error code 9");
+}
+
+#[test]
 fn xudt_user_destruction_skips_access_and_extensions() {
     let mut fixture = XudtFixture::new();
     let udt_input = fixture.live_udt_input(100);

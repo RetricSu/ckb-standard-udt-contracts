@@ -47,6 +47,11 @@ pub fn run() -> Result<(), Error> {
         let Some(input_meta) = meta::find_meta_in_source(&meta_type_hash, Source::Input)? else {
             return Ok(());
         };
+        let visible_meta =
+            meta::find_unique_visible_meta(&meta_type_hash)?.ok_or(Error::MetaMissing)?;
+        if visible_meta != input_meta {
+            return Err(Error::MetaNotUnique);
+        }
         validate_protocol_burn(&meta_type_hash, &input_meta, delta)
     }
 }
