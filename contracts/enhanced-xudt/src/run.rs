@@ -34,12 +34,13 @@ pub fn run() -> Result<(), Error> {
             meta::find_unique_visible_meta(&meta_type_hash)?.ok_or(Error::MetaMissing)?;
         validate_transfer(&meta_type_hash, &current_meta)
     } else if output_amount > input_amount {
-        let current_meta =
-            meta::find_unique_visible_meta(&meta_type_hash)?.ok_or(Error::MetaMissing)?;
         let delta = output_amount
             .checked_sub(input_amount)
             .ok_or(Error::AmountOverflow)?;
-        validate_mint(&meta_type_hash, &current_meta, delta)
+        match meta::find_unique_visible_meta(&meta_type_hash)? {
+            Some(current_meta) => validate_mint(&meta_type_hash, &current_meta, delta),
+            None => validate_initial_create_mint(&meta_type_hash),
+        }
     } else {
         let delta = input_amount
             .checked_sub(output_amount)
@@ -73,8 +74,21 @@ fn validate_mint(
         return Err(Error::MetaStateMismatch);
     }
     meta::require_authority(current_meta.mint_authority.as_ref())?;
-    validate_supply_delta(meta_type_hash, delta, true)?;
+    if current_meta.is_supply_tracked() {
+        validate_supply_delta(meta_type_hash, delta, true)?;
+    } else if current_meta.current_supply != 0 {
+        return Err(Error::MetaStateMismatch);
+    }
     extensions::run_extensions(Operation::Mint, &current_meta.extensions, Some(true))
+}
+
+fn validate_initial_create_mint(meta_type_hash: &[u8; 32]) -> Result<(), Error> {
+    if meta::find_meta_in_source(meta_type_hash, Source::Input)?.is_some() {
+        return Err(Error::MetaNotUnique);
+    }
+
+    meta::find_meta_in_source(meta_type_hash, Source::Output)?.ok_or(Error::MetaMissing)?;
+    Ok(())
 }
 
 fn validate_protocol_burn(
@@ -83,7 +97,11 @@ fn validate_protocol_burn(
     delta: u128,
 ) -> Result<(), Error> {
     meta::require_authority(input_meta.mint_authority.as_ref())?;
-    validate_supply_delta(meta_type_hash, delta, false)?;
+    if input_meta.is_supply_tracked() {
+        validate_supply_delta(meta_type_hash, delta, false)?;
+    } else if input_meta.current_supply != 0 {
+        return Err(Error::MetaStateMismatch);
+    }
     access::validate_if_enabled(meta_type_hash, input_meta)?;
     extensions::run_extensions(Operation::ProtocolBurn, &input_meta.extensions, None)
 }

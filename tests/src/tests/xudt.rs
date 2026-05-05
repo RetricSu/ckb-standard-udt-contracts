@@ -11,6 +11,7 @@ use crate::{
 };
 use ckb_testtool::{
     builtin::ALWAYS_SUCCESS,
+    ckb_hash::new_blake2b,
     ckb_types::{
         bytes::Bytes,
         core::{ScriptHashType, TransactionBuilder, TransactionView},
@@ -84,6 +85,15 @@ fn xudt_meta_data(
 
 fn full_domain_shard(entries: Vec<[u8; 32]>) -> Bytes {
     build_access_list_shard_bytes([0u8; 32], [0xffu8; 32], entries)
+}
+
+fn calculate_type_id(input: &CellInput, output_index: u64) -> [u8; 32] {
+    let mut type_id = [0u8; 32];
+    let mut hasher = new_blake2b();
+    hasher.update(input.as_slice());
+    hasher.update(&output_index.to_le_bytes());
+    hasher.finalize(&mut type_id);
+    type_id
 }
 
 struct XudtFixture {
@@ -341,6 +351,74 @@ fn xudt_tracked_mint_updates_supply() {
     let tx = fixture.complete(tx);
 
     expect_tx_pass(&fixture.context, &tx);
+}
+
+#[test]
+fn xudt_untracked_mint_with_meta_dep_does_not_require_meta_update() {
+    let mut fixture = XudtFixture::new();
+    let meta_dep = fixture.live_meta_dep(0, 0, true);
+    let funding = create_funding_input(&mut fixture.context, &fixture.lock.script, 100_000_000_000);
+
+    let tx = TransactionBuilder::default()
+        .input(funding)
+        .cell_dep(cell_dep(meta_dep.previous_output()))
+        .output(typed_output(
+            &fixture.lock.script,
+            &fixture.xudt.script,
+            100_000_000_000,
+        ))
+        .output_data(udt_amount_bytes(50).pack())
+        .build();
+    let tx = fixture.complete(tx);
+
+    expect_tx_pass(&fixture.context, &tx);
+}
+
+#[test]
+fn xudt_initial_create_mint_uses_output_meta() {
+    let mut context = Context::default();
+    let lock = always_success_lock(&mut context, Bytes::from(vec![1u8]));
+    let meta_out_point = context.deploy_cell(Loader::default().load_binary("enhanced-xudt-meta"));
+    let funding = create_funding_input(&mut context, &lock.script, 1_000_000_000_000);
+    let type_id = calculate_type_id(&funding, 0);
+    let meta = {
+        let script = context
+            .build_script_with_hash_type(
+                &meta_out_point,
+                ScriptHashType::Data2,
+                Bytes::from(type_id.to_vec()),
+            )
+            .expect("build deployed Data2 meta script");
+        let script_hash = script_hash(&script);
+        DeployedScript {
+            out_point: meta_out_point,
+            script,
+            script_hash,
+        }
+    };
+    let xudt = xudt_script(&mut context, meta.script_hash);
+
+    let tx = TransactionBuilder::default()
+        .input(funding)
+        .output(typed_output(&lock.script, &meta.script, 100_000_000_000))
+        .output(typed_output(&lock.script, &xudt.script, 100_000_000_000))
+        .output_data(
+            xudt_meta_data(
+                CONFIG_SUPPLY_TRACKED,
+                50,
+                Some(input_lock_authority(lock.script_hash)),
+                Vec::new(),
+            )
+            .pack(),
+        )
+        .output_data(udt_amount_bytes(50).pack())
+        .cell_dep(cell_dep_for_script(&lock))
+        .cell_dep(cell_dep_for_script(&meta))
+        .cell_dep(cell_dep_for_script(&xudt))
+        .build();
+    let tx = context.complete_tx(tx);
+
+    expect_tx_pass(&context, &tx);
 }
 
 #[test]
