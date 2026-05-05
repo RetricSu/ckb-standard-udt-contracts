@@ -23,10 +23,10 @@ Use these new paths and package names:
 - `contracts/enhanced-xudt-meta` package `enhanced-xudt-meta`
 - `contracts/enhanced-xudt` package `enhanced-xudt`
 - `contracts/access-list` package `access-list`
-- `tests/plugins/dl-allow` package `test-dl-allow`
-- `tests/plugins/dl-deny` package `test-dl-deny`
-- `tests/plugins/spawn-allow` package `test-spawn-allow`
-- `tests/plugins/spawn-deny` package `test-spawn-deny`
+- `tests/plugins/dl-allow` package `dl-allow`
+- `tests/plugins/dl-deny` package `dl-deny`
+- `tests/plugins/spawn-allow` package `spawn-allow`
+- `tests/plugins/spawn-deny` package `spawn-deny`
 
 Use these public type names:
 
@@ -45,6 +45,7 @@ Legacy `ref/old` code may be copied in small pieces during implementation, but a
 - Existing standard drafts: `ref/CKB Enhanced UDT Standard.md`, `ref/Enhanced UDT Standard V1.md`
 - Legacy implementation reference only: `ref/old/`
 - CKB programming model: `ref/ckb-programming-model.md`
+- Local agent constraints: `agents.md`
 - Build/test contract: `Makefile`
 
 ## New File Structure
@@ -70,70 +71,72 @@ Legacy `ref/old` code may be copied in small pieces during implementation, but a
 
 ---
 
-### Task 1: Create Clean Workspace Skeleton
+### Task 1: Generate Script Crates From Templates
 
 **Files:**
 - Modify: `Cargo.toml`
 - Modify: `Makefile`
 - Create: `lib/types/Cargo.toml`
 - Create: `lib/script-utils/Cargo.toml`
-- Create: `contracts/enhanced-sudt-meta/Cargo.toml`
-- Create: `contracts/enhanced-sudt/Cargo.toml`
-- Create: `contracts/enhanced-xudt-meta/Cargo.toml`
-- Create: `contracts/enhanced-xudt/Cargo.toml`
-- Create: `contracts/access-list/Cargo.toml`
-- Create: `tests/plugins/dl-allow/Cargo.toml`
-- Create: `tests/plugins/dl-deny/Cargo.toml`
-- Create: `tests/plugins/spawn-allow/Cargo.toml`
-- Create: `tests/plugins/spawn-deny/Cargo.toml`
+- Generate: `contracts/enhanced-sudt-meta/`
+- Generate: `contracts/enhanced-sudt/`
+- Generate: `contracts/enhanced-xudt-meta/`
+- Generate: `contracts/enhanced-xudt/`
+- Generate: `contracts/access-list/`
+- Generate: `tests/plugins/dl-allow/`
+- Generate: `tests/plugins/dl-deny/`
+- Generate: `tests/plugins/spawn-allow/`
+- Generate: `tests/plugins/spawn-deny/`
 - Test: `cargo metadata --no-deps --format-version 1`
 
-- [ ] **Step 1: Create directories**
+- [ ] **Step 1: Verify template generator is available**
+
+Run:
+
+```bash
+cargo generate --version
+```
+
+Expected: PASS and prints a `cargo-generate` version. If missing, install it with `cargo install cargo-generate` and rerun the version check.
+
+- [ ] **Step 2: Generate core contract crates via Makefile**
+
+Run these commands from the repository root:
+
+```bash
+make generate CRATE=enhanced-sudt-meta
+make generate CRATE=enhanced-sudt
+make generate CRATE=enhanced-xudt-meta
+make generate CRATE=enhanced-xudt
+make generate CRATE=access-list
+```
+
+Expected: each command creates a contract crate under `contracts/` using `ckb-script-templates`, with its own generated `Makefile`, `Cargo.toml`, and `src/entry.rs` / `src/main.rs` structure. Root `Cargo.toml` is updated by the existing `make generate` insertion point.
+
+- [ ] **Step 3: Generate test plugin script crates via template**
+
+Run:
+
+```bash
+make generate CRATE=dl-allow DESTINATION=tests/plugins
+make generate CRATE=dl-deny DESTINATION=tests/plugins
+make generate CRATE=spawn-allow DESTINATION=tests/plugins
+make generate CRATE=spawn-deny DESTINATION=tests/plugins
+```
+
+Expected: each plugin crate is generated from the same contract template under `tests/plugins/`. Root `Cargo.toml` includes these members.
+
+- [ ] **Step 4: Create shared library directories**
 
 Run:
 
 ```bash
 mkdir -p lib/types/src/schemas lib/types/src/generated lib/script-utils/src
-mkdir -p contracts/enhanced-sudt-meta/src contracts/enhanced-sudt/src
-mkdir -p contracts/enhanced-xudt-meta/src contracts/enhanced-xudt/src
-mkdir -p contracts/access-list/src
-mkdir -p tests/plugins/dl-allow/src tests/plugins/dl-deny/src
-mkdir -p tests/plugins/spawn-allow/src tests/plugins/spawn-deny/src
 ```
 
-Expected: all listed directories exist.
+Expected: shared library directories exist. These are not script crates and are intentionally not generated from `ckb-script-templates`.
 
-- [ ] **Step 2: Replace workspace members**
-
-Edit root `Cargo.toml`:
-
-```toml
-[workspace]
-resolver = "2"
-
-members = [
-  "lib/types",
-  "lib/script-utils",
-  "contracts/enhanced-sudt-meta",
-  "contracts/enhanced-sudt",
-  "contracts/enhanced-xudt-meta",
-  "contracts/enhanced-xudt",
-  "contracts/access-list",
-  "tests/plugins/dl-allow",
-  "tests/plugins/dl-deny",
-  "tests/plugins/spawn-allow",
-  "tests/plugins/spawn-deny",
-  "tests",
-]
-
-[profile.release]
-overflow-checks = true
-strip = false
-codegen-units = 1
-debug = true
-```
-
-- [ ] **Step 3: Add shared crate manifests**
+- [ ] **Step 5: Add shared crate manifests**
 
 Create `lib/types/Cargo.toml`:
 
@@ -174,82 +177,9 @@ default = []
 native-simulator = ["ckb-std/native-simulator"]
 ```
 
-- [ ] **Step 4: Add contract manifests**
+- [ ] **Step 6: Add shared library modules**
 
-For `contracts/enhanced-sudt-meta/Cargo.toml`:
-
-```toml
-[package]
-name = "enhanced-sudt-meta"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-ckb-std = "0.16.3"
-standard-udt-types = { path = "../../lib/types", default-features = false, features = ["no-std"] }
-standard-udt-script-utils = { path = "../../lib/script-utils", default-features = false }
-
-[features]
-default = []
-native-simulator = ["ckb-std/native-simulator"]
-```
-
-Use the same manifest for `enhanced-sudt`, `enhanced-xudt-meta`, `enhanced-xudt`, and `access-list`, changing only `package.name`.
-
-For `tests/plugins/dl-allow/Cargo.toml`:
-
-```toml
-[package]
-name = "test-dl-allow"
-version = "0.1.0"
-edition = "2021"
-
-[dependencies]
-ckb-std = "0.16.3"
-
-[features]
-default = []
-native-simulator = ["ckb-std/native-simulator"]
-```
-
-Use the same manifest for `tests/plugins/dl-deny`, `tests/plugins/spawn-allow`, and `tests/plugins/spawn-deny`, changing only `package.name` to `test-dl-deny`, `test-spawn-allow`, and `test-spawn-deny`.
-
-- [ ] **Step 5: Update Makefile contract list**
-
-In `Makefile`, replace the existing contract-list variable with:
-
-```make
-CONTRACTS := enhanced-sudt-meta enhanced-sudt enhanced-xudt-meta enhanced-xudt access-list
-TEST_REQUIRED_BINARIES := $(addprefix $(BUILD_DIR)/,$(CONTRACTS))
-```
-
-Replace later references to the old contract-list variable with `$(CONTRACTS)`.
-
-Add test plugin binaries separately:
-
-```make
-TEST_PLUGINS := test-dl-allow test-dl-deny test-spawn-allow test-spawn-deny
-TEST_REQUIRED_BINARIES := $(addprefix $(BUILD_DIR)/,$(CONTRACTS) $(TEST_PLUGINS))
-```
-
-In the `build` target, after building contracts, build each package in `$(TEST_PLUGINS)` and copy its resulting binary to `$(BUILD_DIR)` under the package name.
-
-- [ ] **Step 6: Add minimal entry files**
-
-For each contract crate, create `src/main.rs`:
-
-```rust
-#![no_std]
-#![no_main]
-
-ckb_std::entry!(program_entry);
-
-fn program_entry() -> i8 {
-    0
-}
-```
-
-For `lib/types/src/lib.rs`:
+Create `lib/types/src/lib.rs`:
 
 ```rust
 #![cfg_attr(not(feature = "std"), no_std)]
@@ -261,7 +191,13 @@ pub mod generated;
 pub mod metadata;
 ```
 
-For `lib/script-utils/src/lib.rs`:
+Create `lib/types/src/error.rs`, `lib/types/src/metadata.rs`, and `lib/types/src/generated/mod.rs` with:
+
+```rust
+// Module filled by later tasks.
+```
+
+Create `lib/script-utils/src/lib.rs`:
 
 ```rust
 #![no_std]
@@ -275,13 +211,70 @@ pub mod meta;
 pub mod supply;
 ```
 
-Create empty module files named in `lib.rs` with at least:
+Create `lib/script-utils/src/amount.rs`, `lib/script-utils/src/authority.rs`, `lib/script-utils/src/error.rs`, `lib/script-utils/src/meta.rs`, and `lib/script-utils/src/supply.rs` with:
 
 ```rust
 // Module filled by later tasks.
 ```
 
-- [ ] **Step 7: Verify workspace metadata**
+- [ ] **Step 7: Add shared library members to workspace**
+
+Keep the generated contract/plugin member entries inserted by `make generate`. Add only the two shared library members manually near the top of root `Cargo.toml`:
+
+```toml
+"lib/types",
+"lib/script-utils",
+```
+
+Do not replace generated member entries. Do not remove the `# @@INSERTION_POINT@@` comment.
+
+- [ ] **Step 8: Update Makefile build set using generated crate names**
+
+In `Makefile`, replace the current `V1_CONTRACTS := ...` line with:
+
+```make
+CONTRACTS := enhanced-sudt-meta enhanced-sudt enhanced-xudt-meta enhanced-xudt access-list
+TEST_PLUGINS := dl-allow dl-deny spawn-allow spawn-deny
+TEST_REQUIRED_BINARIES := $(addprefix $(BUILD_DIR)/,$(CONTRACTS) $(TEST_PLUGINS))
+```
+
+Replace only build/test loops that refer to `$(V1_CONTRACTS)` with `$(CONTRACTS)`.
+
+After the contract build loop in the `build` target, add a test plugin build loop that preserves template crate Makefiles:
+
+```make
+		for plugin in $(TEST_PLUGINS); do \
+			$(MAKE) -e -C tests/plugins/$$plugin build; \
+		done; \
+```
+
+Do not replace generated contract Makefiles with direct `cargo build --target ...` calls.
+
+- [ ] **Step 9: Add shared dependencies to generated script crates**
+
+Edit each generated core contract `Cargo.toml` under `contracts/enhanced-sudt-meta`, `contracts/enhanced-sudt`, `contracts/enhanced-xudt-meta`, `contracts/enhanced-xudt`, and `contracts/access-list` by adding:
+
+```toml
+standard-udt-types = { path = "../../lib/types", default-features = false, features = ["no-std"] }
+standard-udt-script-utils = { path = "../../lib/script-utils", default-features = false }
+```
+
+For plugin crates under `tests/plugins/`, keep the generated template dependencies only at this stage.
+
+- [ ] **Step 10: Verify no hand-rolled script skeleton**
+
+Run:
+
+```bash
+test -f contracts/enhanced-sudt/Makefile
+test -f contracts/enhanced-sudt/src/entry.rs
+test -f tests/plugins/spawn-allow/Makefile
+test -f tests/plugins/spawn-allow/src/entry.rs
+```
+
+Expected: all commands pass, proving the script crates were generated from the template shape.
+
+- [ ] **Step 11: Verify workspace metadata**
 
 Run:
 
@@ -291,12 +284,12 @@ cargo metadata --no-deps --format-version 1
 
 Expected: PASS and output contains the new package names.
 
-- [ ] **Step 8: Commit skeleton**
+- [ ] **Step 12: Commit generated skeleton**
 
 Run:
 
 ```bash
-git add Cargo.toml Makefile lib contracts
+git add Cargo.toml Makefile lib contracts tests/plugins
 git commit -m "chore: create enhanced udt workspace"
 ```
 
@@ -975,7 +968,7 @@ pub fn cell_dep_for_script(
 }
 ```
 
-Spawn extension tests must use `deploy_script_with_args(context, "test-spawn-allow", Bytes::new())` or `test-spawn-deny`, put `deployed.script_hash` and `Some(deployed.script.clone())` into the Meta `ScriptAttr`, and explicitly add `cell_dep_for_script(&deployed)` to the transaction.
+Spawn extension tests must use `deploy_script_with_args(context, "spawn-allow", Bytes::new())` or `spawn-deny`, put `deployed.script_hash` and `Some(deployed.script.clone())` into the Meta `ScriptAttr`, and explicitly add `cell_dep_for_script(&deployed)` to the transaction.
 
 - [ ] **Step 5: Compile tests**
 
@@ -1001,7 +994,7 @@ git commit -m "test: add enhanced udt fixtures"
 ### Task 5: Implement sUDT Meta Contract
 
 **Files:**
-- Modify: `contracts/enhanced-sudt-meta/src/main.rs`
+- Modify: `contracts/enhanced-sudt-meta/src/entry.rs`
 - Create: `contracts/enhanced-sudt-meta/src/error.rs`
 - Create: `contracts/enhanced-sudt-meta/src/meta_cell.rs`
 - Create: `contracts/enhanced-sudt-meta/src/update.rs`
@@ -1089,7 +1082,7 @@ git commit -m "feat: implement enhanced sudt meta"
 ### Task 6: Implement sUDT Contract
 
 **Files:**
-- Modify: `contracts/enhanced-sudt/src/main.rs`
+- Modify: `contracts/enhanced-sudt/src/entry.rs`
 - Create: `contracts/enhanced-sudt/src/error.rs`
 - Create: `contracts/enhanced-sudt/src/meta.rs`
 - Test: `tests/src/tests/sudt.rs`
@@ -1133,7 +1126,7 @@ Expected: FAIL because the contract is still a stub.
 
 - [ ] **Step 3: Implement sUDT operation flow**
 
-In `contracts/enhanced-sudt/src/main.rs`, implement:
+In `contracts/enhanced-sudt/src/entry.rs`, implement:
 
 ```rust
 sum_in == sum_out => pass
@@ -1169,7 +1162,7 @@ git commit -m "feat: implement enhanced sudt"
 ### Task 7: Implement xUDT Meta Contract
 
 **Files:**
-- Modify: `contracts/enhanced-xudt-meta/src/main.rs`
+- Modify: `contracts/enhanced-xudt-meta/src/entry.rs`
 - Create: `contracts/enhanced-xudt-meta/src/error.rs`
 - Create: `contracts/enhanced-xudt-meta/src/config.rs`
 - Create: `contracts/enhanced-xudt-meta/src/access.rs`
@@ -1246,7 +1239,7 @@ git commit -m "feat: implement enhanced xudt meta"
 ### Task 8: Implement AccessList Contract
 
 **Files:**
-- Modify: `contracts/access-list/src/main.rs`
+- Modify: `contracts/access-list/src/entry.rs`
 - Create: `contracts/access-list/src/error.rs`
 - Create: `contracts/access-list/src/mode.rs`
 - Create: `contracts/access-list/src/shards.rs`
@@ -1317,16 +1310,16 @@ git commit -m "feat: implement access list"
 ### Task 9: Implement xUDT Contract and Extensions
 
 **Files:**
-- Modify: `contracts/enhanced-xudt/src/main.rs`
+- Modify: `contracts/enhanced-xudt/src/entry.rs`
 - Create: `contracts/enhanced-xudt/src/error.rs`
 - Create: `contracts/enhanced-xudt/src/config.rs`
 - Create: `contracts/enhanced-xudt/src/access.rs`
 - Create: `contracts/enhanced-xudt/src/extensions.rs`
 - Create: `contracts/enhanced-xudt/src/meta.rs`
-- Modify: `tests/plugins/dl-allow/src/main.rs`
-- Modify: `tests/plugins/dl-deny/src/main.rs`
-- Modify: `tests/plugins/spawn-allow/src/main.rs`
-- Modify: `tests/plugins/spawn-deny/src/main.rs`
+- Modify: `tests/plugins/dl-allow/src/entry.rs`
+- Modify: `tests/plugins/dl-deny/src/entry.rs`
+- Modify: `tests/plugins/spawn-allow/src/entry.rs`
+- Modify: `tests/plugins/spawn-deny/src/entry.rs`
 - Test: `tests/src/tests/xudt.rs`
 - Test: `tests/src/tests/plugin_runtime.rs`
 
@@ -1394,7 +1387,7 @@ Expected: FAIL because the xUDT contract and test plugins are stubs.
 
 - [ ] **Step 4: Implement dynamic-linking plugins**
 
-`tests/plugins/dl-allow/src/main.rs` exports the dynamic-linking ABI and returns success:
+`tests/plugins/dl-allow/src/entry.rs` exports the dynamic-linking ABI and returns success:
 
 ```rust
 #![no_std]
@@ -1419,7 +1412,7 @@ fn program_entry() -> i8 {
 ckb_std::entry!(program_entry);
 ```
 
-`tests/plugins/dl-deny/src/main.rs` exports the same ABI and returns failure:
+`tests/plugins/dl-deny/src/entry.rs` exports the same ABI and returns failure:
 
 ```rust
 #![no_std]
@@ -1446,7 +1439,7 @@ ckb_std::entry!(program_entry);
 
 - [ ] **Step 5: Implement spawn plugins**
 
-`tests/plugins/spawn-allow/src/main.rs` exits successfully:
+`tests/plugins/spawn-allow/src/entry.rs` exits successfully:
 
 ```rust
 #![no_std]
@@ -1468,7 +1461,7 @@ fn program_entry() -> i8 {
 ckb_std::entry!(program_entry);
 ```
 
-`tests/plugins/spawn-deny/src/main.rs` exits with failure:
+`tests/plugins/spawn-deny/src/entry.rs` exits with failure:
 
 ```rust
 #![no_std]
@@ -1633,10 +1626,10 @@ enhanced-sudt
 enhanced-xudt-meta
 enhanced-xudt
 access-list
-test-dl-allow
-test-dl-deny
-test-spawn-allow
-test-spawn-deny
+dl-allow
+dl-deny
+spawn-allow
+spawn-deny
 ```
 
 - [ ] **Step 2: Run debug tests**
