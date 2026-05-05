@@ -1,0 +1,82 @@
+use ckb_testtool::ckb_types::{bytes::Bytes, packed::Script, prelude::*};
+use standard_udt_types::metadata::{
+    AccessListRange, AccessListShard, ScriptAttr, ScriptLocation, SudtMeta, XudtMeta,
+};
+
+pub struct DeployedScript {
+    pub out_point: ckb_testtool::ckb_types::packed::OutPoint,
+    pub script: Script,
+    pub script_hash: [u8; 32],
+}
+
+pub fn input_lock_authority(script_hash: [u8; 32]) -> ScriptAttr {
+    ScriptAttr {
+        location: ScriptLocation::InputLock,
+        script_hash,
+        script: None,
+    }
+}
+
+pub fn build_sudt_meta_bytes(
+    config_flags: u8,
+    current_supply: u128,
+    mint_authority: Option<ScriptAttr>,
+    metadata_authority: Option<ScriptAttr>,
+) -> Bytes {
+    let metadata = SudtMeta {
+        config_flags,
+        current_supply,
+        decimals: 0,
+        name: Vec::new(),
+        symbol: Vec::new(),
+        uri: Vec::new(),
+        extra_data: Vec::new(),
+        mint_authority,
+        metadata_authority,
+    };
+    Bytes::from(metadata.to_bytes().expect("build SudtMeta bytes"))
+}
+
+pub fn build_xudt_meta_bytes(
+    config_flags: u8,
+    current_supply: u128,
+    mint_authority: Option<ScriptAttr>,
+    metadata_authority: Option<ScriptAttr>,
+    access_authority: Option<ScriptAttr>,
+    extensions: Vec<ScriptAttr>,
+) -> Bytes {
+    let metadata = XudtMeta {
+        config_flags,
+        current_supply,
+        decimals: 0,
+        name: Vec::new(),
+        symbol: Vec::new(),
+        uri: Vec::new(),
+        extra_data: Vec::new(),
+        mint_authority,
+        metadata_authority,
+        access_authority,
+        extensions,
+    };
+    Bytes::from(metadata.to_bytes().expect("build XudtMeta bytes"))
+}
+
+pub fn build_access_list_shard_bytes(
+    start: [u8; 32],
+    end: [u8; 32],
+    entries: Vec<[u8; 32]>,
+) -> Bytes {
+    let shard = AccessListShard {
+        range: AccessListRange { start, end },
+        entries,
+    };
+    Bytes::from(shard.to_bytes().expect("build AccessListShard bytes"))
+}
+
+pub fn udt_amount_bytes(amount: u128) -> Bytes {
+    Bytes::from(amount.to_le_bytes().to_vec())
+}
+
+pub fn script_hash(script: &Script) -> [u8; 32] {
+    script.calc_script_hash().unpack()
+}

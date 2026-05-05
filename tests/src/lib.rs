@@ -11,7 +11,8 @@ use std::fs;
 use std::path::PathBuf;
 use std::str::FromStr;
 
-pub mod helpers;
+pub mod fixtures;
+pub mod metadata_builders;
 #[cfg(test)]
 mod tests;
 
@@ -111,7 +112,9 @@ pub fn verify_and_dump_failed_tx(
                     Ok(mock_tx) => match serde_json::to_string_pretty(&mock_tx) {
                         Ok(json) => match std::fs::write(&file_path, json) {
                             Ok(()) => println!("Failed tx written to {:?}", file_path),
-                            Err(err) => eprintln!("Failed to write tx dump {:?}: {}", file_path, err),
+                            Err(err) => {
+                                eprintln!("Failed to write tx dump {:?}: {}", file_path, err)
+                            }
                         },
                         Err(err) => eprintln!("Failed to serialize dumped tx: {}", err),
                     },

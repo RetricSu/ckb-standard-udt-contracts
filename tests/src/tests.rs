@@ -1,3 +1,8 @@
+use ckb_testtool::{
+    ckb_types::{bytes::Bytes, core::TransactionBuilder, packed::*, prelude::*},
+    context::Context,
+};
+
 mod common;
 
 // generated unit test for contract enhanced-sudt-meta
@@ -15,7 +20,7 @@ fn test_enhanced_sudt_meta() {
     // prepare cells
     let input_out_point = context.create_cell(
         CellOutput::new_builder()
-            .capacity(1000)
+            .capacity(1000.pack())
             .lock(lock_script.clone())
             .build(),
         Bytes::new(),
@@ -25,11 +30,11 @@ fn test_enhanced_sudt_meta() {
         .build();
     let outputs = vec![
         CellOutput::new_builder()
-            .capacity(500)
+            .capacity(500.pack())
             .lock(lock_script.clone())
             .build(),
         CellOutput::new_builder()
-            .capacity(500)
+            .capacity(500.pack())
             .lock(lock_script)
             .build(),
     ];
@@ -66,7 +71,7 @@ fn test_enhanced_sudt() {
     // prepare cells
     let input_out_point = context.create_cell(
         CellOutput::new_builder()
-            .capacity(1000)
+            .capacity(1000.pack())
             .lock(lock_script.clone())
             .build(),
         Bytes::new(),
@@ -76,11 +81,11 @@ fn test_enhanced_sudt() {
         .build();
     let outputs = vec![
         CellOutput::new_builder()
-            .capacity(500)
+            .capacity(500.pack())
             .lock(lock_script.clone())
             .build(),
         CellOutput::new_builder()
-            .capacity(500)
+            .capacity(500.pack())
             .lock(lock_script)
             .build(),
     ];
@@ -117,7 +122,7 @@ fn test_enhanced_xudt_meta() {
     // prepare cells
     let input_out_point = context.create_cell(
         CellOutput::new_builder()
-            .capacity(1000)
+            .capacity(1000.pack())
             .lock(lock_script.clone())
             .build(),
         Bytes::new(),
@@ -127,11 +132,11 @@ fn test_enhanced_xudt_meta() {
         .build();
     let outputs = vec![
         CellOutput::new_builder()
-            .capacity(500)
+            .capacity(500.pack())
             .lock(lock_script.clone())
             .build(),
         CellOutput::new_builder()
-            .capacity(500)
+            .capacity(500.pack())
             .lock(lock_script)
             .build(),
     ];
@@ -168,7 +173,7 @@ fn test_enhanced_xudt() {
     // prepare cells
     let input_out_point = context.create_cell(
         CellOutput::new_builder()
-            .capacity(1000)
+            .capacity(1000.pack())
             .lock(lock_script.clone())
             .build(),
         Bytes::new(),
@@ -178,11 +183,11 @@ fn test_enhanced_xudt() {
         .build();
     let outputs = vec![
         CellOutput::new_builder()
-            .capacity(500)
+            .capacity(500.pack())
             .lock(lock_script.clone())
             .build(),
         CellOutput::new_builder()
-            .capacity(500)
+            .capacity(500.pack())
             .lock(lock_script)
             .build(),
     ];
@@ -219,7 +224,7 @@ fn test_access_list() {
     // prepare cells
     let input_out_point = context.create_cell(
         CellOutput::new_builder()
-            .capacity(1000)
+            .capacity(1000.pack())
             .lock(lock_script.clone())
             .build(),
         Bytes::new(),
@@ -229,11 +234,11 @@ fn test_access_list() {
         .build();
     let outputs = vec![
         CellOutput::new_builder()
-            .capacity(500)
+            .capacity(500.pack())
             .lock(lock_script.clone())
             .build(),
         CellOutput::new_builder()
-            .capacity(500)
+            .capacity(500.pack())
             .lock(lock_script)
             .build(),
     ];
@@ -270,7 +275,7 @@ fn test_dl_allow() {
     // prepare cells
     let input_out_point = context.create_cell(
         CellOutput::new_builder()
-            .capacity(1000)
+            .capacity(1000.pack())
             .lock(lock_script.clone())
             .build(),
         Bytes::new(),
@@ -280,11 +285,11 @@ fn test_dl_allow() {
         .build();
     let outputs = vec![
         CellOutput::new_builder()
-            .capacity(500)
+            .capacity(500.pack())
             .lock(lock_script.clone())
             .build(),
         CellOutput::new_builder()
-            .capacity(500)
+            .capacity(500.pack())
             .lock(lock_script)
             .build(),
     ];
@@ -321,7 +326,7 @@ fn test_dl_deny() {
     // prepare cells
     let input_out_point = context.create_cell(
         CellOutput::new_builder()
-            .capacity(1000)
+            .capacity(1000.pack())
             .lock(lock_script.clone())
             .build(),
         Bytes::new(),
@@ -331,11 +336,11 @@ fn test_dl_deny() {
         .build();
     let outputs = vec![
         CellOutput::new_builder()
-            .capacity(500)
+            .capacity(500.pack())
             .lock(lock_script.clone())
             .build(),
         CellOutput::new_builder()
-            .capacity(500)
+            .capacity(500.pack())
             .lock(lock_script)
             .build(),
     ];
@@ -372,7 +377,7 @@ fn test_spawn_allow() {
     // prepare cells
     let input_out_point = context.create_cell(
         CellOutput::new_builder()
-            .capacity(1000)
+            .capacity(1000.pack())
             .lock(lock_script.clone())
             .build(),
         Bytes::new(),
@@ -382,11 +387,11 @@ fn test_spawn_allow() {
         .build();
     let outputs = vec![
         CellOutput::new_builder()
-            .capacity(500)
+            .capacity(500.pack())
             .lock(lock_script.clone())
             .build(),
         CellOutput::new_builder()
-            .capacity(500)
+            .capacity(500.pack())
             .lock(lock_script)
             .build(),
     ];
@@ -423,7 +428,7 @@ fn test_spawn_deny() {
     // prepare cells
     let input_out_point = context.create_cell(
         CellOutput::new_builder()
-            .capacity(1000)
+            .capacity(1000.pack())
             .lock(lock_script.clone())
             .build(),
         Bytes::new(),
@@ -433,11 +438,11 @@ fn test_spawn_deny() {
         .build();
     let outputs = vec![
         CellOutput::new_builder()
-            .capacity(500)
+            .capacity(500.pack())
             .lock(lock_script.clone())
             .build(),
         CellOutput::new_builder()
-            .capacity(500)
+            .capacity(500.pack())
             .lock(lock_script)
             .build(),
     ];
