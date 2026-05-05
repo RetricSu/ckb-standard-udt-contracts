@@ -8,21 +8,26 @@ use ckb_std::{
     type_id::check_type_id,
 };
 
-use crate::error::Error;
+use crate::{constants::ENHANCED_SUDT_CODE_HASH, error::Error};
 
 pub const CONFIG_SUPPLY_TRACKED: u8 = 0b0000_0001;
 const SUDT_META_FIELDS: usize = 9;
 const SUDT_ALLOWED_CONFIG_MASK: u8 = CONFIG_SUPPLY_TRACKED;
-// Temporary explicit UDT code-hash source until the repo has stable build-time
-// constants: tracked sUDT Meta stores the expected enhanced-sudt Data2 code hash
-// as the whole `extra_data` field.
-const UDT_CODE_HASH_CONFIG_LEN: usize = 32;
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SudtMeta {
     pub config_flags: u8,
     pub current_supply: u128,
-    pub udt_code_hash: Option<[u8; 32]>,
+    pub metadata_fields: Vec<u8>,
+    pub mint_authority_raw: Vec<u8>,
+    pub metadata_authority_raw: Vec<u8>,
+    pub mint_authority: Option<ScriptAttr>,
+    pub metadata_authority: Option<ScriptAttr>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ScriptAttr {
+    pub location: u8,
+    pub script_hash: [u8; 32],
 }
 
 pub struct MetaGroup {
@@ -53,8 +58,7 @@ pub fn validate_create_type_id() -> Result<(), Error> {
 
 pub fn validate_create(output_meta: &SudtMeta, meta_type_hash: &[u8; 32]) -> Result<(), Error> {
     if is_supply_tracked(output_meta.config_flags) {
-        let udt_code_hash = output_meta.udt_code_hash.ok_or(Error::InvalidMetaData)?;
-        let initial_supply = sum_initial_udt_outputs(meta_type_hash, &udt_code_hash)?;
+        let initial_supply = sum_initial_udt_outputs(meta_type_hash, &ENHANCED_SUDT_CODE_HASH)?;
         if output_meta.current_supply != initial_supply {
             return Err(Error::InvalidSupply);
         }
@@ -131,7 +135,11 @@ fn parse_meta(data: &[u8]) -> Result<SudtMeta, Error> {
 
     let current_supply = u128_field(data, offsets[1], offsets[2])?;
     let _decimals = single_byte_field(data, offsets[2], offsets[3])?;
-    let udt_code_hash = udt_code_hash_config(data, offsets[6], offsets[7])?;
+    let metadata_fields = data[offsets[2]..offsets[7]].to_vec();
+    let mint_authority_raw = data[offsets[7]..offsets[8]].to_vec();
+    let metadata_authority_raw = data[offsets[8]..offsets[9]].to_vec();
+    let mint_authority = parse_script_attr_opt(&mint_authority_raw)?;
+    let metadata_authority = parse_script_attr_opt(&metadata_authority_raw)?;
 
     if !is_supply_tracked(config_flags) && current_supply != 0 {
         return Err(Error::InvalidSupply);
@@ -140,7 +148,11 @@ fn parse_meta(data: &[u8]) -> Result<SudtMeta, Error> {
     Ok(SudtMeta {
         config_flags,
         current_supply,
-        udt_code_hash,
+        metadata_fields,
+        mint_authority_raw,
+        metadata_authority_raw,
+        mint_authority,
+        metadata_authority,
     })
 }
 
@@ -210,31 +222,41 @@ fn u128_field(data: &[u8], start: usize, end: usize) -> Result<u128, Error> {
     Ok(u128::from_le_bytes(raw))
 }
 
-fn udt_code_hash_config(data: &[u8], start: usize, end: usize) -> Result<Option<[u8; 32]>, Error> {
-    let extra_data = molecule_bytes(data, start, end)?;
-    if extra_data.is_empty() {
+fn parse_script_attr_opt(data: &[u8]) -> Result<Option<ScriptAttr>, Error> {
+    if data.is_empty() {
         return Ok(None);
     }
-    if extra_data.len() != UDT_CODE_HASH_CONFIG_LEN {
-        return Err(Error::InvalidMetaData);
-    }
 
-    let mut code_hash = [0u8; 32];
-    code_hash.copy_from_slice(extra_data);
-    Ok(Some(code_hash))
+    parse_script_attr(data).map(Some)
 }
 
-fn molecule_bytes(data: &[u8], start: usize, end: usize) -> Result<&[u8], Error> {
-    if end < start + 4 || end > data.len() {
+fn parse_script_attr(data: &[u8]) -> Result<ScriptAttr, Error> {
+    let offsets = table_offsets(data, 3)?;
+    let location = single_byte_field(data, offsets[0], offsets[1])?;
+    if location > 4 {
         return Err(Error::InvalidMetaData);
     }
-    let len = read_u32(data, start)? as usize;
-    let bytes_start = start + 4;
-    let bytes_end = bytes_start.checked_add(len).ok_or(Error::InvalidMetaData)?;
-    if bytes_end != end {
+
+    let script_hash = byte32_field(data, offsets[1], offsets[2])?;
+    let script_opt = &data[offsets[2]..offsets[3]];
+    if location <= 2 && !script_opt.is_empty() {
         return Err(Error::InvalidMetaData);
     }
-    Ok(&data[bytes_start..bytes_end])
+
+    Ok(ScriptAttr {
+        location,
+        script_hash,
+    })
+}
+
+fn byte32_field(data: &[u8], start: usize, end: usize) -> Result<[u8; 32], Error> {
+    if end != start + 32 || end > data.len() {
+        return Err(Error::InvalidMetaData);
+    }
+
+    let mut raw = [0u8; 32];
+    raw.copy_from_slice(&data[start..end]);
+    Ok(raw)
 }
 
 fn read_u32(data: &[u8], start: usize) -> Result<u32, Error> {

@@ -4,6 +4,7 @@
 #[cfg(any(feature = "library", test))]
 extern crate alloc;
 
+mod constants;
 mod error;
 mod meta_cell;
 mod update;

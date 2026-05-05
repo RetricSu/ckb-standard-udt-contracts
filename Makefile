@@ -27,7 +27,7 @@ SIM_BUILD ?= auto
 # revert this behavior, you can change this to anything other than true
 CLEAN_BUILD_DIR_FIRST := true
 BUILD_DIR := build/$(MODE)
-CONTRACTS := enhanced-sudt-meta enhanced-sudt enhanced-xudt-meta enhanced-xudt access-list
+CONTRACTS := enhanced-sudt enhanced-sudt-meta enhanced-xudt-meta enhanced-xudt access-list
 TEST_PLUGINS := dl-allow dl-deny spawn-allow spawn-deny
 TEST_REQUIRED_BINARIES := $(addprefix $(BUILD_DIR)/,$(CONTRACTS) $(TEST_PLUGINS))
 
@@ -54,7 +54,12 @@ build:
 	@set -eu; \
 	if [ "x$(CONTRACT)" = "x" ]; then \
 		for contract in $(CONTRACTS); do \
-			$(MAKE) -e -C contracts/$$contract build; \
+			if [ "$$contract" = "enhanced-sudt-meta" ]; then \
+				enhanced_sudt_hash=$$(python3 $(TOP)/scripts/ckb-data-hash $(BUILD_DIR)/enhanced-sudt); \
+				ENHANCED_SUDT_CODE_HASH=$$enhanced_sudt_hash $(MAKE) -e -C contracts/$$contract build; \
+			else \
+				$(MAKE) -e -C contracts/$$contract build; \
+			fi; \
 		done; \
 		for plugin in $(TEST_PLUGINS); do \
 			$(MAKE) -e -C tests/plugins/$$plugin build; \
@@ -77,7 +82,13 @@ build:
 				;; \
 		esac; \
 	else \
-		$(MAKE) -e -C contracts/$(CONTRACT) build; \
+		if [ "$(CONTRACT)" = "enhanced-sudt-meta" ]; then \
+			$(MAKE) -e -C contracts/enhanced-sudt build; \
+			enhanced_sudt_hash=$$(python3 $(TOP)/scripts/ckb-data-hash $(BUILD_DIR)/enhanced-sudt); \
+			ENHANCED_SUDT_CODE_HASH=$$enhanced_sudt_hash $(MAKE) -e -C contracts/enhanced-sudt-meta build; \
+		else \
+			$(MAKE) -e -C contracts/$(CONTRACT) build; \
+		fi; \
 		sim_package="$(CONTRACT)-sim"; \
 		case "$(SIM_BUILD)" in \
 			true) \

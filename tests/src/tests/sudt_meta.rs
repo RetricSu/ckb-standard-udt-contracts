@@ -3,7 +3,9 @@ use crate::{
         cell_dep_for_script, create_funding_input, create_typed_cell, expect_tx_fail,
         expect_tx_fail_with_code, expect_tx_pass, typed_output,
     },
-    metadata_builders::{build_sudt_meta_bytes, script_hash, udt_amount_bytes, DeployedScript},
+    metadata_builders::{
+        build_sudt_meta_bytes, input_lock_authority, script_hash, udt_amount_bytes, DeployedScript,
+    },
     Loader,
 };
 use ckb_testtool::{
@@ -17,7 +19,7 @@ use ckb_testtool::{
     },
     context::Context,
 };
-use standard_udt_types::metadata::{SudtMeta, CONFIG_SUPPLY_TRACKED};
+use standard_udt_types::metadata::{ScriptAttr, SudtMeta, CONFIG_SUPPLY_TRACKED};
 
 fn deploy_data2_script(context: &mut Context, binary_name: &str, args: Bytes) -> DeployedScript {
     let out_point = context.deploy_cell(Loader::default().load_binary(binary_name));
@@ -65,30 +67,37 @@ fn fake_data2_script(context: &mut Context, meta_type_hash: [u8; 32]) -> Deploye
     }
 }
 
-fn tracked_meta_data(current_supply: u128, udt_code_hash: [u8; 32]) -> Bytes {
-    sudt_meta_data(CONFIG_SUPPLY_TRACKED, current_supply, udt_code_hash)
+fn tracked_meta_data(current_supply: u128) -> Bytes {
+    build_sudt_meta_bytes(CONFIG_SUPPLY_TRACKED, current_supply, None, None)
 }
 
-fn sudt_meta_data(config_flags: u8, current_supply: u128, udt_code_hash: [u8; 32]) -> Bytes {
+fn sudt_meta_data(
+    config_flags: u8,
+    current_supply: u128,
+    mint_authority: Option<ScriptAttr>,
+    metadata_authority: Option<ScriptAttr>,
+    name: Vec<u8>,
+    extra_data: Vec<u8>,
+) -> Bytes {
     Bytes::from(
         SudtMeta {
             config_flags,
             current_supply,
             decimals: 0,
-            name: Vec::new(),
+            name,
             symbol: Vec::new(),
             uri: Vec::new(),
-            extra_data: udt_code_hash.to_vec(),
-            mint_authority: None,
-            metadata_authority: None,
+            extra_data,
+            mint_authority,
+            metadata_authority,
         }
         .to_bytes()
         .expect("build SudtMeta bytes"),
     )
 }
 
-fn untracked_nonzero_meta_data(current_supply: u128, udt_code_hash: [u8; 32]) -> Bytes {
-    let mut data = tracked_meta_data(current_supply, udt_code_hash).to_vec();
+fn untracked_nonzero_meta_data(current_supply: u128) -> Bytes {
+    let mut data = tracked_meta_data(current_supply).to_vec();
     let config_offset = u32::from_le_bytes(data[4..8].try_into().expect("config offset")) as usize;
     data[config_offset] = 0;
     Bytes::from(data)
@@ -134,8 +143,7 @@ fn create_meta_tx(
         }
     };
     let udt = udt_script(&mut context, meta.script_hash);
-    let udt_code_hash: [u8; 32] = udt.script.code_hash().unpack();
-    let meta_data = tracked_meta_data(current_supply, udt_code_hash);
+    let meta_data = tracked_meta_data(current_supply);
 
     let mut outputs = vec![typed_output(&lock.script, &meta.script, 100_000_000_000)];
     let mut outputs_data = vec![meta_data];
@@ -173,8 +181,16 @@ fn create_meta_tx(
 }
 
 fn update_meta_tx(input_meta_data: Bytes, output_meta_data: Bytes) -> (Context, TransactionView) {
+    update_meta_tx_with_data(|_| (input_meta_data, output_meta_data))
+}
+
+fn update_meta_tx_with_data<F>(build_data: F) -> (Context, TransactionView)
+where
+    F: FnOnce([u8; 32]) -> (Bytes, Bytes),
+{
     let mut context = Context::default();
     let lock = always_success_lock(&mut context);
+    let (input_meta_data, output_meta_data) = build_data(lock.script_hash);
     let meta = meta_script(&mut context, Bytes::from(vec![2u8; 32]));
     let input_out_point = create_typed_cell(
         &mut context,
@@ -228,9 +244,8 @@ fn sudt_meta_create_rejects_type_id_mismatch() {
 
 #[test]
 fn sudt_meta_rejects_supply_tracking_bit_change() {
-    let udt_code_hash = [2u8; 32];
     let (context, tx) = update_meta_tx(
-        tracked_meta_data(0, udt_code_hash),
+        tracked_meta_data(0),
         build_sudt_meta_bytes(0, 0, None, None),
     );
 
@@ -258,11 +273,10 @@ fn sudt_meta_rejects_untracked_nonzero_supply() {
         script_hash: meta_script_hash,
     };
     let udt = udt_script(&mut context, meta.script_hash);
-    let udt_code_hash: [u8; 32] = udt.script.code_hash().unpack();
     let tx = TransactionBuilder::default()
         .input(input)
         .output(typed_output(&lock.script, &meta.script, 100_000_000_000))
-        .output_data(untracked_nonzero_meta_data(100, udt_code_hash).pack())
+        .output_data(untracked_nonzero_meta_data(100).pack())
         .cell_dep(cell_dep_for_script(&lock))
         .cell_dep(cell_dep_for_script(&meta))
         .cell_dep(cell_dep_for_script(&udt))
@@ -270,4 +284,113 @@ fn sudt_meta_rejects_untracked_nonzero_supply() {
     let tx = context.complete_tx(tx);
 
     expect_tx_fail_with_code(&context, &tx, "error code 4");
+}
+
+#[test]
+fn sudt_meta_update_metadata_change_requires_metadata_authority() {
+    let (context, tx) = update_meta_tx(
+        tracked_meta_data(0),
+        sudt_meta_data(
+            CONFIG_SUPPLY_TRACKED,
+            0,
+            None,
+            None,
+            b"new name".to_vec(),
+            Vec::new(),
+        ),
+    );
+
+    expect_tx_fail_with_code(&context, &tx, "error code 6");
+}
+
+#[test]
+fn sudt_meta_update_metadata_change_with_input_lock_authority_passes() {
+    let (context, tx) = update_meta_tx_with_data(|lock_hash| {
+        let authority = input_lock_authority(lock_hash);
+        (
+            sudt_meta_data(
+                CONFIG_SUPPLY_TRACKED,
+                0,
+                None,
+                Some(authority.clone()),
+                Vec::new(),
+                Vec::new(),
+            ),
+            sudt_meta_data(
+                CONFIG_SUPPLY_TRACKED,
+                0,
+                None,
+                Some(authority),
+                b"new name".to_vec(),
+                Vec::new(),
+            ),
+        )
+    });
+
+    expect_tx_pass(&context, &tx);
+}
+
+#[test]
+fn sudt_meta_update_rejects_metadata_authority_recreation() {
+    let (context, tx) = update_meta_tx_with_data(|lock_hash| {
+        (
+            tracked_meta_data(0),
+            sudt_meta_data(
+                CONFIG_SUPPLY_TRACKED,
+                0,
+                None,
+                Some(input_lock_authority(lock_hash)),
+                Vec::new(),
+                Vec::new(),
+            ),
+        )
+    });
+
+    expect_tx_fail_with_code(&context, &tx, "error code 6");
+}
+
+#[test]
+fn sudt_meta_update_supply_change_with_input_lock_mint_authority_passes() {
+    let (context, tx) = update_meta_tx_with_data(|lock_hash| {
+        let authority = input_lock_authority(lock_hash);
+        (
+            sudt_meta_data(
+                CONFIG_SUPPLY_TRACKED,
+                100,
+                Some(authority.clone()),
+                None,
+                Vec::new(),
+                Vec::new(),
+            ),
+            sudt_meta_data(
+                CONFIG_SUPPLY_TRACKED,
+                101,
+                Some(authority),
+                None,
+                Vec::new(),
+                Vec::new(),
+            ),
+        )
+    });
+
+    expect_tx_pass(&context, &tx);
+}
+
+#[test]
+fn sudt_meta_update_rejects_mint_authority_recreation() {
+    let (context, tx) = update_meta_tx_with_data(|lock_hash| {
+        (
+            tracked_meta_data(0),
+            sudt_meta_data(
+                CONFIG_SUPPLY_TRACKED,
+                0,
+                Some(input_lock_authority(lock_hash)),
+                None,
+                Vec::new(),
+                Vec::new(),
+            ),
+        )
+    });
+
+    expect_tx_fail_with_code(&context, &tx, "error code 6");
 }
