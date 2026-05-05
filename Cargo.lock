@@ -753,6 +753,7 @@ dependencies = [
  "buddy-alloc",
  "cc",
  "ckb-gen-types 1.1.0",
+ "ckb-hash 1.1.0",
  "ckb-x64-simulator 1.1.0",
  "gcd",
  "int-enum",

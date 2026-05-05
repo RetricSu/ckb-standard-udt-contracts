@@ -31,7 +31,10 @@ fn run() -> Result<(), error::Error> {
     let group = meta_cell::load_meta_group()?;
 
     match (group.input.as_ref(), group.output.as_ref()) {
-        (None, Some(output)) => meta_cell::validate_create(output, &group.meta_type_hash),
+        (None, Some(output)) => {
+            meta_cell::validate_create_type_id()?;
+            meta_cell::validate_create(output, &group.meta_type_hash)
+        }
         (Some(input), Some(output)) => update::validate_update(input, output),
         _ => Err(error::Error::InvalidArgs),
     }

@@ -7,6 +7,8 @@ use crate::{
     Loader,
 };
 use ckb_testtool::{
+    builtin::ALWAYS_SUCCESS,
+    ckb_hash::new_blake2b,
     ckb_types::{
         bytes::Bytes,
         core::{ScriptHashType, TransactionBuilder, TransactionView},
@@ -15,7 +17,7 @@ use ckb_testtool::{
     },
     context::Context,
 };
-use standard_udt_types::metadata::CONFIG_SUPPLY_TRACKED;
+use standard_udt_types::metadata::{SudtMeta, CONFIG_SUPPLY_TRACKED};
 
 fn deploy_data2_script(context: &mut Context, binary_name: &str, args: Bytes) -> DeployedScript {
     let out_point = context.deploy_cell(Loader::default().load_binary(binary_name));
@@ -46,28 +48,108 @@ fn always_success_lock(context: &mut Context) -> DeployedScript {
     deploy_data2_script(context, "enhanced-sudt", Bytes::new())
 }
 
-fn tracked_meta_data(current_supply: u128) -> Bytes {
-    build_sudt_meta_bytes(CONFIG_SUPPLY_TRACKED, current_supply, None, None)
+fn fake_data2_script(context: &mut Context, meta_type_hash: [u8; 32]) -> DeployedScript {
+    let out_point = context.deploy_cell(ALWAYS_SUCCESS.clone());
+    let script = context
+        .build_script_with_hash_type(
+            &out_point,
+            ScriptHashType::Data2,
+            Bytes::from(meta_type_hash.to_vec()),
+        )
+        .expect("build fake Data2 script");
+    let script_hash = script_hash(&script);
+    DeployedScript {
+        out_point,
+        script,
+        script_hash,
+    }
 }
 
-fn untracked_nonzero_meta_data(current_supply: u128) -> Bytes {
-    let mut data = tracked_meta_data(current_supply).to_vec();
+fn tracked_meta_data(current_supply: u128, udt_code_hash: [u8; 32]) -> Bytes {
+    sudt_meta_data(CONFIG_SUPPLY_TRACKED, current_supply, udt_code_hash)
+}
+
+fn sudt_meta_data(config_flags: u8, current_supply: u128, udt_code_hash: [u8; 32]) -> Bytes {
+    Bytes::from(
+        SudtMeta {
+            config_flags,
+            current_supply,
+            decimals: 0,
+            name: Vec::new(),
+            symbol: Vec::new(),
+            uri: Vec::new(),
+            extra_data: udt_code_hash.to_vec(),
+            mint_authority: None,
+            metadata_authority: None,
+        }
+        .to_bytes()
+        .expect("build SudtMeta bytes"),
+    )
+}
+
+fn untracked_nonzero_meta_data(current_supply: u128, udt_code_hash: [u8; 32]) -> Bytes {
+    let mut data = tracked_meta_data(current_supply, udt_code_hash).to_vec();
     let config_offset = u32::from_le_bytes(data[4..8].try_into().expect("config offset")) as usize;
     data[config_offset] = 0;
     Bytes::from(data)
 }
 
-fn create_meta_tx(meta_data: Bytes, udt_amount: Option<u128>) -> (Context, TransactionView) {
+fn calculate_type_id(input: &CellInput, output_index: u64) -> [u8; 32] {
+    let mut type_id = [0u8; 32];
+    let mut hasher = new_blake2b();
+    hasher.update(input.as_slice());
+    hasher.update(&output_index.to_le_bytes());
+    hasher.finalize(&mut type_id);
+    type_id
+}
+
+fn create_meta_tx(
+    current_supply: u128,
+    udt_amount: Option<u128>,
+    fake_udt_amount: Option<u128>,
+    valid_type_id: bool,
+) -> (Context, TransactionView) {
     let mut context = Context::default();
     let lock = always_success_lock(&mut context);
-    let meta = meta_script(&mut context, Bytes::from(vec![1u8; 32]));
-    let udt = udt_script(&mut context, meta.script_hash);
+    let meta_out_point = context.deploy_cell(Loader::default().load_binary("enhanced-sudt-meta"));
     let input = create_funding_input(&mut context, &lock.script, 1_000_000_000_000);
+    let type_id = if valid_type_id {
+        calculate_type_id(&input, 0)
+    } else {
+        [1u8; 32]
+    };
+    let meta = {
+        let script = context
+            .build_script_with_hash_type(
+                &meta_out_point,
+                ScriptHashType::Data2,
+                Bytes::from(type_id.to_vec()),
+            )
+            .expect("build deployed Data2 meta script");
+        let script_hash = script_hash(&script);
+        DeployedScript {
+            out_point: meta_out_point,
+            script,
+            script_hash,
+        }
+    };
+    let udt = udt_script(&mut context, meta.script_hash);
+    let udt_code_hash: [u8; 32] = udt.script.code_hash().unpack();
+    let meta_data = tracked_meta_data(current_supply, udt_code_hash);
 
     let mut outputs = vec![typed_output(&lock.script, &meta.script, 100_000_000_000)];
     let mut outputs_data = vec![meta_data];
     if let Some(amount) = udt_amount {
         outputs.push(typed_output(&lock.script, &udt.script, 100_000_000_000));
+        outputs_data.push(udt_amount_bytes(amount));
+    }
+    let fake_udt = if fake_udt_amount.is_some() {
+        Some(fake_data2_script(&mut context, meta.script_hash))
+    } else {
+        None
+    };
+    if let (Some(fake), Some(amount)) = (fake_udt.as_ref(), fake_udt_amount) {
+        outputs.push(typed_output(&lock.script, &fake.script, 100_000_000_000));
         outputs_data.push(udt_amount_bytes(amount));
     }
 
@@ -79,6 +161,13 @@ fn create_meta_tx(meta_data: Bytes, udt_amount: Option<u128>) -> (Context, Trans
         .cell_dep(cell_dep_for_script(&meta))
         .cell_dep(cell_dep_for_script(&udt))
         .build();
+    let tx = if let Some(fake) = fake_udt.as_ref() {
+        tx.as_advanced_builder()
+            .cell_dep(cell_dep_for_script(fake))
+            .build()
+    } else {
+        tx
+    };
     let tx = context.complete_tx(tx);
     (context, tx)
 }
@@ -111,22 +200,37 @@ fn update_meta_tx(input_meta_data: Bytes, output_meta_data: Bytes) -> (Context, 
 
 #[test]
 fn sudt_meta_create_tracked_supply_matches_initial_outputs() {
-    let (context, tx) = create_meta_tx(tracked_meta_data(100), Some(100));
+    let (context, tx) = create_meta_tx(100, Some(100), None, true);
 
     expect_tx_pass(&context, &tx);
 }
 
 #[test]
 fn sudt_meta_create_tracked_supply_mismatch_rejects() {
-    let (context, tx) = create_meta_tx(tracked_meta_data(101), Some(100));
+    let (context, tx) = create_meta_tx(101, Some(100), None, true);
 
     expect_tx_fail_with_code(&context, &tx, "error code 4");
 }
 
 #[test]
+fn sudt_meta_create_ignores_fake_data2_udt_outputs() {
+    let (context, tx) = create_meta_tx(100, None, Some(100), true);
+
+    expect_tx_fail_with_code(&context, &tx, "error code 4");
+}
+
+#[test]
+fn sudt_meta_create_rejects_type_id_mismatch() {
+    let (context, tx) = create_meta_tx(100, Some(100), None, false);
+
+    expect_tx_fail_with_code(&context, &tx, "error code 2");
+}
+
+#[test]
 fn sudt_meta_rejects_supply_tracking_bit_change() {
+    let udt_code_hash = [2u8; 32];
     let (context, tx) = update_meta_tx(
-        tracked_meta_data(0),
+        tracked_meta_data(0, udt_code_hash),
         build_sudt_meta_bytes(0, 0, None, None),
     );
 
@@ -135,7 +239,35 @@ fn sudt_meta_rejects_supply_tracking_bit_change() {
 
 #[test]
 fn sudt_meta_rejects_untracked_nonzero_supply() {
-    let (context, tx) = create_meta_tx(untracked_nonzero_meta_data(100), None);
+    let mut context = Context::default();
+    let lock = always_success_lock(&mut context);
+    let meta_out_point = context.deploy_cell(Loader::default().load_binary("enhanced-sudt-meta"));
+    let input = create_funding_input(&mut context, &lock.script, 1_000_000_000_000);
+    let type_id = calculate_type_id(&input, 0);
+    let meta_script = context
+        .build_script_with_hash_type(
+            &meta_out_point,
+            ScriptHashType::Data2,
+            Bytes::from(type_id.to_vec()),
+        )
+        .expect("build meta script");
+    let meta_script_hash = script_hash(&meta_script);
+    let meta = DeployedScript {
+        out_point: meta_out_point,
+        script: meta_script,
+        script_hash: meta_script_hash,
+    };
+    let udt = udt_script(&mut context, meta.script_hash);
+    let udt_code_hash: [u8; 32] = udt.script.code_hash().unpack();
+    let tx = TransactionBuilder::default()
+        .input(input)
+        .output(typed_output(&lock.script, &meta.script, 100_000_000_000))
+        .output_data(untracked_nonzero_meta_data(100, udt_code_hash).pack())
+        .cell_dep(cell_dep_for_script(&lock))
+        .cell_dep(cell_dep_for_script(&meta))
+        .cell_dep(cell_dep_for_script(&udt))
+        .build();
+    let tx = context.complete_tx(tx);
 
     expect_tx_fail_with_code(&context, &tx, "error code 4");
 }
