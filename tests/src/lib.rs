@@ -17,8 +17,10 @@ pub mod metadata_builders;
 #[cfg(test)]
 mod tests {
     mod access_list;
+    mod plugin_runtime;
     mod sudt;
     mod sudt_meta;
+    mod xudt;
     mod xudt_meta;
 }
 

@@ -15,8 +15,16 @@ ckb_std::entry!(program_entry);
 // and the buddy-alloc alloc implementation.
 ckb_std::default_alloc!(16384, 1258306, 64);
 
-pub fn program_entry() -> i8 {
-    ckb_std::debug!("This is a sample contract!");
+mod access;
+mod config;
+mod error;
+mod extensions;
+mod meta;
+mod run;
 
-    0
+pub fn program_entry() -> i8 {
+    match run::run() {
+        Ok(()) => 0,
+        Err(error) => error.into(),
+    }
 }
