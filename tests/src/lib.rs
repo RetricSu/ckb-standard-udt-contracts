@@ -18,6 +18,7 @@ pub mod metadata_builders;
 mod tests {
     mod sudt;
     mod sudt_meta;
+    mod xudt_meta;
 }
 
 // The exact same Loader code from capsule's template, except that
