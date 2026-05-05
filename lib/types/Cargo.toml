@@ -13,4 +13,4 @@ cfg-if = "1.0.0"
 default = ["std"]
 std = ["dep:ckb-types"]
 no-std = ["dep:ckb-std"]
-native-simulator = ["ckb-std/native-simulator"]
+native-simulator = ["no-std", "ckb-std/native-simulator"]

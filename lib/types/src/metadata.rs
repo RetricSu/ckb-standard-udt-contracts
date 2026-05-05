@@ -13,10 +13,14 @@ pub const CONFIG_SUPPLY_TRACKED: u8 = 0b0000_0001;
 pub const CONFIG_ACCESS_ENABLED: u8 = 0b0000_0010;
 pub const CONFIG_ACCESS_WHITELIST: u8 = 0b0000_0100;
 pub const CONFIG_PAUSED: u8 = 0b0000_1000;
-pub const SUDT_ALLOWED_CONFIG_MASK: u8 = CONFIG_SUPPLY_TRACKED | CONFIG_PAUSED;
+pub const SUDT_ALLOWED_CONFIG_MASK: u8 = CONFIG_SUPPLY_TRACKED;
 pub const XUDT_ALLOWED_CONFIG_MASK: u8 =
     CONFIG_SUPPLY_TRACKED | CONFIG_ACCESS_ENABLED | CONFIG_ACCESS_WHITELIST | CONFIG_PAUSED;
 pub const MAX_EXTENSIONS: usize = 16;
+pub const MAX_METADATA_NAME_BYTES: usize = 1024;
+pub const MAX_METADATA_SYMBOL_BYTES: usize = 128;
+pub const MAX_METADATA_URI_BYTES: usize = 2048;
+pub const MAX_METADATA_EXTRA_DATA_BYTES: usize = 16 * 1024;
 pub const MAX_ACCESSLIST_ENTRIES: usize = 8192;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -160,6 +164,7 @@ impl SudtMeta {
 
     pub fn to_molecule(&self) -> Result<generated::metadata::SudtMeta, Error> {
         validate_sudt_config(self.config_flags, self.current_supply)?;
+        validate_metadata_sizes(&self.name, &self.symbol, &self.uri, &self.extra_data)?;
         Ok(generated::metadata::SudtMeta::new_builder()
             .config_flags(self.config_flags.into())
             .current_supply(pack_u128(self.current_supply))
@@ -182,15 +187,15 @@ impl TryFrom<&[u8]> for SudtMeta {
     type Error = Error;
 
     fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
-        let raw = generated::metadata::SudtMeta::from_compatible_slice(data)?;
+        let raw = generated::metadata::SudtMeta::from_slice(data)?;
         let meta = Self {
             config_flags: raw.config_flags().into(),
             current_supply: unpack_u128(raw.current_supply()),
             decimals: raw.decimals().into(),
-            name: unpack_bytes(raw.name()),
-            symbol: unpack_bytes(raw.symbol()),
-            uri: unpack_bytes(raw.uri()),
-            extra_data: unpack_bytes(raw.extra_data()),
+            name: unpack_limited_bytes(raw.name(), MAX_METADATA_NAME_BYTES)?,
+            symbol: unpack_limited_bytes(raw.symbol(), MAX_METADATA_SYMBOL_BYTES)?,
+            uri: unpack_limited_bytes(raw.uri(), MAX_METADATA_URI_BYTES)?,
+            extra_data: unpack_limited_bytes(raw.extra_data(), MAX_METADATA_EXTRA_DATA_BYTES)?,
             mint_authority: unpack_script_attr_opt(raw.mint_authority())?,
             metadata_authority: unpack_script_attr_opt(raw.metadata_authority())?,
         };
@@ -206,6 +211,7 @@ impl XudtMeta {
 
     pub fn to_molecule(&self) -> Result<generated::metadata::XudtMeta, Error> {
         validate_xudt_config(self.config_flags, self.current_supply)?;
+        validate_metadata_sizes(&self.name, &self.symbol, &self.uri, &self.extra_data)?;
         validate_extensions(&self.extensions)?;
         Ok(generated::metadata::XudtMeta::new_builder()
             .config_flags(self.config_flags.into())
@@ -231,15 +237,15 @@ impl TryFrom<&[u8]> for XudtMeta {
     type Error = Error;
 
     fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
-        let raw = generated::metadata::XudtMeta::from_compatible_slice(data)?;
+        let raw = generated::metadata::XudtMeta::from_slice(data)?;
         let meta = Self {
             config_flags: raw.config_flags().into(),
             current_supply: unpack_u128(raw.current_supply()),
             decimals: raw.decimals().into(),
-            name: unpack_bytes(raw.name()),
-            symbol: unpack_bytes(raw.symbol()),
-            uri: unpack_bytes(raw.uri()),
-            extra_data: unpack_bytes(raw.extra_data()),
+            name: unpack_limited_bytes(raw.name(), MAX_METADATA_NAME_BYTES)?,
+            symbol: unpack_limited_bytes(raw.symbol(), MAX_METADATA_SYMBOL_BYTES)?,
+            uri: unpack_limited_bytes(raw.uri(), MAX_METADATA_URI_BYTES)?,
+            extra_data: unpack_limited_bytes(raw.extra_data(), MAX_METADATA_EXTRA_DATA_BYTES)?,
             mint_authority: unpack_script_attr_opt(raw.mint_authority())?,
             metadata_authority: unpack_script_attr_opt(raw.metadata_authority())?,
             access_authority: unpack_script_attr_opt(raw.access_authority())?,
@@ -287,7 +293,7 @@ impl TryFrom<&[u8]> for AccessListShard {
     type Error = Error;
 
     fn try_from(data: &[u8]) -> Result<Self, Self::Error> {
-        let raw = generated::metadata::AccessListShard::from_compatible_slice(data)?;
+        let raw = generated::metadata::AccessListShard::from_slice(data)?;
         if raw.entries().len() > MAX_ACCESSLIST_ENTRIES {
             return Err(Error::AccessListTooLarge);
         }
@@ -409,6 +415,33 @@ fn unpack_bytes(raw: generated::blockchain::Bytes) -> Vec<u8> {
     raw.raw_data().to_vec()
 }
 
+fn unpack_limited_bytes(
+    raw: generated::blockchain::Bytes,
+    max_len: usize,
+) -> Result<Vec<u8>, Error> {
+    let data = unpack_bytes(raw);
+    if data.len() > max_len {
+        return Err(Error::MetadataTooLarge);
+    }
+    Ok(data)
+}
+
+fn validate_metadata_sizes(
+    name: &[u8],
+    symbol: &[u8],
+    uri: &[u8],
+    extra_data: &[u8],
+) -> Result<(), Error> {
+    if name.len() > MAX_METADATA_NAME_BYTES
+        || symbol.len() > MAX_METADATA_SYMBOL_BYTES
+        || uri.len() > MAX_METADATA_URI_BYTES
+        || extra_data.len() > MAX_METADATA_EXTRA_DATA_BYTES
+    {
+        return Err(Error::MetadataTooLarge);
+    }
+    Ok(())
+}
+
 fn pack_u128(value: u128) -> generated::metadata::Uint128 {
     generated::metadata::Uint128::from(value.to_le_bytes())
 }
@@ -420,6 +453,11 @@ fn unpack_u128(raw: generated::metadata::Uint128) -> u128 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use alloc::vec;
+    #[cfg(all(not(feature = "std"), feature = "no-std"))]
+    use ckb_std::ckb_types::{bytes::Bytes, core::ScriptHashType, packed::Byte32};
+    #[cfg(feature = "std")]
     use ckb_types::{bytes::Bytes, core::ScriptHashType, packed::Byte32};
 
     fn empty_sudt(config_flags: u8, current_supply: u128) -> SudtMeta {
@@ -452,6 +490,24 @@ mod tests {
         }
     }
 
+    fn append_empty_table_field(raw: &[u8]) -> Vec<u8> {
+        let old_total = u32::from_le_bytes(raw[0..4].try_into().expect("total size")) as usize;
+        let field_count =
+            (u32::from_le_bytes(raw[4..8].try_into().expect("first offset")) as usize / 4) - 1;
+        let new_total = old_total + 4;
+
+        let mut extended = Vec::with_capacity(new_total);
+        extended.extend_from_slice(&(new_total as u32).to_le_bytes());
+        for index in 0..field_count {
+            let start = 4 + index * 4;
+            let offset = u32::from_le_bytes(raw[start..start + 4].try_into().expect("offset"));
+            extended.extend_from_slice(&(offset + 4).to_le_bytes());
+        }
+        extended.extend_from_slice(&(new_total as u32).to_le_bytes());
+        extended.extend_from_slice(&raw[4 + field_count * 4..]);
+        extended
+    }
+
     fn build_script(tag: u8) -> Script {
         Script::new_builder()
             .code_hash(Byte32::from_slice(&[tag; 32]).expect("byte32"))
@@ -475,6 +531,17 @@ mod tests {
         assert!(matches!(meta.to_bytes(), Err(Error::InvalidConfigFlags)));
         assert!(matches!(
             validate_sudt_config(CONFIG_ACCESS_ENABLED, 0),
+            Err(Error::InvalidConfigFlags)
+        ));
+    }
+
+    #[test]
+    fn sudt_rejects_paused_config_bit() {
+        let meta = empty_sudt(CONFIG_PAUSED, 0);
+
+        assert!(matches!(meta.to_bytes(), Err(Error::InvalidConfigFlags)));
+        assert!(matches!(
+            validate_sudt_config(CONFIG_PAUSED, 0),
             Err(Error::InvalidConfigFlags)
         ));
     }
@@ -554,6 +621,78 @@ mod tests {
         assert!(matches!(
             duplicated.to_bytes(),
             Err(Error::ExtensionsDuplicated)
+        ));
+    }
+
+    #[test]
+    fn metadata_round_trips_and_uses_strict_decoding() {
+        let mut sudt = empty_sudt(CONFIG_SUPPLY_TRACKED, 42);
+        sudt.name = b"Example".to_vec();
+        sudt.symbol = b"EX".to_vec();
+
+        let encoded = sudt.to_bytes().expect("encode sudt");
+        assert_eq!(SudtMeta::from_slice(&encoded).expect("decode sudt"), sudt);
+        assert!(matches!(
+            SudtMeta::from_slice(&append_empty_table_field(&encoded)),
+            Err(Error::Molecule)
+        ));
+
+        let xudt = empty_xudt(CONFIG_ACCESS_ENABLED, 0);
+        let encoded = xudt.to_bytes().expect("encode xudt");
+        assert_eq!(XudtMeta::from_slice(&encoded).expect("decode xudt"), xudt);
+        assert!(matches!(
+            XudtMeta::from_slice(&append_empty_table_field(&encoded)),
+            Err(Error::Molecule)
+        ));
+
+        let shard = AccessListShard {
+            range: AccessListRange {
+                start: [0u8; 32],
+                end: [0xffu8; 32],
+            },
+            entries: vec![[1u8; 32]],
+        };
+        let encoded = shard.to_bytes().expect("encode shard");
+        assert_eq!(
+            AccessListShard::from_slice(&encoded).expect("decode shard"),
+            shard
+        );
+        assert!(matches!(
+            AccessListShard::from_slice(&append_empty_table_field(&encoded)),
+            Err(Error::Molecule)
+        ));
+    }
+
+    #[test]
+    fn metadata_rejects_byte_fields_over_limit() {
+        let mut sudt = empty_sudt(0, 0);
+        sudt.name = vec![0; MAX_METADATA_NAME_BYTES + 1];
+
+        assert!(matches!(sudt.to_bytes(), Err(Error::MetadataTooLarge)));
+
+        let raw = generated::metadata::SudtMeta::new_builder()
+            .config_flags(0u8.into())
+            .current_supply(pack_u128(0))
+            .decimals(8u8.into())
+            .name(pack_bytes(&vec![0; MAX_METADATA_NAME_BYTES + 1]))
+            .symbol(generated::blockchain::Bytes::default())
+            .uri(generated::blockchain::Bytes::default())
+            .extra_data(generated::blockchain::Bytes::default())
+            .mint_authority(
+                generated::metadata::ScriptAttrOpt::new_builder()
+                    .set(None)
+                    .build(),
+            )
+            .metadata_authority(
+                generated::metadata::ScriptAttrOpt::new_builder()
+                    .set(None)
+                    .build(),
+            )
+            .build();
+
+        assert!(matches!(
+            SudtMeta::from_slice(raw.as_slice()),
+            Err(Error::MetadataTooLarge)
         ));
     }
 
