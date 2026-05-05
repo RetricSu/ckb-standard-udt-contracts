@@ -2,8 +2,11 @@ use alloc::vec::Vec;
 
 use ckb_std::{
     ckb_constants::Source,
+    ckb_types::prelude::*,
     error::SysError,
-    high_level::{load_cell_data, load_cell_lock_hash, load_cell_type_hash, load_script},
+    high_level::{
+        load_cell_data, load_cell_lock, load_cell_lock_hash, load_cell_type_hash, load_script,
+    },
 };
 
 use crate::error::Error;
@@ -12,6 +15,18 @@ const UDT_AMOUNT_LEN: usize = 16;
 const SUDT_META_FIELDS: usize = 9;
 const CONFIG_SUPPLY_TRACKED: u8 = 0b0000_0001;
 const SUDT_ALLOWED_CONFIG_MASK: u8 = CONFIG_SUPPLY_TRACKED;
+const META_LOCK_CODE_HASH_WHITELIST: [[u8; 32]; 2] = [
+    [
+        0x3b, 0x52, 0x1c, 0xc4, 0xb5, 0x52, 0xf1, 0x09, 0xd0, 0x92, 0xd8, 0xcc, 0x46, 0x8a, 0x80,
+        0x48, 0xac, 0xb5, 0x3c, 0x59, 0x52, 0xdb, 0xe7, 0x69, 0xd2, 0xb2, 0xf9, 0xcf, 0x6e, 0x47,
+        0xf7, 0xf1,
+    ],
+    [
+        0xe6, 0x83, 0xb0, 0x41, 0x39, 0x34, 0x47, 0x68, 0x34, 0x84, 0x99, 0xc2, 0x3e, 0xb1, 0x32,
+        0x6d, 0x5a, 0x52, 0xd6, 0xdb, 0x00, 0x6c, 0x0d, 0x2f, 0xec, 0xe0, 0x0a, 0x83, 0x1f, 0x36,
+        0x60, 0xd7,
+    ],
+];
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SudtMeta {
@@ -155,6 +170,7 @@ fn find_meta_in_source(
                 if found.is_some() {
                     return Err(Error::MetaNotUnique);
                 }
+                validate_meta_lock(index, source)?;
                 let data = load_cell_data(index, source).map_err(|_| Error::Syscall)?;
                 found = Some(parse_meta(&data)?);
                 index += 1;
@@ -181,7 +197,6 @@ fn parse_meta(data: &[u8]) -> Result<SudtMeta, Error> {
         return Err(Error::InvalidMetaData);
     }
 
-    // TODO: enforce the Meta lock whitelist once canonical lock hashes are available.
     Ok(SudtMeta {
         config_flags,
         current_supply,
@@ -228,6 +243,16 @@ fn has_type_hash(target: &[u8; 32], source: Source) -> Result<bool, Error> {
             Err(SysError::IndexOutOfBound) => return Ok(false),
             Err(_) => return Err(Error::Syscall),
         }
+    }
+}
+
+fn validate_meta_lock(index: usize, source: Source) -> Result<(), Error> {
+    let lock = load_cell_lock(index, source).map_err(|_| Error::Syscall)?;
+    let code_hash: [u8; 32] = lock.code_hash().unpack();
+    if META_LOCK_CODE_HASH_WHITELIST.contains(&code_hash) {
+        Ok(())
+    } else {
+        Err(Error::MetaLockNotAllowed)
     }
 }
 
