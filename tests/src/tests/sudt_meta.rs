@@ -47,7 +47,16 @@ fn udt_script(context: &mut Context, meta_type_hash: [u8; 32]) -> DeployedScript
 }
 
 fn always_success_lock(context: &mut Context) -> DeployedScript {
-    deploy_data2_script(context, "enhanced-sudt", Bytes::new())
+    let out_point = context.deploy_cell(ALWAYS_SUCCESS.clone());
+    let script = context
+        .build_script_with_hash_type(&out_point, ScriptHashType::Data2, Bytes::new())
+        .expect("build always-success lock");
+    let script_hash = script_hash(&script);
+    DeployedScript {
+        out_point,
+        script,
+        script_hash,
+    }
 }
 
 fn fake_data2_script(context: &mut Context, meta_type_hash: [u8; 32]) -> DeployedScript {
