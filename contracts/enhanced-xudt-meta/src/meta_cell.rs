@@ -70,12 +70,12 @@ pub fn load_meta_group() -> Result<MetaGroup, Error> {
     Ok(MetaGroup {
         input: load_group_meta(Source::GroupInput)?,
         output: load_group_meta(Source::GroupOutput)?,
-        meta_type_hash: load_script_hash().map_err(|_| Error::Syscall)?,
+        meta_type_hash: load_script_hash()?,
     })
 }
 
 pub fn validate_type_args() -> Result<(), Error> {
-    let script = load_script().map_err(|_| Error::Syscall)?;
+    let script = load_script()?;
     if script.args().raw_data().len() != 32 {
         return Err(Error::InvalidArgs);
     }
@@ -114,11 +114,11 @@ pub fn sum_initial_udt_outputs(
                 continue;
             }
             Err(SysError::IndexOutOfBound) => return Ok(total),
-            Err(_) => return Err(Error::Syscall),
+            Err(error) => return Err(error.into()),
         };
 
         if is_token_script(&type_script, meta_type_hash, udt_code_hash) {
-            let data = load_cell_data(index, Source::Output).map_err(|_| Error::Syscall)?;
+            let data = load_cell_data(index, Source::Output)?;
             let amount = decode_amount(&data)?;
             total = total.checked_add(amount).ok_or(Error::InvalidSupply)?;
         }
@@ -139,7 +139,7 @@ pub fn has_same_token_cells(meta_type_hash: &[u8; 32]) -> Result<bool, Error> {
                 }
                 Ok(_) => index += 1,
                 Err(SysError::IndexOutOfBound) => break,
-                Err(_) => return Err(Error::Syscall),
+                Err(error) => return Err(error.into()),
             }
         }
     }
@@ -147,36 +147,50 @@ pub fn has_same_token_cells(meta_type_hash: &[u8; 32]) -> Result<bool, Error> {
 }
 
 pub fn has_legal_access_list_shard(meta_type_hash: &[u8; 32]) -> Result<bool, Error> {
-    let mut index = 0;
-    loop {
-        match load_cell_type(index, Source::Output) {
-            Ok(Some(script)) if is_access_list_script(&script, meta_type_hash) => {
-                let data = load_cell_data(index, Source::Output).map_err(|_| Error::Syscall)?;
-                parse_access_list_shard(&data)?;
-                return Ok(true);
-            }
-            Ok(_) => index += 1,
-            Err(SysError::IndexOutOfBound) => return Ok(false),
-            Err(_) => return Err(Error::Syscall),
-        }
-    }
+    Ok(!collect_legal_access_list_shards(meta_type_hash)?.is_empty())
 }
 
 pub fn has_full_domain_access_list_shards(meta_type_hash: &[u8; 32]) -> Result<bool, Error> {
+    let shards = collect_legal_access_list_shards(meta_type_hash)?;
+    if shards.is_empty() {
+        return Ok(false);
+    }
+
+    if shards[0].start != [0u8; 32] {
+        return Ok(false);
+    }
+
+    let mut expected_start = [0u8; 32];
+    for shard in &shards {
+        if shard.start != expected_start {
+            return Ok(false);
+        }
+        let Some(next_start) = increment_byte32(&shard.end) else {
+            return Ok(shard.end == [0xffu8; 32]);
+        };
+        expected_start = next_start;
+    }
+
+    Ok(false)
+}
+
+fn collect_legal_access_list_shards(
+    meta_type_hash: &[u8; 32],
+) -> Result<Vec<AccessListShard>, Error> {
+    let mut shards = Vec::new();
     let mut index = 0;
     loop {
         match load_cell_type(index, Source::Output) {
             Ok(Some(script)) if is_access_list_script(&script, meta_type_hash) => {
-                let data = load_cell_data(index, Source::Output).map_err(|_| Error::Syscall)?;
+                let data = load_cell_data(index, Source::Output)?;
                 let shard = parse_access_list_shard(&data)?;
-                if shard.start == [0u8; 32] && shard.end == [0xffu8; 32] && shard.entries == 0 {
-                    return Ok(true);
-                }
+                validate_shard_order(&shards, &shard)?;
+                shards.push(shard);
                 index += 1;
             }
             Ok(_) => index += 1,
-            Err(SysError::IndexOutOfBound) => return Ok(false),
-            Err(_) => return Err(Error::Syscall),
+            Err(SysError::IndexOutOfBound) => return Ok(shards),
+            Err(error) => return Err(error.into()),
         }
     }
 }
@@ -206,13 +220,13 @@ fn load_group_meta(source: Source) -> Result<Option<XudtMeta>, Error> {
                 index += 1;
             }
             Err(SysError::IndexOutOfBound) => return Ok(found),
-            Err(_) => return Err(Error::Syscall),
+            Err(error) => return Err(error.into()),
         }
     }
 }
 
 fn validate_meta_lock(index: usize, source: Source) -> Result<(), Error> {
-    let lock = load_cell_lock(index, source).map_err(|_| Error::Syscall)?;
+    let lock = load_cell_lock(index, source)?;
     let code_hash: [u8; 32] = lock.code_hash().unpack();
     if META_LOCK_CODE_HASH_WHITELIST.contains(&code_hash) {
         Ok(())
@@ -376,29 +390,28 @@ fn parse_script_attr(data: &[u8]) -> Result<ScriptAttr, Error> {
     })
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 struct AccessListShard {
     start: [u8; 32],
     end: [u8; 32],
-    entries: usize,
 }
 
 fn parse_access_list_shard(data: &[u8]) -> Result<AccessListShard, Error> {
-    let offsets = table_offsets(data, ACCESS_LIST_SHARD_FIELDS, true)?;
+    let offsets = table_offsets(data, ACCESS_LIST_SHARD_FIELDS, false)?;
     if offsets[1] != offsets[0] + 64 {
         return Err(Error::InvalidMetaData);
     }
     let start = byte32_field(data, offsets[0], offsets[0] + 32)?;
     let end = byte32_field(data, offsets[0] + 32, offsets[1])?;
-    let entries = parse_byte32_vec_count(&data[offsets[1]..offsets[2]])?;
-    Ok(AccessListShard {
-        start,
-        end,
-        entries,
-    })
+    if start > end || !is_nibble_aligned_range(&start, &end) {
+        return Err(Error::InvalidMetaData);
+    }
+
+    parse_byte32_vec(&data[offsets[1]..offsets[2]])?;
+    Ok(AccessListShard { start, end })
 }
 
-fn parse_byte32_vec_count(data: &[u8]) -> Result<usize, Error> {
+fn parse_byte32_vec(data: &[u8]) -> Result<Vec<[u8; 32]>, Error> {
     if data.len() < 4 {
         return Err(Error::InvalidMetaData);
     }
@@ -406,7 +419,50 @@ fn parse_byte32_vec_count(data: &[u8]) -> Result<usize, Error> {
     if count > MAX_ACCESSLIST_ENTRIES || data.len() != 4 + count * 32 {
         return Err(Error::InvalidMetaData);
     }
-    Ok(count)
+
+    let mut entries = Vec::with_capacity(count);
+    let mut prev = None;
+    for index in 0..count {
+        let start = 4 + index * 32;
+        let entry = byte32_field(data, start, start + 32)?;
+        if let Some(prev_entry) = prev {
+            if entry <= prev_entry {
+                return Err(Error::InvalidMetaData);
+            }
+        }
+        prev = Some(entry);
+        entries.push(entry);
+    }
+    Ok(entries)
+}
+
+fn validate_shard_order(
+    previous_shards: &[AccessListShard],
+    shard: &AccessListShard,
+) -> Result<(), Error> {
+    if let Some(previous) = previous_shards.last() {
+        if shard.start <= previous.end {
+            return Err(Error::InvalidMetaData);
+        }
+    }
+    Ok(())
+}
+
+fn is_nibble_aligned_range(start: &[u8; 32], end: &[u8; 32]) -> bool {
+    start[31] & 0x0f == 0 && end[31] & 0x0f == 0x0f
+}
+
+fn increment_byte32(value: &[u8; 32]) -> Option<[u8; 32]> {
+    let mut next = *value;
+    for byte in next.iter_mut().rev() {
+        if *byte == 0xff {
+            *byte = 0;
+        } else {
+            *byte += 1;
+            return Some(next);
+        }
+    }
+    None
 }
 
 fn table_offsets(

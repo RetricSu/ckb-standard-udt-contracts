@@ -94,6 +94,18 @@ fn full_domain_shard() -> Bytes {
     build_access_list_shard_bytes([0u8; 32], [0xffu8; 32], Vec::new())
 }
 
+fn access_list_shard_with_extra_field() -> Bytes {
+    let mut data = Vec::new();
+    data.extend_from_slice(&84u32.to_le_bytes());
+    data.extend_from_slice(&16u32.to_le_bytes());
+    data.extend_from_slice(&80u32.to_le_bytes());
+    data.extend_from_slice(&84u32.to_le_bytes());
+    data.extend_from_slice(&[0u8; 32]);
+    data.extend_from_slice(&[0xffu8; 32]);
+    data.extend_from_slice(&0u32.to_le_bytes());
+    Bytes::from(data)
+}
+
 struct UpdateCase {
     context: Context,
     tx: TransactionView,
@@ -353,4 +365,124 @@ fn xudt_meta_access_authority_controls_pause_and_access_mode() {
         )
     });
     expect_tx_pass(&with_authority.context, &with_authority.tx);
+}
+
+#[test]
+fn xudt_meta_disabled_to_blacklist_rejects_overlapping_access_list_outputs() {
+    let case = update_meta_tx(|context, lock, meta| {
+        let authority = input_lock_authority(lock.script_hash);
+        let access_list = access_list_script(context, meta.script_hash);
+        let overlapping_access_list = access_list_script(context, meta.script_hash);
+        (
+            xudt_meta_data(0, 0, None, None, Some(authority.clone()), Vec::new()),
+            xudt_meta_data(
+                CONFIG_ACCESS_ENABLED,
+                0,
+                None,
+                None,
+                Some(authority),
+                Vec::new(),
+            ),
+            vec![
+                ExtraCell::Output {
+                    lock: lock.script.clone(),
+                    type_script: access_list.script.clone(),
+                    data: full_domain_shard(),
+                    cell_dep: access_list,
+                },
+                ExtraCell::Output {
+                    lock: lock.script.clone(),
+                    type_script: overlapping_access_list.script.clone(),
+                    data: build_access_list_shard_bytes([0u8; 32], [0xffu8; 32], Vec::new()),
+                    cell_dep: overlapping_access_list,
+                },
+            ],
+        )
+    });
+
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 3");
+}
+
+#[test]
+fn xudt_meta_disabled_to_whitelist_rejects_access_list_start_after_end() {
+    let case = update_meta_tx(|context, lock, meta| {
+        let authority = input_lock_authority(lock.script_hash);
+        let access_list = access_list_script(context, meta.script_hash);
+        let mut start = [0u8; 32];
+        start[31] = 0x10;
+        (
+            xudt_meta_data(0, 0, None, None, Some(authority.clone()), Vec::new()),
+            xudt_meta_data(
+                CONFIG_ACCESS_ENABLED | CONFIG_ACCESS_WHITELIST,
+                0,
+                None,
+                None,
+                Some(authority),
+                Vec::new(),
+            ),
+            vec![ExtraCell::Output {
+                lock: lock.script.clone(),
+                type_script: access_list.script.clone(),
+                data: build_access_list_shard_bytes(start, [0u8; 32], Vec::new()),
+                cell_dep: access_list,
+            }],
+        )
+    });
+
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 3");
+}
+
+#[test]
+fn xudt_meta_disabled_to_whitelist_rejects_access_list_extra_table_field() {
+    let case = update_meta_tx(|context, lock, meta| {
+        let authority = input_lock_authority(lock.script_hash);
+        let access_list = access_list_script(context, meta.script_hash);
+        (
+            xudt_meta_data(0, 0, None, None, Some(authority.clone()), Vec::new()),
+            xudt_meta_data(
+                CONFIG_ACCESS_ENABLED | CONFIG_ACCESS_WHITELIST,
+                0,
+                None,
+                None,
+                Some(authority),
+                Vec::new(),
+            ),
+            vec![ExtraCell::Output {
+                lock: lock.script.clone(),
+                type_script: access_list.script.clone(),
+                data: access_list_shard_with_extra_field(),
+                cell_dep: access_list,
+            }],
+        )
+    });
+
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 3");
+}
+
+#[test]
+fn xudt_meta_disabled_to_whitelist_rejects_duplicate_access_list_entries() {
+    let case = update_meta_tx(|context, lock, meta| {
+        let authority = input_lock_authority(lock.script_hash);
+        let access_list = access_list_script(context, meta.script_hash);
+        let entry = [1u8; 32];
+        (
+            xudt_meta_data(0, 0, None, None, Some(authority.clone()), Vec::new()),
+            xudt_meta_data(
+                CONFIG_ACCESS_ENABLED | CONFIG_ACCESS_WHITELIST,
+                0,
+                None,
+                None,
+                Some(authority),
+                Vec::new(),
+            ),
+            vec![ExtraCell::Output {
+                lock: lock.script.clone(),
+                type_script: access_list.script.clone(),
+                data: build_access_list_shard_bytes([0u8; 32], [0xffu8; 32], vec![entry, entry]),
+                cell_dep: access_list,
+            }],
+        )
+    });
+
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 3");
 }

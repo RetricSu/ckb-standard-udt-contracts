@@ -127,7 +127,7 @@ fn has_input_lock_hash(target: &[u8; 32]) -> Result<bool, Error> {
             Ok(candidate) if &candidate == target => return Ok(true),
             Ok(_) => index += 1,
             Err(SysError::IndexOutOfBound) => return Ok(false),
-            Err(_) => return Err(Error::Syscall),
+            Err(error) => return Err(error.into()),
         }
     }
 }
@@ -139,7 +139,7 @@ fn has_type_hash(target: &[u8; 32], source: Source) -> Result<bool, Error> {
             Ok(Some(candidate)) if &candidate == target => return Ok(true),
             Ok(_) => index += 1,
             Err(SysError::IndexOutOfBound) => return Ok(false),
-            Err(_) => return Err(Error::Syscall),
+            Err(error) => return Err(error.into()),
         }
     }
 }
