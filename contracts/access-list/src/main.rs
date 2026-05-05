@@ -1,8 +1,20 @@
 #![cfg_attr(not(any(feature = "library", test)), no_std)]
 #![cfg_attr(not(test), no_main)]
+#![cfg_attr(feature = "library", allow(dead_code))]
 
 #[cfg(any(feature = "library", test))]
 extern crate alloc;
+
+#[path = "error.rs"]
+mod error;
+#[path = "meta.rs"]
+mod meta;
+#[path = "mode.rs"]
+mod mode;
+#[path = "run.rs"]
+mod run;
+#[path = "shards.rs"]
+mod shards;
 
 #[cfg(not(any(feature = "library", test)))]
 ckb_std::entry!(program_entry);
@@ -16,7 +28,8 @@ ckb_std::entry!(program_entry);
 ckb_std::default_alloc!(16384, 1258306, 64);
 
 pub fn program_entry() -> i8 {
-    ckb_std::debug!("This is a sample contract!");
-
-    0
+    match crate::run::run() {
+        Ok(()) => 0,
+        Err(error) => error.into(),
+    }
 }

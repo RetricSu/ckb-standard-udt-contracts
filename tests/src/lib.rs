@@ -16,6 +16,7 @@ pub mod metadata_builders;
 
 #[cfg(test)]
 mod tests {
+    mod access_list;
     mod sudt;
     mod sudt_meta;
     mod xudt_meta;
