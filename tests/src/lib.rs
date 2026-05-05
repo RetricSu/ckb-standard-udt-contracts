@@ -14,6 +14,11 @@ use std::str::FromStr;
 pub mod fixtures;
 pub mod metadata_builders;
 
+#[cfg(test)]
+mod tests {
+    mod sudt_meta;
+}
+
 // The exact same Loader code from capsule's template, except that
 // now we use MODE as the environment variable
 const TEST_ENV_VAR: &str = "MODE";

@@ -4,6 +4,10 @@
 #[cfg(any(feature = "library", test))]
 extern crate alloc;
 
+mod error;
+mod meta_cell;
+mod update;
+
 #[cfg(not(any(feature = "library", test)))]
 ckb_std::entry!(program_entry);
 #[cfg(not(any(feature = "library", test)))]
@@ -16,7 +20,19 @@ ckb_std::entry!(program_entry);
 ckb_std::default_alloc!(16384, 1258306, 64);
 
 pub fn program_entry() -> i8 {
-    ckb_std::debug!("This is a sample contract!");
+    match run() {
+        Ok(()) => 0,
+        Err(error) => error.into(),
+    }
+}
 
-    0
+fn run() -> Result<(), error::Error> {
+    meta_cell::validate_type_args()?;
+    let group = meta_cell::load_meta_group()?;
+
+    match (group.input.as_ref(), group.output.as_ref()) {
+        (None, Some(output)) => meta_cell::validate_create(output, &group.meta_type_hash),
+        (Some(input), Some(output)) => update::validate_update(input, output),
+        _ => Err(error::Error::InvalidArgs),
+    }
 }
