@@ -27,9 +27,9 @@ SIM_BUILD ?= auto
 # revert this behavior, you can change this to anything other than true
 CLEAN_BUILD_DIR_FIRST := true
 BUILD_DIR := build/$(MODE)
-# V1 contract set is the default and only build target.
-V1_CONTRACTS := sudt-meta-v1 sudt-type-v1 xudt-meta-v1 xudt-type-v1 accesslist-type-v1 eudt-plugin-allow-v1 eudt-plugin-deny-v1
-TEST_REQUIRED_BINARIES := $(addprefix $(BUILD_DIR)/,$(V1_CONTRACTS))
+CONTRACTS := enhanced-sudt-meta enhanced-sudt enhanced-xudt-meta enhanced-xudt access-list
+TEST_PLUGINS := dl-allow dl-deny spawn-allow spawn-deny
+TEST_REQUIRED_BINARIES := $(addprefix $(BUILD_DIR)/,$(CONTRACTS) $(TEST_PLUGINS))
 
 ifeq (release,$(MODE))
 	MODE_ARGS := --release
@@ -53,8 +53,11 @@ build:
 	mkdir -p $(BUILD_DIR)
 	@set -eu; \
 	if [ "x$(CONTRACT)" = "x" ]; then \
-		for contract in $(V1_CONTRACTS); do \
+		for contract in $(CONTRACTS); do \
 			$(MAKE) -e -C contracts/$$contract build; \
+		done; \
+		for plugin in $(TEST_PLUGINS); do \
+			$(MAKE) -e -C tests/plugins/$$plugin build; \
 		done; \
 		for crate in $(wildcard crates/*); do \
 			cargo build -p $$(basename $$crate) $(MODE_ARGS) $(CARGO_ARGS); \
@@ -172,7 +175,7 @@ generate:
 			cat $(DESTINATION)/$(CRATE)/.cargo-generate/tests.rs >> tests/src/tests.rs; \
 			rm -rf $(DESTINATION)/$(CRATE)/.cargo-generate/; \
 		fi; \
-		sed '/@@INSERTION_POINT@@/s/$$/\n  "$(DESTINATION)\/$(CRATE)",/' Cargo.toml > Cargo.toml.new; \
+		sed '\|@@INSERTION_POINT@@|s|$$|\n  "$(DESTINATION)/$(CRATE)",|' Cargo.toml > Cargo.toml.new; \
 		mv Cargo.toml.new Cargo.toml; \
 	fi;
 
