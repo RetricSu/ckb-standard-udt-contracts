@@ -28,5 +28,5 @@ pub extern "C" fn eudt_validate(
 }
 
 pub fn program_entry() -> i8 {
-    1
+    0
 }

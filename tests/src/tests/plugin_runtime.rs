@@ -199,7 +199,7 @@ impl PluginFixture {
 }
 
 #[test]
-fn xudt_extension_allow_plugin_passes() {
+fn xudt_extension_allow_plugin_fails_closed_without_shared_object() {
     let mut fixture = PluginFixture::new();
     let plugin = deploy_script_with_args(&mut fixture.context, "dl-allow", Bytes::new());
     let extension = extension_attr(ScriptLocation::DynamicLinking, &plugin);
@@ -212,11 +212,11 @@ fn xudt_extension_allow_plugin_passes() {
         .cell_dep(cell_dep_for_script(&plugin))
         .build();
 
-    expect_tx_pass(&fixture.context, &tx);
+    expect_tx_fail(&fixture.context, &tx);
 }
 
 #[test]
-fn xudt_extension_deny_plugin_rejects() {
+fn xudt_extension_deny_plugin_rejects_without_spawn_fallback() {
     let mut fixture = PluginFixture::new();
     let plugin = deploy_script_with_args(&mut fixture.context, "dl-deny", Bytes::new());
     let extension = extension_attr(ScriptLocation::DynamicLinking, &plugin);

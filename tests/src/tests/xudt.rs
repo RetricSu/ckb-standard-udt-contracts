@@ -1,7 +1,7 @@
 use crate::{
     fixtures::{
         cell_dep, cell_dep_for_script, create_funding_input, create_typed_cell, expect_tx_fail,
-        expect_tx_pass, typed_output,
+        expect_tx_fail_with_code, expect_tx_pass, typed_output,
     },
     metadata_builders::{
         build_access_list_shard_bytes, build_xudt_meta_bytes, input_lock_authority, script_hash,
@@ -114,6 +114,24 @@ impl XudtFixture {
         }
     }
 
+    fn new_with_always_success_meta() -> Self {
+        let mut context = Context::default();
+        let lock = always_success_lock(&mut context, Bytes::from(vec![1u8]));
+        let other_lock = always_success_lock(&mut context, Bytes::from(vec![2u8]));
+        let meta = always_success_lock(&mut context, Bytes::from(vec![3u8]));
+        let xudt = xudt_script(&mut context, meta.script_hash);
+        let access_list = access_list_script(&mut context, meta.script_hash);
+
+        Self {
+            context,
+            lock,
+            other_lock,
+            meta,
+            xudt,
+            access_list,
+        }
+    }
+
     fn live_udt_input_with_lock(&mut self, lock: &Script, amount: u128) -> CellInput {
         let out_point = create_typed_cell(
             &mut self.context,
@@ -132,6 +150,15 @@ impl XudtFixture {
 
     fn live_meta_input(&mut self, config_flags: u8, supply: u128, authorized: bool) -> CellInput {
         let mint_authority = authorized.then_some(input_lock_authority(self.lock.script_hash));
+        self.live_meta_input_with_authority(config_flags, supply, mint_authority)
+    }
+
+    fn live_meta_input_with_authority(
+        &mut self,
+        config_flags: u8,
+        supply: u128,
+        mint_authority: Option<ScriptAttr>,
+    ) -> CellInput {
         let out_point = create_typed_cell(
             &mut self.context,
             &self.lock.script,
@@ -144,6 +171,15 @@ impl XudtFixture {
 
     fn live_meta_dep(&mut self, config_flags: u8, supply: u128, authorized: bool) -> CellInput {
         self.live_meta_input(config_flags, supply, authorized)
+    }
+
+    fn output_meta_data(
+        &self,
+        config_flags: u8,
+        supply: u128,
+        mint_authority: Option<ScriptAttr>,
+    ) -> Bytes {
+        xudt_meta_data(config_flags, supply, mint_authority, Vec::new())
     }
 
     fn live_access_list_input(&mut self, data: Bytes) -> CellInput {
@@ -401,4 +437,74 @@ fn xudt_whitelist_rejects_missing_input_lock() {
     let tx = fixture.complete(tx);
 
     expect_tx_fail(&fixture.context, &tx);
+}
+
+#[test]
+fn xudt_protocol_burn_access_mode_switch_still_requires_mint_authority() {
+    let mut fixture = XudtFixture::new_with_always_success_meta();
+    let meta_input = fixture.live_meta_input_with_authority(CONFIG_ACCESS_ENABLED, 0, None);
+    let udt_input = fixture.live_udt_input(100);
+
+    let tx = TransactionBuilder::default()
+        .input(meta_input)
+        .input(udt_input)
+        .output(typed_output(
+            &fixture.lock.script,
+            &fixture.meta.script,
+            100_000_000_000,
+        ))
+        .output(typed_output(
+            &fixture.lock.script,
+            &fixture.xudt.script,
+            100_000_000_000,
+        ))
+        .output_data(
+            fixture
+                .output_meta_data(CONFIG_ACCESS_ENABLED | CONFIG_ACCESS_WHITELIST, 0, None)
+                .pack(),
+        )
+        .output_data(udt_amount_bytes(40).pack())
+        .build();
+    let tx = fixture.complete(tx);
+
+    expect_tx_fail_with_code(&fixture.context, &tx, "error code 13");
+}
+
+#[test]
+fn xudt_protocol_burn_access_mode_switch_does_not_skip_access_checks() {
+    let mut fixture = XudtFixture::new_with_always_success_meta();
+    let authority = input_lock_authority(fixture.lock.script_hash);
+    let meta_input = fixture.live_meta_input_with_authority(
+        CONFIG_ACCESS_ENABLED | CONFIG_ACCESS_WHITELIST,
+        0,
+        Some(authority.clone()),
+    );
+    let udt_input = fixture.live_udt_input(100);
+    let access_list =
+        fixture.live_access_list_input(full_domain_shard(vec![fixture.other_lock.script_hash]));
+
+    let tx = TransactionBuilder::default()
+        .input(meta_input)
+        .input(udt_input)
+        .cell_dep(cell_dep(access_list.previous_output()))
+        .output(typed_output(
+            &fixture.lock.script,
+            &fixture.meta.script,
+            100_000_000_000,
+        ))
+        .output(typed_output(
+            &fixture.lock.script,
+            &fixture.xudt.script,
+            100_000_000_000,
+        ))
+        .output_data(
+            fixture
+                .output_meta_data(CONFIG_ACCESS_ENABLED, 0, Some(authority))
+                .pack(),
+        )
+        .output_data(udt_amount_bytes(40).pack())
+        .build();
+    let tx = fixture.complete(tx);
+
+    expect_tx_fail_with_code(&fixture.context, &tx, "error code 18");
 }

@@ -77,23 +77,10 @@ fn validate_protocol_burn(
     input_meta: &XudtMeta,
     delta: u128,
 ) -> Result<(), Error> {
-    if is_access_mode_switch(meta_type_hash)? {
-        return Ok(());
-    }
     meta::require_authority(input_meta.mint_authority.as_ref())?;
     validate_supply_delta(meta_type_hash, delta, false)?;
     access::validate_if_enabled(meta_type_hash, input_meta)?;
     extensions::run_extensions(Operation::ProtocolBurn, &input_meta.extensions, true)
-}
-
-fn is_access_mode_switch(meta_type_hash: &[u8; 32]) -> Result<bool, Error> {
-    let Some(input_meta) = meta::find_meta_in_source(meta_type_hash, Source::Input)? else {
-        return Ok(false);
-    };
-    let Some(output_meta) = meta::find_meta_in_source(meta_type_hash, Source::Output)? else {
-        return Ok(false);
-    };
-    Ok(input_meta.access_mode_flags() != output_meta.access_mode_flags())
 }
 
 fn validate_supply_delta(meta_type_hash: &[u8; 32], delta: u128, mint: bool) -> Result<(), Error> {

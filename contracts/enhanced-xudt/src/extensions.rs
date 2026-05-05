@@ -40,13 +40,9 @@ fn run_dynamic_linking_extension(
     let script = extension.script.as_ref().ok_or(Error::InvalidMetaData)?;
     let code_hash = script.code_hash().raw_data();
     let mut context = unsafe { CKBDLContext::<[u8; 128 * 1024]>::new() };
-    let library = match context.load(&code_hash) {
-        Ok(library) => library,
-        Err(_) => {
-            // Generated Rust fixture binaries are executable scripts, not shared objects.
-            return run_spawn_extension(operation, index, extension, mint_authority_checked);
-        }
-    };
+    let library = context
+        .load(&code_hash)
+        .map_err(|_| Error::ExtensionFailed)?;
     let ext_data = script.args().raw_data();
 
     let result = unsafe {

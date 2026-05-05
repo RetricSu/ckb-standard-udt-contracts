@@ -63,10 +63,6 @@ impl XudtMeta {
     pub fn is_paused(&self) -> bool {
         self.config_flags & CONFIG_PAUSED != 0
     }
-
-    pub fn access_mode_flags(&self) -> u8 {
-        self.config_flags & (CONFIG_ACCESS_ENABLED | CONFIG_ACCESS_WHITELIST)
-    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
