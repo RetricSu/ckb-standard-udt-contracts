@@ -1,3 +1,5 @@
+use ckb_std::error::SysError;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Error {
     InvalidArgs,
@@ -28,5 +30,25 @@ impl Error {
 impl From<Error> for i8 {
     fn from(error: Error) -> Self {
         error.code()
+    }
+}
+
+impl From<SysError> for Error {
+    fn from(_: SysError) -> Self {
+        Self::Syscall
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Error;
+    use ckb_std::error::SysError;
+
+    #[test]
+    fn sys_error_maps_to_syscall() {
+        let error = Error::from(SysError::LengthNotEnough(32));
+
+        assert_eq!(error, Error::Syscall);
+        assert_eq!(i8::from(error), 8);
     }
 }
