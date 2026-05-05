@@ -53,7 +53,8 @@ pub fn validate_shards_for_mode(
             if !input_shards.is_empty() {
                 validate_full_domain(input_shards)?;
             }
-            validate_full_domain(output_shards)
+            validate_full_domain(output_shards)?;
+            validate_blacklist_diff(input_shards, output_shards)
         }
         AccessMode::Whitelist => {
             if output_shards.is_empty() {
@@ -62,6 +63,102 @@ pub fn validate_shards_for_mode(
                 Ok(())
             }
         }
+    }
+}
+
+fn validate_blacklist_diff(
+    input_shards: &[AccessListShard],
+    output_shards: &[AccessListShard],
+) -> Result<(), Error> {
+    if input_shards.is_empty() || have_identical_ranges(input_shards, output_shards) {
+        return Ok(());
+    }
+
+    if flatten_entries(input_shards) != flatten_entries(output_shards) {
+        return Err(Error::InvalidShardSet);
+    }
+
+    validate_split_merge_boundaries(input_shards, output_shards)
+}
+
+fn have_identical_ranges(
+    input_shards: &[AccessListShard],
+    output_shards: &[AccessListShard],
+) -> bool {
+    input_shards.len() == output_shards.len()
+        && input_shards
+            .iter()
+            .zip(output_shards)
+            .all(|(input, output)| input.start == output.start && input.end == output.end)
+}
+
+fn flatten_entries(shards: &[AccessListShard]) -> Vec<[u8; 32]> {
+    let mut entries = Vec::new();
+    for shard in shards {
+        entries.extend_from_slice(&shard.entries);
+    }
+    entries
+}
+
+fn validate_split_merge_boundaries(
+    input_shards: &[AccessListShard],
+    output_shards: &[AccessListShard],
+) -> Result<(), Error> {
+    let mut input_index = 0;
+    let mut output_index = 0;
+
+    while input_index < input_shards.len() && output_index < output_shards.len() {
+        if input_shards[input_index].start != output_shards[output_index].start {
+            return Err(Error::InvalidShardSet);
+        }
+
+        if input_shards[input_index].end == output_shards[output_index].end {
+            input_index += 1;
+            output_index += 1;
+            continue;
+        }
+
+        let input_start = input_index;
+        let output_start = output_index;
+        let mut input_end = input_shards[input_index].end;
+        let mut output_end = output_shards[output_index].end;
+
+        loop {
+            match input_end.cmp(&output_end) {
+                core::cmp::Ordering::Less => {
+                    input_index += 1;
+                    if input_index >= input_shards.len() {
+                        return Err(Error::InvalidShardSet);
+                    }
+                    input_end = input_shards[input_index].end;
+                }
+                core::cmp::Ordering::Greater => {
+                    output_index += 1;
+                    if output_index >= output_shards.len() {
+                        return Err(Error::InvalidShardSet);
+                    }
+                    output_end = output_shards[output_index].end;
+                }
+                core::cmp::Ordering::Equal => break,
+            }
+        }
+
+        let input_count = input_index - input_start + 1;
+        let output_count = output_index - output_start + 1;
+        let pure_split = input_count == 1 && output_count > 1;
+        let pure_merge = input_count > 1 && output_count == 1;
+        if !pure_split && !pure_merge {
+            return Err(Error::InvalidShardSet);
+        }
+
+        input_index += 1;
+        output_index += 1;
+    }
+
+    if input_index == input_shards.len() && output_index == output_shards.len() {
+        Ok(())
+    } else {
+        Err(Error::InvalidShardSet)
     }
 }
 

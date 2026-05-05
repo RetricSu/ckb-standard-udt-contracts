@@ -1,5 +1,7 @@
 use crate::{
-    fixtures::{cell_dep_for_script, create_typed_cell, expect_tx_fail, typed_output},
+    fixtures::{
+        cell_dep_for_script, create_typed_cell, expect_tx_fail, expect_tx_pass, typed_output,
+    },
     metadata_builders::{
         build_access_list_shard_bytes, build_xudt_meta_bytes, input_lock_authority, script_hash,
         DeployedScript,
@@ -71,8 +73,28 @@ fn shard(start_last: u8, end_last: u8, entries: Vec<[u8; 32]>) -> Bytes {
     build_access_list_shard_bytes(start, end, entries)
 }
 
+fn bounded_shard(start_last: u8, end_last: u8, entries: Vec<[u8; 32]>) -> Bytes {
+    let mut start = [0u8; 32];
+    let mut end = [0u8; 32];
+    start[31] = start_last;
+    end[31] = end_last;
+    build_access_list_shard_bytes(start, end, entries)
+}
+
+fn tail_shard(start_last: u8, entries: Vec<[u8; 32]>) -> Bytes {
+    let mut start = [0u8; 32];
+    start[31] = start_last;
+    build_access_list_shard_bytes(start, [0xffu8; 32], entries)
+}
+
 fn full_domain_shard(entries: Vec<[u8; 32]>) -> Bytes {
     build_access_list_shard_bytes([0u8; 32], [0xffu8; 32], entries)
+}
+
+fn entry(last: u8) -> [u8; 32] {
+    let mut value = [0u8; 32];
+    value[31] = last;
+    value
 }
 
 struct AccessListCase {
@@ -198,6 +220,66 @@ fn access_list_whitelist_missing_coverage_is_fail_closed_for_xudt() {
         true,
         vec![shard(0x00, 0x0f, Vec::new())],
         Vec::new(),
+    );
+
+    expect_tx_fail(&case.context, &case.tx);
+}
+
+#[test]
+fn access_list_blacklist_allows_same_range_insert_delete() {
+    let case = access_list_update_tx(
+        CONFIG_ACCESS_ENABLED,
+        true,
+        vec![full_domain_shard(vec![entry(0x10)])],
+        vec![full_domain_shard(vec![entry(0x10), entry(0x20)])],
+    );
+
+    expect_tx_pass(&case.context, &case.tx);
+}
+
+#[test]
+fn access_list_blacklist_allows_split_preserving_entries() {
+    let case = access_list_update_tx(
+        CONFIG_ACCESS_ENABLED,
+        true,
+        vec![full_domain_shard(vec![entry(0x08), entry(0x20)])],
+        vec![
+            bounded_shard(0x00, 0x0f, vec![entry(0x08)]),
+            tail_shard(0x10, vec![entry(0x20)]),
+        ],
+    );
+
+    expect_tx_pass(&case.context, &case.tx);
+}
+
+#[test]
+fn access_list_blacklist_rejects_split_that_changes_entries() {
+    let case = access_list_update_tx(
+        CONFIG_ACCESS_ENABLED,
+        true,
+        vec![full_domain_shard(vec![entry(0x08)])],
+        vec![
+            bounded_shard(0x00, 0x0f, vec![entry(0x08)]),
+            tail_shard(0x10, vec![entry(0x20)]),
+        ],
+    );
+
+    expect_tx_fail(&case.context, &case.tx);
+}
+
+#[test]
+fn access_list_blacklist_rejects_boundary_rewrite_with_entry_changes() {
+    let case = access_list_update_tx(
+        CONFIG_ACCESS_ENABLED,
+        true,
+        vec![
+            bounded_shard(0x00, 0x0f, vec![entry(0x08)]),
+            tail_shard(0x10, vec![entry(0x20)]),
+        ],
+        vec![
+            bounded_shard(0x00, 0x1f, vec![entry(0x08), entry(0x18)]),
+            tail_shard(0x20, vec![entry(0x20)]),
+        ],
     );
 
     expect_tx_fail(&case.context, &case.tx);
