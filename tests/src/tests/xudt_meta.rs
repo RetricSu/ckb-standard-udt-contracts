@@ -90,6 +90,53 @@ fn with_config_flags(data: Bytes, config_flags: u8) -> Bytes {
     Bytes::from(data)
 }
 
+fn malformed_name_meta_data() -> Bytes {
+    let name = 1u32.to_le_bytes().to_vec();
+    replace_xudt_meta_table_field(xudt_meta_data(0, 0, None, None, None, Vec::new()), 3, &name)
+}
+
+fn oversized_name_meta_data() -> Bytes {
+    let mut name = 1025u32.to_le_bytes().to_vec();
+    name.extend_from_slice(&vec![0u8; 1025]);
+    replace_xudt_meta_table_field(xudt_meta_data(0, 0, None, None, None, Vec::new()), 3, &name)
+}
+
+fn replace_xudt_meta_table_field(data: Bytes, field_index: usize, replacement: &[u8]) -> Bytes {
+    let data = data.to_vec();
+    let first_offset = read_u32(&data, 4) as usize;
+    let field_count = first_offset / 4 - 1;
+    let mut offsets = Vec::with_capacity(field_count + 1);
+    for index in 0..field_count {
+        offsets.push(read_u32(&data, 4 + index * 4) as usize);
+    }
+    offsets.push(data.len());
+
+    let old_start = offsets[field_index];
+    let old_end = offsets[field_index + 1];
+    let delta = replacement.len() as isize - (old_end - old_start) as isize;
+    let new_total = (data.len() as isize + delta) as usize;
+
+    let mut result = Vec::with_capacity(new_total);
+    result.extend_from_slice(&new_total.to_le_bytes()[..4]);
+    for index in 0..field_count {
+        let offset = if index <= field_index {
+            offsets[index]
+        } else {
+            (offsets[index] as isize + delta) as usize
+        };
+        result.extend_from_slice(&(offset as u32).to_le_bytes());
+    }
+    result.extend_from_slice(&data[first_offset..old_start]);
+    result.extend_from_slice(replacement);
+    result.extend_from_slice(&data[old_end..]);
+
+    Bytes::from(result)
+}
+
+fn read_u32(data: &[u8], start: usize) -> u32 {
+    u32::from_le_bytes(data[start..start + 4].try_into().expect("u32 field"))
+}
+
 fn full_domain_shard() -> Bytes {
     build_access_list_shard_bytes([0u8; 32], [0xffu8; 32], Vec::new())
 }
@@ -189,6 +236,26 @@ fn xudt_meta_rejects_invalid_config_flags() {
         let input = xudt_meta_data(0, 0, None, None, None, Vec::new());
         let output = with_config_flags(input.clone(), CONFIG_ACCESS_WHITELIST);
         (input, output, Vec::new())
+    });
+
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 3");
+}
+
+#[test]
+fn xudt_meta_rejects_malformed_name_bytes_field() {
+    let case = update_meta_tx(|_, _, _| {
+        let data = malformed_name_meta_data();
+        (data.clone(), data, Vec::new())
+    });
+
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 3");
+}
+
+#[test]
+fn xudt_meta_rejects_oversized_name_field() {
+    let case = update_meta_tx(|_, _, _| {
+        let data = oversized_name_meta_data();
+        (data.clone(), data, Vec::new())
     });
 
     expect_tx_fail_with_code(&case.context, &case.tx, "error code 3");

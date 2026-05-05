@@ -25,6 +25,10 @@ const XUDT_ALLOWED_CONFIG_MASK: u8 =
     CONFIG_SUPPLY_TRACKED | CONFIG_ACCESS_ENABLED | CONFIG_ACCESS_WHITELIST | CONFIG_PAUSED;
 const MAX_EXTENSIONS: usize = 16;
 const MAX_ACCESSLIST_ENTRIES: usize = 8192;
+const MAX_METADATA_NAME_BYTES: usize = 1024;
+const MAX_METADATA_SYMBOL_BYTES: usize = 128;
+const MAX_METADATA_URI_BYTES: usize = 2048;
+const MAX_METADATA_EXTRA_DATA_BYTES: usize = 16 * 1024;
 
 // Current compatibility whitelist is by lock code_hash, matching enhanced-sudt.
 const META_LOCK_CODE_HASH_WHITELIST: [[u8; 32]; 2] = [
@@ -245,6 +249,10 @@ fn parse_meta(data: &[u8]) -> Result<XudtMeta, Error> {
 
     let current_supply = u128_field(data, offsets[1], offsets[2])?;
     let _decimals = single_byte_field(data, offsets[2], offsets[3])?;
+    validate_bytes_field(data, offsets[3], offsets[4], MAX_METADATA_NAME_BYTES)?;
+    validate_bytes_field(data, offsets[4], offsets[5], MAX_METADATA_SYMBOL_BYTES)?;
+    validate_bytes_field(data, offsets[5], offsets[6], MAX_METADATA_URI_BYTES)?;
+    validate_bytes_field(data, offsets[6], offsets[7], MAX_METADATA_EXTRA_DATA_BYTES)?;
     let metadata_fields = data[offsets[2]..offsets[7]].to_vec();
     let mint_authority_raw = data[offsets[7]..offsets[8]].to_vec();
     let metadata_authority_raw = data[offsets[8]..offsets[9]].to_vec();
@@ -531,6 +539,24 @@ fn byte32_field(data: &[u8], start: usize, end: usize) -> Result<[u8; 32], Error
     let mut raw = [0u8; 32];
     raw.copy_from_slice(&data[start..end]);
     Ok(raw)
+}
+
+fn validate_bytes_field(
+    data: &[u8],
+    start: usize,
+    end: usize,
+    max_len: usize,
+) -> Result<(), Error> {
+    if end < start || end > data.len() || end - start < 4 {
+        return Err(Error::InvalidMetaData);
+    }
+
+    let count = read_u32(data, start)? as usize;
+    if count > max_len || end - start != 4 + count {
+        return Err(Error::InvalidMetaData);
+    }
+
+    Ok(())
 }
 
 fn read_u32(data: &[u8], start: usize) -> Result<u32, Error> {
