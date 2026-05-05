@@ -111,7 +111,7 @@ make generate CRATE=enhanced-xudt
 make generate CRATE=access-list
 ```
 
-Expected: each command creates a contract crate under `contracts/` using `ckb-script-templates`, with its own generated `Makefile`, `Cargo.toml`, and `src/main.rs` / `src/main.rs` structure. Root `Cargo.toml` is updated by the existing `make generate` insertion point.
+Expected: each command creates a contract crate under `contracts/` using `ckb-script-templates`, with its own generated `Makefile`, `Cargo.toml`, and `src/main.rs` / `src/lib.rs` structure. Root `Cargo.toml` is updated by the existing `make generate` insertion point.
 
 - [ ] **Step 3: Generate test plugin script crates via template**
 
