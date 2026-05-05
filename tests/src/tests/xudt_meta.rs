@@ -486,3 +486,94 @@ fn xudt_meta_disabled_to_whitelist_rejects_duplicate_access_list_entries() {
 
     expect_tx_fail_with_code(&case.context, &case.tx, "error code 3");
 }
+
+#[test]
+fn xudt_meta_blacklist_to_whitelist_requires_legal_output_shard() {
+    let missing_shard = update_meta_tx(|_, lock, _| {
+        let authority = input_lock_authority(lock.script_hash);
+        (
+            xudt_meta_data(
+                CONFIG_ACCESS_ENABLED,
+                0,
+                None,
+                None,
+                Some(authority.clone()),
+                Vec::new(),
+            ),
+            xudt_meta_data(
+                CONFIG_ACCESS_ENABLED | CONFIG_ACCESS_WHITELIST,
+                0,
+                None,
+                None,
+                Some(authority),
+                Vec::new(),
+            ),
+            Vec::new(),
+        )
+    });
+    expect_tx_fail_with_code(&missing_shard.context, &missing_shard.tx, "error code 9");
+
+    let with_shard = update_meta_tx(|context, lock, meta| {
+        let authority = input_lock_authority(lock.script_hash);
+        let access_list = access_list_script(context, meta.script_hash);
+        (
+            xudt_meta_data(
+                CONFIG_ACCESS_ENABLED,
+                0,
+                None,
+                None,
+                Some(authority.clone()),
+                Vec::new(),
+            ),
+            xudt_meta_data(
+                CONFIG_ACCESS_ENABLED | CONFIG_ACCESS_WHITELIST,
+                0,
+                None,
+                None,
+                Some(authority),
+                Vec::new(),
+            ),
+            vec![ExtraCell::Output {
+                lock: lock.script.clone(),
+                type_script: access_list.script.clone(),
+                data: full_domain_shard(),
+                cell_dep: access_list,
+            }],
+        )
+    });
+    expect_tx_pass(&with_shard.context, &with_shard.tx);
+}
+
+#[test]
+fn xudt_meta_blacklist_to_whitelist_rejects_malformed_access_list_output() {
+    let case = update_meta_tx(|context, lock, meta| {
+        let authority = input_lock_authority(lock.script_hash);
+        let access_list = access_list_script(context, meta.script_hash);
+        (
+            xudt_meta_data(
+                CONFIG_ACCESS_ENABLED,
+                0,
+                None,
+                None,
+                Some(authority.clone()),
+                Vec::new(),
+            ),
+            xudt_meta_data(
+                CONFIG_ACCESS_ENABLED | CONFIG_ACCESS_WHITELIST,
+                0,
+                None,
+                None,
+                Some(authority),
+                Vec::new(),
+            ),
+            vec![ExtraCell::Output {
+                lock: lock.script.clone(),
+                type_script: access_list.script.clone(),
+                data: access_list_shard_with_extra_field(),
+                cell_dep: access_list,
+            }],
+        )
+    });
+
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 3");
+}

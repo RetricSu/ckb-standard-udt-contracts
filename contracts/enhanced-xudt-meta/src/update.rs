@@ -90,7 +90,7 @@ fn validate_access_mode_transition(
                 return Err(Error::AccessListRequired);
             }
         }
-        (false, false, true, true) => {
+        (false, false, true, true) | (true, false, true, true) => {
             if !has_legal_access_list_shard(meta_type_hash)? {
                 return Err(Error::AccessListRequired);
             }
