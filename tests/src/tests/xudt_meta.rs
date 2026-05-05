@@ -352,11 +352,12 @@ fn xudt_meta_access_mode_switch_rejects_same_token_xudt_cells() {
     let case = update_meta_tx(|context, lock, meta| {
         let authority = input_lock_authority(lock.script_hash);
         let access_list = access_list_script(context, meta.script_hash);
-        let xudt = xudt_script(context, meta.script_hash);
+        let input_xudt = xudt_script(context, meta.script_hash);
+        let output_xudt = xudt_script(context, meta.script_hash);
         let previous_output = create_typed_cell(
             context,
             &lock.script,
-            &xudt.script,
+            &input_xudt.script,
             100_000_000_000,
             udt_amount_bytes(1),
         );
@@ -386,7 +387,13 @@ fn xudt_meta_access_mode_switch_rejects_same_token_xudt_cells() {
                 },
                 ExtraCell::Input {
                     previous_output,
-                    cell_dep: xudt,
+                    cell_dep: input_xudt,
+                },
+                ExtraCell::Output {
+                    lock: lock.script.clone(),
+                    type_script: output_xudt.script.clone(),
+                    data: udt_amount_bytes(1),
+                    cell_dep: output_xudt,
                 },
             ],
         )
