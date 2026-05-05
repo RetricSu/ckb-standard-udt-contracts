@@ -14,17 +14,27 @@ use crate::{error::Error, meta::ScriptAttr, run::Operation};
 
 type ExtensionFn = unsafe extern "C" fn(*const u8, u8, u8, *const u8, usize, u8) -> i8;
 
+pub type MintAuthorityContext = Option<bool>;
+
+const fn mint_authority_context_code(value: MintAuthorityContext) -> u8 {
+    match value {
+        Some(true) => 1,
+        Some(false) => 0,
+        None => 2,
+    }
+}
+
 pub fn run_extensions(
     operation: Operation,
     extensions: &[ScriptAttr],
-    mint_authority_checked: bool,
+    mint_authority_context: MintAuthorityContext,
 ) -> Result<(), Error> {
     for (index, extension) in extensions.iter().enumerate() {
         match extension.location {
             3 => {
-                run_dynamic_linking_extension(operation, index, extension, mint_authority_checked)?
+                run_dynamic_linking_extension(operation, index, extension, mint_authority_context)?
             }
-            4 => run_spawn_extension(operation, index, extension, mint_authority_checked)?,
+            4 => run_spawn_extension(operation, index, extension, mint_authority_context)?,
             _ => return Err(Error::InvalidMetaData),
         }
     }
@@ -35,7 +45,7 @@ fn run_dynamic_linking_extension(
     operation: Operation,
     index: usize,
     extension: &ScriptAttr,
-    mint_authority_checked: bool,
+    mint_authority_context: MintAuthorityContext,
 ) -> Result<(), Error> {
     let script = extension.script.as_ref().ok_or(Error::InvalidMetaData)?;
     let code_hash = script.code_hash().raw_data();
@@ -55,7 +65,7 @@ fn run_dynamic_linking_extension(
             index as u8,
             ext_data.as_ptr(),
             ext_data.len(),
-            u8::from(mint_authority_checked),
+            mint_authority_context_code(mint_authority_context),
         )
     };
 
@@ -70,7 +80,7 @@ fn run_spawn_extension(
     operation: Operation,
     index: usize,
     extension: &ScriptAttr,
-    mint_authority_checked: bool,
+    mint_authority_context: MintAuthorityContext,
 ) -> Result<(), Error> {
     let script = extension.script.as_ref().ok_or(Error::InvalidMetaData)?;
     let code_hash = script.code_hash().raw_data();
@@ -78,8 +88,10 @@ fn run_spawn_extension(
     let ext_index = CString::new(decimal_byte(index as u8)).map_err(|_| Error::InvalidMetaData)?;
     let ext_data =
         CString::new(hex_encode(&script.args().raw_data())).map_err(|_| Error::InvalidMetaData)?;
-    let checked = CString::new(if mint_authority_checked { "1" } else { "0" })
-        .map_err(|_| Error::InvalidMetaData)?;
+    let checked = CString::new(decimal_byte(mint_authority_context_code(
+        mint_authority_context,
+    )))
+    .map_err(|_| Error::InvalidMetaData)?;
     let args: [&CStr; 4] = [
         op.as_c_str(),
         ext_index.as_c_str(),

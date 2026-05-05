@@ -61,7 +61,7 @@ fn validate_transfer(meta_type_hash: &[u8; 32], current_meta: &XudtMeta) -> Resu
         return Err(Error::MetaStateMismatch);
     }
     access::validate_if_enabled(meta_type_hash, current_meta)?;
-    extensions::run_extensions(Operation::Transfer, &current_meta.extensions, false)
+    extensions::run_extensions(Operation::Transfer, &current_meta.extensions, None)
 }
 
 fn validate_mint(
@@ -74,7 +74,7 @@ fn validate_mint(
     }
     meta::require_authority(current_meta.mint_authority.as_ref())?;
     validate_supply_delta(meta_type_hash, delta, true)?;
-    extensions::run_extensions(Operation::Mint, &current_meta.extensions, true)
+    extensions::run_extensions(Operation::Mint, &current_meta.extensions, Some(true))
 }
 
 fn validate_protocol_burn(
@@ -85,7 +85,7 @@ fn validate_protocol_burn(
     meta::require_authority(input_meta.mint_authority.as_ref())?;
     validate_supply_delta(meta_type_hash, delta, false)?;
     access::validate_if_enabled(meta_type_hash, input_meta)?;
-    extensions::run_extensions(Operation::ProtocolBurn, &input_meta.extensions, true)
+    extensions::run_extensions(Operation::ProtocolBurn, &input_meta.extensions, None)
 }
 
 fn validate_supply_delta(meta_type_hash: &[u8; 32], delta: u128, mint: bool) -> Result<(), Error> {

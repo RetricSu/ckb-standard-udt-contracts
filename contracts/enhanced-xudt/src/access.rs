@@ -2,7 +2,7 @@ use alloc::vec::Vec;
 
 use ckb_std::{
     ckb_constants::Source,
-    ckb_types::prelude::*,
+    ckb_types::{core::ScriptHashType, prelude::*},
     error::SysError,
     high_level::{load_cell_data, load_cell_lock_hash, load_cell_type},
 };
@@ -100,7 +100,9 @@ fn is_access_list_script(
     meta_type_hash: &[u8; 32],
 ) -> bool {
     let code_hash: [u8; 32] = type_script.code_hash().unpack();
-    type_script.args().raw_data().as_ref() == meta_type_hash && code_hash == ACCESS_LIST_CODE_HASH
+    type_script.hash_type() == ScriptHashType::Data2.into()
+        && type_script.args().raw_data().as_ref() == meta_type_hash
+        && code_hash == ACCESS_LIST_CODE_HASH
 }
 
 fn parse_access_list_shard(data: &[u8]) -> Result<AccessListShard, Error> {

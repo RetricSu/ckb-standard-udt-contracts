@@ -193,6 +193,29 @@ impl XudtFixture {
         CellInput::new_builder().previous_output(out_point).build()
     }
 
+    fn live_access_list_input_with_hash_type(
+        &mut self,
+        hash_type: ScriptHashType,
+        data: Bytes,
+    ) -> CellInput {
+        let type_script = self
+            .context
+            .build_script_with_hash_type(
+                &self.access_list.out_point,
+                hash_type,
+                Bytes::from(self.meta.script_hash.to_vec()),
+            )
+            .expect("build access-list script with hash type");
+        let out_point = create_typed_cell(
+            &mut self.context,
+            &self.lock.script,
+            &type_script,
+            100_000_000_000,
+            data,
+        );
+        CellInput::new_builder().previous_output(out_point).build()
+    }
+
     fn complete(&mut self, tx: TransactionView) -> TransactionView {
         let tx = tx
             .as_advanced_builder()
@@ -474,6 +497,32 @@ fn xudt_whitelist_rejects_missing_input_lock() {
     let tx = fixture.complete(tx);
 
     expect_tx_fail(&fixture.context, &tx);
+}
+
+#[test]
+fn xudt_whitelist_ignores_non_data2_access_list_shards() {
+    let mut fixture = XudtFixture::new();
+    let meta_dep = fixture.live_meta_dep(CONFIG_ACCESS_ENABLED | CONFIG_ACCESS_WHITELIST, 0, false);
+    let udt_input = fixture.live_udt_input(100);
+    let fake_access_list = fixture.live_access_list_input_with_hash_type(
+        ScriptHashType::Data,
+        full_domain_shard(vec![fixture.lock.script_hash]),
+    );
+
+    let tx = TransactionBuilder::default()
+        .input(udt_input)
+        .cell_dep(cell_dep(meta_dep.previous_output()))
+        .cell_dep(cell_dep(fake_access_list.previous_output()))
+        .output(typed_output(
+            &fixture.lock.script,
+            &fixture.xudt.script,
+            100_000_000_000,
+        ))
+        .output_data(udt_amount_bytes(100).pack())
+        .build();
+    let tx = fixture.complete(tx);
+
+    expect_tx_fail_with_code(&fixture.context, &tx, "error code 18");
 }
 
 #[test]

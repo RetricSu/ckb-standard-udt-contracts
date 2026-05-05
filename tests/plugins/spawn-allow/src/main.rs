@@ -28,5 +28,8 @@ pub fn program_entry() -> i8 {
     {
         return 3;
     }
+    if args[2].to_bytes() == b"726571756972655f6d696e745f6e6f6e65" && args[3].to_bytes() != b"2" {
+        return 4;
+    }
     0
 }

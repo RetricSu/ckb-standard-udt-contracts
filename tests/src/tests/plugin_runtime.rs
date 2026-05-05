@@ -204,6 +204,39 @@ impl PluginFixture {
         self.complete(tx)
     }
 
+    fn protocol_burn_tx(
+        &mut self,
+        meta_input: CellInput,
+        extensions: Vec<ScriptAttr>,
+    ) -> TransactionView {
+        let udt_input = self.live_udt_input(100);
+        let tx = TransactionBuilder::default()
+            .input(meta_input)
+            .input(udt_input)
+            .output(typed_output(
+                &self.lock.script,
+                &self.meta.script,
+                100_000_000_000,
+            ))
+            .output(typed_output(
+                &self.lock.script,
+                &self.xudt.script,
+                100_000_000_000,
+            ))
+            .output_data(
+                xudt_meta_data(
+                    CONFIG_SUPPLY_TRACKED,
+                    50,
+                    Some(input_lock_authority(self.lock.script_hash)),
+                    extensions,
+                )
+                .pack(),
+            )
+            .output_data(udt_amount_bytes(50).pack())
+            .build();
+        self.complete(tx)
+    }
+
     fn complete(&mut self, tx: TransactionView) -> TransactionView {
         let tx = tx
             .as_advanced_builder()
@@ -301,6 +334,48 @@ fn xudt_spawn_extension_deny_plugin_rejects() {
 }
 
 #[test]
+fn xudt_transfer_extension_receives_mint_authority_none() {
+    let mut fixture = PluginFixture::new();
+    let plugin = dynamic_library_script(
+        &mut fixture.context,
+        "dl-shared-allow",
+        Bytes::from_static(b"require_mint_none"),
+    );
+    let extension = extension_attr(ScriptLocation::DynamicLinking, &plugin);
+    let meta_input = fixture.live_meta_input(0, 0, vec![extension.clone()]);
+    let udt_input = fixture.live_udt_input(100);
+
+    let tx = fixture
+        .transfer_tx(meta_input, udt_input)
+        .as_advanced_builder()
+        .cell_dep(cell_dep_for_script(&plugin))
+        .build();
+
+    expect_tx_pass(&fixture.context, &tx);
+}
+
+#[test]
+fn xudt_spawn_transfer_extension_receives_mint_authority_none() {
+    let mut fixture = PluginFixture::new();
+    let plugin = deploy_script_with_args(
+        &mut fixture.context,
+        "spawn-allow",
+        Bytes::from_static(b"require_mint_none"),
+    );
+    let extension = extension_attr(ScriptLocation::Spawn, &plugin);
+    let meta_input = fixture.live_meta_input(0, 0, vec![extension.clone()]);
+    let udt_input = fixture.live_udt_input(100);
+
+    let tx = fixture
+        .transfer_tx(meta_input, udt_input)
+        .as_advanced_builder()
+        .cell_dep(cell_dep_for_script(&plugin))
+        .build();
+
+    expect_tx_pass(&fixture.context, &tx);
+}
+
+#[test]
 fn xudt_mint_extension_receives_mint_authority_checked() {
     let mut fixture = PluginFixture::new();
     let plugin = dynamic_library_script(
@@ -313,6 +388,26 @@ fn xudt_mint_extension_receives_mint_authority_checked() {
 
     let tx = fixture
         .mint_tx(meta_input, vec![extension])
+        .as_advanced_builder()
+        .cell_dep(cell_dep_for_script(&plugin))
+        .build();
+
+    expect_tx_pass(&fixture.context, &tx);
+}
+
+#[test]
+fn xudt_protocol_burn_extension_receives_mint_authority_none() {
+    let mut fixture = PluginFixture::new();
+    let plugin = dynamic_library_script(
+        &mut fixture.context,
+        "dl-shared-allow",
+        Bytes::from_static(b"require_mint_none"),
+    );
+    let extension = extension_attr(ScriptLocation::DynamicLinking, &plugin);
+    let meta_input = fixture.live_meta_input(CONFIG_SUPPLY_TRACKED, 100, vec![extension.clone()]);
+
+    let tx = fixture
+        .protocol_burn_tx(meta_input, vec![extension])
         .as_advanced_builder()
         .cell_dep(cell_dep_for_script(&plugin))
         .build();
