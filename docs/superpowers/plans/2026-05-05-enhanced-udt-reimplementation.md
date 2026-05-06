@@ -1394,7 +1394,7 @@ Expected: FAIL because the xUDT contract and test plugins are stubs.
 #![no_main]
 
 #[no_mangle]
-pub extern "C" fn eudt_validate(
+pub extern "C" fn udt_validate(
     _script_hash: *const u8,
     _op_type: u8,
     _ext_index: u8,
@@ -1419,7 +1419,7 @@ ckb_std::entry!(program_entry);
 #![no_main]
 
 #[no_mangle]
-pub extern "C" fn eudt_validate(
+pub extern "C" fn udt_validate(
     _script_hash: *const u8,
     _op_type: u8,
     _ext_index: u8,

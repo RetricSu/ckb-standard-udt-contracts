@@ -155,7 +155,7 @@ Authority plugins should use a minimal ABI independent from xUDT extension opera
 Dynamic linking:
 
 ```c
-int eudt_authorize(const unsigned char *script_hash,
+int udt_authorize(const unsigned char *script_hash,
                    const unsigned char *args,
                    unsigned long args_len);
 ```
@@ -178,7 +178,7 @@ Rules:
 - Exit `0` to authorize.
 - Any nonzero exit denies.
 
-This ABI is intentionally separate from xUDT extension ABI. Extensions still use `eudt_validate(...)` and extension operation context.
+This ABI is intentionally separate from xUDT extension ABI. Extensions still use `udt_validate(...)` and extension operation context.
 
 ## xUDT Extensions
 
@@ -192,7 +192,7 @@ This ABI is intentionally separate from xUDT extension ABI. Extensions still use
 - Extension ABI remains:
 
 ```c
-int eudt_validate(const unsigned char *script_hash,
+int udt_validate(const unsigned char *script_hash,
                   unsigned char op_type,
                   unsigned char ext_index,
                   const unsigned char *ext_data_ptr,

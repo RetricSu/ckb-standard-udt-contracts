@@ -14,7 +14,7 @@ CFLAGS := --target=riscv64-unknown-linux-gnu -march=rv64imac -mabi=lp64 -fuse-ld
 LDFLAGS := -Wl,-static -Wl,--gc-sections -Wl,-z,separate-code -shared
 
 build:
-	$(CLANG) $(CFLAGS) $(LDFLAGS) -o $(OUTPUT) src/eudt_authorize.c
+	$(CLANG) $(CFLAGS) $(LDFLAGS) -o $(OUTPUT) src/udt_authorize.c
 	@set -eu; \
 	if [ "x$(BUILD_DIR)" != "x" ]; then \
 		mkdir -p "$(REPO_ROOT)/$(BUILD_DIR)"; \

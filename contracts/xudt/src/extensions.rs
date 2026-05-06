@@ -57,9 +57,8 @@ fn run_dynamic_linking_extension(
 
     let script_hash: [u8; 32] = script.calc_script_hash().unpack();
     let result = unsafe {
-        let validate: Symbol<ExtensionFn> = library
-            .get(b"eudt_validate")
-            .ok_or(Error::ExtensionFailed)?;
+        let validate: Symbol<ExtensionFn> =
+            library.get(b"udt_validate").ok_or(Error::ExtensionFailed)?;
         validate(
             script_hash.as_ptr(),
             operation.code(),

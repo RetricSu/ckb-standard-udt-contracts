@@ -119,7 +119,7 @@ fn run_dynamic_linking_authority(authority: &ParsedAuthority) -> Result<bool, Sc
 
     let result = unsafe {
         let authorize: Symbol<AuthorityFn> = library
-            .get(b"eudt_authorize")
+            .get(b"udt_authorize")
             .ok_or(ScriptError::AuthorityFailed)?;
         authorize(authority.script_hash.as_ptr(), args.as_ptr(), args.len())
     };

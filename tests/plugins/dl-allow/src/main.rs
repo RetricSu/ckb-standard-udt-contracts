@@ -16,7 +16,7 @@ ckb_std::entry!(program_entry);
 ckb_std::default_alloc!(16384, 1258306, 64);
 
 #[unsafe(no_mangle)]
-pub extern "C" fn eudt_validate(
+pub extern "C" fn udt_validate(
     _script_hash: *const u8,
     _op_type: u8,
     _ext_index: u8,

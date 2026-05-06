@@ -17,7 +17,7 @@ static int matches_allow(const unsigned char *data, size_t len) {
   return 1;
 }
 
-__attribute__((visibility("default"))) int eudt_authorize(
+__attribute__((visibility("default"))) int udt_authorize(
     const unsigned char *script_hash, const unsigned char *args,
     unsigned long args_len) {
   (void)script_hash;

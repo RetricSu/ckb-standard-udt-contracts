@@ -306,7 +306,7 @@ Use `CKBDLContext` and load by `authority.script.code_hash().raw_data()`. Look u
 ```rust
 type AuthorityFn = unsafe extern "C" fn(*const u8, *const u8, usize) -> i8;
 let authorize: Symbol<AuthorityFn> = library
-    .get(b"eudt_authorize")
+    .get(b"udt_authorize")
     .ok_or(ScriptError::AuthorityFailed)?;
 ```
 
@@ -580,13 +580,13 @@ match extension.extension_type {
 }
 ```
 
-Compute the extension script hash when calling `eudt_validate`:
+Compute the extension script hash when calling `udt_validate`:
 
 ```rust
 let script_hash: [u8; 32] = extension.script.calc_script_hash().unpack();
 ```
 
-Do not use the authority runtime for xUDT extensions, because extensions use `eudt_validate` with operation context, while authority uses `eudt_authorize`.
+Do not use the authority runtime for xUDT extensions, because extensions use `udt_validate` with operation context, while authority uses `udt_authorize`.
 
 - [x] **Step 5: Verify contract packages**
 
@@ -629,7 +629,7 @@ git commit -m "feat: use shared authority runtime in contracts"
 Create C fixtures exporting:
 
 ```c
-__attribute__((visibility("default"))) int eudt_authorize(
+__attribute__((visibility("default"))) int udt_authorize(
     const unsigned char *script_hash,
     const unsigned char *args,
     unsigned long args_len) {

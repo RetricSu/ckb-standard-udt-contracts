@@ -503,7 +503,7 @@ fn xudt_meta_access_update_with_dynamic_linking_authority_passes() {
 fn xudt_meta_access_update_with_dynamic_linking_authority_denies() {
     let case = xudt_meta_access_update_with_plugin_authority("authority-dl-deny", false);
 
-    expect_tx_fail_with_code(&case.context, &case.tx, "error code 18");
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 17");
 }
 
 #[test]
@@ -517,7 +517,7 @@ fn xudt_meta_access_update_with_spawn_authority_passes() {
 fn xudt_meta_access_update_with_spawn_authority_denies() {
     let case = xudt_meta_access_update_with_plugin_authority("authority-spawn-deny", true);
 
-    expect_tx_fail_with_code(&case.context, &case.tx, "error code 18");
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 17");
 }
 
 #[test]
@@ -553,7 +553,7 @@ fn xudt_meta_disabled_to_blacklist_rejects_overlapping_access_list_outputs() {
         )
     });
 
-    expect_tx_fail_with_code(&case.context, &case.tx, "error code 14");
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 20");
 }
 
 #[test]
@@ -582,7 +582,7 @@ fn xudt_meta_disabled_to_whitelist_rejects_access_list_start_after_end() {
         )
     });
 
-    expect_tx_fail_with_code(&case.context, &case.tx, "error code 14");
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 19");
 }
 
 #[test]
@@ -609,7 +609,7 @@ fn xudt_meta_disabled_to_whitelist_rejects_access_list_extra_table_field() {
         )
     });
 
-    expect_tx_fail_with_code(&case.context, &case.tx, "error code 14");
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 19");
 }
 
 #[test]
@@ -637,7 +637,7 @@ fn xudt_meta_disabled_to_whitelist_rejects_duplicate_access_list_entries() {
         )
     });
 
-    expect_tx_fail_with_code(&case.context, &case.tx, "error code 14");
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 19");
 }
 
 #[test]
@@ -728,5 +728,5 @@ fn xudt_meta_blacklist_to_whitelist_rejects_malformed_access_list_output() {
         )
     });
 
-    expect_tx_fail_with_code(&case.context, &case.tx, "error code 14");
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 19");
 }

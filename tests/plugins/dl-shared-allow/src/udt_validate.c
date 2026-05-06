@@ -34,7 +34,7 @@ static int matches_require_mint_none(const unsigned char *data, size_t len) {
   return 1;
 }
 
-__attribute__((visibility("default"))) int eudt_validate(
+__attribute__((visibility("default"))) int udt_validate(
     const unsigned char *script_hash, unsigned char op_type,
     unsigned char ext_index, const unsigned char *ext_data_ptr,
     unsigned long ext_data_len, unsigned char mint_authority_checked) {
