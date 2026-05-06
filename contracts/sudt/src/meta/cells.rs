@@ -109,12 +109,12 @@ pub(crate) fn find_meta_in_source(
 }
 
 fn decode_amount(data: &[u8]) -> Result<u128, Error> {
-    if data.len() != UDT_AMOUNT_LEN {
+    if data.len() < UDT_AMOUNT_LEN {
         return Err(Error::AmountEncoding);
     }
 
     let mut raw = [0u8; UDT_AMOUNT_LEN];
-    raw.copy_from_slice(data);
+    raw.copy_from_slice(&data[..UDT_AMOUNT_LEN]);
     Ok(u128::from_le_bytes(raw))
 }
 

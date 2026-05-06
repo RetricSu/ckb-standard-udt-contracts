@@ -101,12 +101,12 @@ pub fn sum_initial_udt_outputs(
 }
 
 fn decode_amount(data: &[u8]) -> Result<u128, Error> {
-    if data.len() != 16 {
+    if data.len() < 16 {
         return Err(Error::InvalidSupply);
     }
 
     let mut raw = [0u8; 16];
-    raw.copy_from_slice(data);
+    raw.copy_from_slice(&data[..16]);
     Ok(u128::from_le_bytes(raw))
 }
 
