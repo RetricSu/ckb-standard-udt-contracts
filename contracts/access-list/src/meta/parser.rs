@@ -4,7 +4,7 @@ use ckb_std::ckb_types::{packed::Script, prelude::*};
 
 use crate::error::Error;
 
-use super::XudtMeta;
+use super::ParsedXudtMeta;
 
 const XUDT_META_FIELDS: usize = 11;
 const SCRIPT_ATTR_FIELDS: usize = 3;
@@ -26,7 +26,7 @@ pub struct ScriptAttr {
     pub script_hash: [u8; 32],
 }
 
-pub(super) fn parse_meta(data: &[u8]) -> Result<XudtMeta, Error> {
+pub(super) fn parse_meta(data: &[u8]) -> Result<ParsedXudtMeta, Error> {
     let offsets = table_offsets(data, XUDT_META_FIELDS)?;
     let config_flags = single_byte_field(data, offsets[0], offsets[1])?;
     validate_config(config_flags)?;
@@ -46,7 +46,7 @@ pub(super) fn parse_meta(data: &[u8]) -> Result<XudtMeta, Error> {
         return Err(Error::InvalidMetaData);
     }
 
-    Ok(XudtMeta {
+    Ok(ParsedXudtMeta {
         config_flags,
         access_authority,
     })

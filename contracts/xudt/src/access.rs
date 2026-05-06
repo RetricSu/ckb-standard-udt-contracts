@@ -10,7 +10,7 @@ use ckb_std::{
 use crate::{
     config::ACCESS_LIST_CODE_HASH,
     error::Error,
-    meta::{self, XudtMeta},
+    meta::{self, ParsedXudtMeta},
 };
 
 const ACCESS_LIST_SHARD_FIELDS: usize = 2;
@@ -23,7 +23,7 @@ struct AccessListShard {
     entries: Vec<[u8; 32]>,
 }
 
-pub fn validate_if_enabled(meta_type_hash: &[u8; 32], meta: &XudtMeta) -> Result<(), Error> {
+pub fn validate_if_enabled(meta_type_hash: &[u8; 32], meta: &ParsedXudtMeta) -> Result<(), Error> {
     if !meta.is_access_enabled() {
         return Ok(());
     }

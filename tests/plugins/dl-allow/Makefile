@@ -3,18 +3,23 @@
 cur_dir = $(dir $(abspath $(firstword $(MAKEFILE_LIST))))
 
 TOP := $(cur_dir)
+MODE ?= release
 # RUSTFLAGS that are likely to be tweaked by developers. For example,
 # while we enable debug logs by default here, some might want to strip them
 # for minimal code size / consumed cycles.
-CUSTOM_RUSTFLAGS := -C debug-assertions
+ifeq (debug,$(MODE))
+	DEFAULT_CUSTOM_RUSTFLAGS := -C debug-assertions
+else
+	DEFAULT_CUSTOM_RUSTFLAGS :=
+endif
+CUSTOM_RUSTFLAGS ?= $(DEFAULT_CUSTOM_RUSTFLAGS)
 # RUSTFLAGS that are less likely to be tweaked by developers. Most likely
 # one would want to keep the default values here.
 FULL_RUSTFLAGS := -C target-feature=+zba,+zbb,+zbc,+zbs,-a $(CUSTOM_RUSTFLAGS)
 # Additional cargo args to append here. For example, one can use
 # make test CARGO_ARGS="-- --nocapture" so as to inspect data emitted to
 # stdout in unit tests
-CARGO_ARGS :=
-MODE := release
+CARGO_ARGS ?=
 # Tweak this to change the clang version to use for building C code. By default
 # we use a bash script with some heuristics to find clang in current system.
 CLANG := $(shell $(TOP)/scripts/find_clang)

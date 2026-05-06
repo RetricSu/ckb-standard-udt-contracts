@@ -8,26 +8,38 @@ use ckb_std::{
 
 use crate::{
     error::Error,
-    meta_cell::parser::{XudtMeta, parse_meta},
+    meta_cell::parser::{ParsedXudtMeta, parse_meta},
 };
 
-// Current compatibility whitelist is by lock code_hash, matching sudt.
-const META_LOCK_CODE_HASH_WHITELIST: [[u8; 32]; 2] = [
-    [
-        0x3b, 0x52, 0x1c, 0xc4, 0xb5, 0x52, 0xf1, 0x09, 0xd0, 0x92, 0xd8, 0xcc, 0x46, 0x8a, 0x80,
-        0x48, 0xac, 0xb5, 0x3c, 0x59, 0x52, 0xdb, 0xe7, 0x69, 0xd2, 0xb2, 0xf9, 0xcf, 0x6e, 0x47,
-        0xf7, 0xf1,
-    ],
-    [
-        0xe6, 0x83, 0xb0, 0x41, 0x39, 0x34, 0x47, 0x68, 0x34, 0x84, 0x99, 0xc2, 0x3e, 0xb1, 0x32,
-        0x6d, 0x5a, 0x52, 0xd6, 0xdb, 0x00, 0x6c, 0x0d, 0x2f, 0xec, 0xe0, 0x0a, 0x83, 0x1f, 0x36,
-        0x60, 0xd7,
-    ],
+const ALWAYS_SUCCESS_LOCK_CODE_HASH_WHITELIST: [[u8; 32]; 1] = [[
+    0x3b, 0x52, 0x1c, 0xc4, 0xb5, 0x52, 0xf1, 0x09, 0xd0, 0x92, 0xd8, 0xcc, 0x46, 0x8a, 0x80, 0x48,
+    0xac, 0xb5, 0x3c, 0x59, 0x52, 0xdb, 0xe7, 0x69, 0xd2, 0xb2, 0xf9, 0xcf, 0x6e, 0x47, 0xf7, 0xf1,
+]];
+
+#[cfg(debug_assertions)]
+const TESTTOOL_ALWAYS_SUCCESS_LOCK_CODE_HASH: [u8; 32] = [
+    0xe6, 0x83, 0xb0, 0x41, 0x39, 0x34, 0x47, 0x68, 0x34, 0x84, 0x99, 0xc2, 0x3e, 0xb1, 0x32, 0x6d,
+    0x5a, 0x52, 0xd6, 0xdb, 0x00, 0x6c, 0x0d, 0x2f, 0xec, 0xe0, 0x0a, 0x83, 0x1f, 0x36, 0x60, 0xd7,
 ];
 
+fn is_allowed_always_success_lock_code_hash(code_hash: &[u8; 32]) -> bool {
+    ALWAYS_SUCCESS_LOCK_CODE_HASH_WHITELIST.contains(code_hash)
+        || is_testtool_always_success_lock_code_hash(code_hash)
+}
+
+#[cfg(debug_assertions)]
+fn is_testtool_always_success_lock_code_hash(code_hash: &[u8; 32]) -> bool {
+    code_hash == &TESTTOOL_ALWAYS_SUCCESS_LOCK_CODE_HASH
+}
+
+#[cfg(not(debug_assertions))]
+fn is_testtool_always_success_lock_code_hash(_: &[u8; 32]) -> bool {
+    false
+}
+
 pub struct MetaGroup {
-    pub input: Option<XudtMeta>,
-    pub output: Option<XudtMeta>,
+    pub input: Option<ParsedXudtMeta>,
+    pub output: Option<ParsedXudtMeta>,
     pub meta_type_hash: [u8; 32],
 }
 
@@ -51,7 +63,7 @@ pub fn validate_create_type_id() -> Result<(), Error> {
     check_type_id(0, 32).map_err(|_| Error::InvalidTypeId)
 }
 
-fn load_group_meta(source: Source) -> Result<Option<XudtMeta>, Error> {
+fn load_group_meta(source: Source) -> Result<Option<ParsedXudtMeta>, Error> {
     let mut found = None;
     let mut index = 0;
 
@@ -74,7 +86,7 @@ fn load_group_meta(source: Source) -> Result<Option<XudtMeta>, Error> {
 fn validate_meta_lock(index: usize, source: Source) -> Result<(), Error> {
     let lock = load_cell_lock(index, source)?;
     let code_hash: [u8; 32] = lock.code_hash().unpack();
-    if META_LOCK_CODE_HASH_WHITELIST.contains(&code_hash) {
+    if is_allowed_always_success_lock_code_hash(&code_hash) {
         Ok(())
     } else {
         Err(Error::InvalidArgs)

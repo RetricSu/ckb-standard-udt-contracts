@@ -7,24 +7,36 @@ use ckb_std::{
 
 use crate::{
     error::Error,
-    meta::parser::{SudtMeta, parse_meta},
+    meta::parser::{ParsedSudtMeta, parse_meta},
 };
 
 const UDT_AMOUNT_LEN: usize = 16;
 
-// Current compatibility whitelist is by lock code_hash, matching the legacy implementation.
-const META_LOCK_CODE_HASH_WHITELIST: [[u8; 32]; 2] = [
-    [
-        0x3b, 0x52, 0x1c, 0xc4, 0xb5, 0x52, 0xf1, 0x09, 0xd0, 0x92, 0xd8, 0xcc, 0x46, 0x8a, 0x80,
-        0x48, 0xac, 0xb5, 0x3c, 0x59, 0x52, 0xdb, 0xe7, 0x69, 0xd2, 0xb2, 0xf9, 0xcf, 0x6e, 0x47,
-        0xf7, 0xf1,
-    ],
-    [
-        0xe6, 0x83, 0xb0, 0x41, 0x39, 0x34, 0x47, 0x68, 0x34, 0x84, 0x99, 0xc2, 0x3e, 0xb1, 0x32,
-        0x6d, 0x5a, 0x52, 0xd6, 0xdb, 0x00, 0x6c, 0x0d, 0x2f, 0xec, 0xe0, 0x0a, 0x83, 0x1f, 0x36,
-        0x60, 0xd7,
-    ],
+const ALWAYS_SUCCESS_LOCK_CODE_HASH_WHITELIST: [[u8; 32]; 1] = [[
+    0x3b, 0x52, 0x1c, 0xc4, 0xb5, 0x52, 0xf1, 0x09, 0xd0, 0x92, 0xd8, 0xcc, 0x46, 0x8a, 0x80, 0x48,
+    0xac, 0xb5, 0x3c, 0x59, 0x52, 0xdb, 0xe7, 0x69, 0xd2, 0xb2, 0xf9, 0xcf, 0x6e, 0x47, 0xf7, 0xf1,
+]];
+
+#[cfg(debug_assertions)]
+const TESTTOOL_ALWAYS_SUCCESS_LOCK_CODE_HASH: [u8; 32] = [
+    0xe6, 0x83, 0xb0, 0x41, 0x39, 0x34, 0x47, 0x68, 0x34, 0x84, 0x99, 0xc2, 0x3e, 0xb1, 0x32, 0x6d,
+    0x5a, 0x52, 0xd6, 0xdb, 0x00, 0x6c, 0x0d, 0x2f, 0xec, 0xe0, 0x0a, 0x83, 0x1f, 0x36, 0x60, 0xd7,
 ];
+
+fn is_allowed_always_success_lock_code_hash(code_hash: &[u8; 32]) -> bool {
+    ALWAYS_SUCCESS_LOCK_CODE_HASH_WHITELIST.contains(code_hash)
+        || is_testtool_always_success_lock_code_hash(code_hash)
+}
+
+#[cfg(debug_assertions)]
+fn is_testtool_always_success_lock_code_hash(code_hash: &[u8; 32]) -> bool {
+    code_hash == &TESTTOOL_ALWAYS_SUCCESS_LOCK_CODE_HASH
+}
+
+#[cfg(not(debug_assertions))]
+fn is_testtool_always_success_lock_code_hash(_: &[u8; 32]) -> bool {
+    false
+}
 
 pub fn load_meta_type_hash_arg() -> Result<[u8; 32], Error> {
     let script = load_script().map_err(Error::from)?;
@@ -57,7 +69,7 @@ pub fn collect_group_amount(source: Source) -> Result<u128, Error> {
 
 pub(crate) fn find_unique_visible_meta(
     meta_type_hash: &[u8; 32],
-) -> Result<Option<SudtMeta>, Error> {
+) -> Result<Option<ParsedSudtMeta>, Error> {
     let mut found = None;
     for source in [Source::CellDep, Source::Input] {
         if let Some(meta) = find_meta_in_source(meta_type_hash, source)? {
@@ -73,7 +85,7 @@ pub(crate) fn find_unique_visible_meta(
 pub(crate) fn find_meta_in_source(
     meta_type_hash: &[u8; 32],
     source: Source,
-) -> Result<Option<SudtMeta>, Error> {
+) -> Result<Option<ParsedSudtMeta>, Error> {
     let mut found = None;
     let mut index = 0;
 
@@ -108,7 +120,7 @@ fn decode_amount(data: &[u8]) -> Result<u128, Error> {
 fn validate_meta_lock(index: usize, source: Source) -> Result<(), Error> {
     let lock = load_cell_lock(index, source).map_err(Error::from)?;
     let code_hash: [u8; 32] = lock.code_hash().unpack();
-    if META_LOCK_CODE_HASH_WHITELIST.contains(&code_hash) {
+    if is_allowed_always_success_lock_code_hash(&code_hash) {
         Ok(())
     } else {
         Err(Error::MetaLockNotAllowed)

@@ -4,7 +4,7 @@ use crate::{
     access,
     error::Error,
     extensions,
-    meta::{self, XudtMeta},
+    meta::{self, ParsedXudtMeta},
 };
 
 #[derive(Clone, Copy)]
@@ -57,7 +57,10 @@ pub fn run() -> Result<(), Error> {
     }
 }
 
-fn validate_transfer(meta_type_hash: &[u8; 32], current_meta: &XudtMeta) -> Result<(), Error> {
+fn validate_transfer(
+    meta_type_hash: &[u8; 32],
+    current_meta: &ParsedXudtMeta,
+) -> Result<(), Error> {
     if current_meta.is_paused() {
         return Err(Error::MetaStateMismatch);
     }
@@ -67,7 +70,7 @@ fn validate_transfer(meta_type_hash: &[u8; 32], current_meta: &XudtMeta) -> Resu
 
 fn validate_mint(
     meta_type_hash: &[u8; 32],
-    current_meta: &XudtMeta,
+    current_meta: &ParsedXudtMeta,
     delta: u128,
 ) -> Result<(), Error> {
     if current_meta.is_paused() {
@@ -93,7 +96,7 @@ fn validate_initial_create_mint(meta_type_hash: &[u8; 32]) -> Result<(), Error> 
 
 fn validate_protocol_burn(
     meta_type_hash: &[u8; 32],
-    input_meta: &XudtMeta,
+    input_meta: &ParsedXudtMeta,
     delta: u128,
 ) -> Result<(), Error> {
     meta::require_authority(input_meta.mint_authority.as_ref())?;

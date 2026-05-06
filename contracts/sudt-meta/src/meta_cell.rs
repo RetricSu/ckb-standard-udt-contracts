@@ -14,7 +14,7 @@ pub const CONFIG_SUPPLY_TRACKED: u8 = 0b0000_0001;
 const SUDT_META_FIELDS: usize = 9;
 const SUDT_ALLOWED_CONFIG_MASK: u8 = CONFIG_SUPPLY_TRACKED;
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct SudtMeta {
+pub struct ParsedSudtMeta {
     pub config_flags: u8,
     pub current_supply: u128,
     pub metadata_fields: Vec<u8>,
@@ -31,8 +31,8 @@ pub struct ScriptAttr {
 }
 
 pub struct MetaGroup {
-    pub input: Option<SudtMeta>,
-    pub output: Option<SudtMeta>,
+    pub input: Option<ParsedSudtMeta>,
+    pub output: Option<ParsedSudtMeta>,
     pub meta_type_hash: [u8; 32],
 }
 
@@ -56,7 +56,10 @@ pub fn validate_create_type_id() -> Result<(), Error> {
     check_type_id(0, 32).map_err(|_| Error::InvalidTypeId)
 }
 
-pub fn validate_create(output_meta: &SudtMeta, meta_type_hash: &[u8; 32]) -> Result<(), Error> {
+pub fn validate_create(
+    output_meta: &ParsedSudtMeta,
+    meta_type_hash: &[u8; 32],
+) -> Result<(), Error> {
     if is_supply_tracked(output_meta.config_flags) {
         let initial_supply = sum_initial_udt_outputs(meta_type_hash, &SUDT_CODE_HASH)?;
         if output_meta.current_supply != initial_supply {
@@ -107,7 +110,7 @@ fn decode_amount(data: &[u8]) -> Result<u128, Error> {
     Ok(u128::from_le_bytes(raw))
 }
 
-fn load_group_meta(source: Source) -> Result<Option<SudtMeta>, Error> {
+fn load_group_meta(source: Source) -> Result<Option<ParsedSudtMeta>, Error> {
     let mut found = None;
     let mut index = 0;
 
@@ -126,7 +129,7 @@ fn load_group_meta(source: Source) -> Result<Option<SudtMeta>, Error> {
     }
 }
 
-fn parse_meta(data: &[u8]) -> Result<SudtMeta, Error> {
+fn parse_meta(data: &[u8]) -> Result<ParsedSudtMeta, Error> {
     let offsets = table_offsets(data, SUDT_META_FIELDS)?;
     let config_flags = single_byte_field(data, offsets[0], offsets[1])?;
     if config_flags & !SUDT_ALLOWED_CONFIG_MASK != 0 {
@@ -145,7 +148,7 @@ fn parse_meta(data: &[u8]) -> Result<SudtMeta, Error> {
         return Err(Error::InvalidSupply);
     }
 
-    Ok(SudtMeta {
+    Ok(ParsedSudtMeta {
         config_flags,
         current_supply,
         metadata_fields,

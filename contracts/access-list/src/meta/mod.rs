@@ -12,7 +12,7 @@ use ckb_std::ckb_constants::Source;
 pub use parser::ScriptAttr;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) struct XudtMeta {
+pub(super) struct ParsedXudtMeta {
     pub(super) config_flags: u8,
     pub(super) access_authority: Option<ScriptAttr>,
 }

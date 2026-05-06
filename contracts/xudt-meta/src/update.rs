@@ -1,7 +1,7 @@
 use crate::{
     error::Error,
     meta_cell::{
-        CONFIG_SUPPLY_TRACKED, ScriptAttr, XudtMeta, access_enabled,
+        CONFIG_SUPPLY_TRACKED, ParsedXudtMeta, ScriptAttr, access_enabled,
         has_full_domain_access_list_shards, has_legal_access_list_shard, has_same_token_cells,
         is_supply_tracked, paused, whitelist_mode,
     },
@@ -13,8 +13,8 @@ use ckb_std::{
 };
 
 pub fn validate_update(
-    input: &XudtMeta,
-    output: &XudtMeta,
+    input: &ParsedXudtMeta,
+    output: &ParsedXudtMeta,
     meta_type_hash: &[u8; 32],
 ) -> Result<(), Error> {
     if input.config_flags & CONFIG_SUPPLY_TRACKED != output.config_flags & CONFIG_SUPPLY_TRACKED {

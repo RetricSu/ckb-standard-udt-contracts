@@ -13,7 +13,7 @@ const MAX_METADATA_URI_BYTES: usize = 2048;
 const MAX_METADATA_EXTRA_DATA_BYTES: usize = 16 * 1024;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct XudtMeta {
+pub struct ParsedXudtMeta {
     pub config_flags: u8,
     pub current_supply: u128,
     pub metadata_fields: Vec<u8>,
@@ -32,7 +32,7 @@ pub struct ScriptAttr {
     pub script_hash: [u8; 32],
 }
 
-pub(crate) fn parse_meta(data: &[u8]) -> Result<XudtMeta, Error> {
+pub(crate) fn parse_meta(data: &[u8]) -> Result<ParsedXudtMeta, Error> {
     // `standard_udt_types::metadata::XudtMeta::from_slice` is intentionally not
     // used in this RISC-V binary for parity with sudt: linking it here
     // currently pulls duplicate ckb-std atomic dummy symbols.
@@ -60,7 +60,7 @@ pub(crate) fn parse_meta(data: &[u8]) -> Result<XudtMeta, Error> {
         return Err(Error::InvalidSupply);
     }
 
-    Ok(XudtMeta {
+    Ok(ParsedXudtMeta {
         config_flags,
         current_supply,
         metadata_fields,

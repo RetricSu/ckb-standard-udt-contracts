@@ -10,6 +10,6 @@ pub use cells::{MetaGroup, load_meta_group, validate_create_type_id, validate_ty
 pub use config::{
     CONFIG_SUPPLY_TRACKED, access_enabled, is_supply_tracked, paused, whitelist_mode,
 };
-pub use parser::{ScriptAttr, XudtMeta};
+pub use parser::{ParsedXudtMeta, ScriptAttr};
 #[allow(unused_imports)]
 pub use token::{has_same_token_cells, sum_initial_udt_outputs, validate_create};

@@ -1,6 +1,6 @@
 use crate::{
     error::Error,
-    meta_cell::{CONFIG_SUPPLY_TRACKED, ScriptAttr, SudtMeta, is_supply_tracked},
+    meta_cell::{CONFIG_SUPPLY_TRACKED, ParsedSudtMeta, ScriptAttr, is_supply_tracked},
 };
 use ckb_std::{
     ckb_constants::Source,
@@ -8,7 +8,7 @@ use ckb_std::{
     high_level::{load_cell_lock_hash, load_cell_type_hash},
 };
 
-pub fn validate_update(input: &SudtMeta, output: &SudtMeta) -> Result<(), Error> {
+pub fn validate_update(input: &ParsedSudtMeta, output: &ParsedSudtMeta) -> Result<(), Error> {
     if input.config_flags & CONFIG_SUPPLY_TRACKED != output.config_flags & CONFIG_SUPPLY_TRACKED {
         return Err(Error::ImmutableSupplyMode);
     }

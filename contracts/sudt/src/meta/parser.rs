@@ -9,7 +9,7 @@ const CONFIG_SUPPLY_TRACKED: u8 = 0b0000_0001;
 const SUDT_ALLOWED_CONFIG_MASK: u8 = CONFIG_SUPPLY_TRACKED;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct SudtMeta {
+pub struct ParsedSudtMeta {
     pub config_flags: u8,
     pub current_supply: u128,
     pub mint_authority: Option<ScriptAttr>,
@@ -21,7 +21,7 @@ pub struct ScriptAttr {
     pub script_hash: [u8; 32],
 }
 
-pub(crate) fn parse_meta(data: &[u8]) -> Result<SudtMeta, Error> {
+pub(crate) fn parse_meta(data: &[u8]) -> Result<ParsedSudtMeta, Error> {
     // `standard_udt_types::metadata::SudtMeta::from_slice` is intentionally not
     // used in this RISC-V binary: it links ckb-std 0.16.x beside this contract's
     // ckb-std 1.1.0, which produces duplicate `__atomic_*` dummy symbols.
@@ -39,7 +39,7 @@ pub(crate) fn parse_meta(data: &[u8]) -> Result<SudtMeta, Error> {
         return Err(Error::InvalidMetaData);
     }
 
-    Ok(SudtMeta {
+    Ok(ParsedSudtMeta {
         config_flags,
         current_supply,
         mint_authority,
