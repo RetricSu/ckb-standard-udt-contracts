@@ -1,6 +1,6 @@
 use crate::{
     fixtures::{
-        cell_dep_for_script, create_funding_input, create_typed_cell, expect_tx_fail,
+        cell_dep, cell_dep_for_script, create_funding_input, create_typed_cell, expect_tx_fail,
         expect_tx_pass, typed_output,
     },
     metadata_builders::{
@@ -90,6 +90,10 @@ fn tracked_meta_data_with_authority(
     mint_authority: Option<Authority>,
 ) -> Bytes {
     build_sudt_meta_bytes(CONFIG_SUPPLY_TRACKED, current_supply, mint_authority, None)
+}
+
+fn untracked_meta_data(mint_authority: Option<Authority>) -> Bytes {
+    build_sudt_meta_bytes(0, 0, mint_authority, None)
 }
 
 struct SudtFixture {
@@ -308,23 +312,23 @@ fn sudt_mint_requires_mint_authority() {
 fn sudt_mint_allows_visible_meta_with_non_whitelisted_lock() {
     let mut fixture = SudtFixture::new();
     let meta_lock = non_whitelisted_lock(&mut fixture.context);
-    let meta_input = fixture.live_meta_input(0, true);
+    let meta_dep = create_typed_cell(
+        &mut fixture.context,
+        &meta_lock.script,
+        &fixture.meta.script,
+        100_000_000_000,
+        untracked_meta_data(Some(input_lock_authority(fixture.lock.script_hash))),
+    );
     let funding = create_funding_input(&mut fixture.context, &fixture.lock.script, 100_000_000_000);
 
     let tx = TransactionBuilder::default()
-        .input(meta_input)
         .input(funding)
-        .output(typed_output(
-            &meta_lock.script,
-            &fixture.meta.script,
-            100_000_000_000,
-        ))
+        .cell_dep(cell_dep(meta_dep))
         .output(typed_output(
             &fixture.lock.script,
             &fixture.udt.script,
             100_000_000_000,
         ))
-        .output_data(tracked_meta_data(50, Some(fixture.lock.script_hash)).pack())
         .output_data(udt_amount_bytes(50).pack())
         .build();
     let tx = fixture.complete(tx);

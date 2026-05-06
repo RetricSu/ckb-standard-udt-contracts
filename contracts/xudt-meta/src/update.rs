@@ -2,8 +2,8 @@ use crate::{
     error::Error,
     meta_cell::{
         CONFIG_SUPPLY_TRACKED, ParsedAuthority, ParsedXudtMeta, access_enabled,
-        has_full_domain_access_list_shards, has_legal_access_list_shard, has_same_token_cells,
-        is_supply_tracked, paused, whitelist_mode,
+        has_full_domain_access_list_inputs, has_full_domain_access_list_outputs,
+        has_same_token_cells, is_supply_tracked, paused, whitelist_mode,
     },
 };
 use standard_udt_script_utils::{
@@ -84,13 +84,20 @@ fn validate_access_mode_transition(
         output_enabled,
         output_whitelist,
     ) {
-        (false, false, true, false) | (true, true, true, false) => {
-            if !has_full_domain_access_list_shards(meta_type_hash)? {
+        (false, false, true, false) | (false, false, true, true) => {
+            if !has_full_domain_access_list_outputs(meta_type_hash)? {
                 return Err(Error::AccessListRequired);
             }
         }
-        (false, false, true, true) | (true, false, true, true) => {
-            if !has_legal_access_list_shard(meta_type_hash)? {
+        (true, false, false, false) | (true, true, false, false) => {
+            if !has_full_domain_access_list_inputs(meta_type_hash)? {
+                return Err(Error::AccessListRequired);
+            }
+        }
+        (true, false, true, true) | (true, true, true, false) => {
+            if !has_full_domain_access_list_inputs(meta_type_hash)?
+                || !has_full_domain_access_list_outputs(meta_type_hash)?
+            {
                 return Err(Error::AccessListRequired);
             }
         }

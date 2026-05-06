@@ -4,7 +4,7 @@ mod config;
 mod parser;
 mod token;
 
-pub use access_list::{has_full_domain_access_list_shards, has_legal_access_list_shard};
+pub use access_list::{has_full_domain_access_list_inputs, has_full_domain_access_list_outputs};
 #[allow(unused_imports)]
 pub use cells::{MetaGroup, load_meta_group, validate_create_type_id, validate_type_args};
 pub use config::{

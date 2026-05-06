@@ -2,7 +2,7 @@
 
 ## Goal
 
-Move invariant checks to the script that owns the cell being constrained, and make xUDT blacklist access control fail closed by requiring a complete AccessList shard chain in every transaction that relies on blacklist mode.
+Move invariant checks to the script that owns the cell being constrained, and make xUDT access control fail closed by requiring membership or non-membership proofs for every checked lock hash.
 
 This is a contract-boundary cleanup. It does not change Molecule schemas, ABI symbols, authority semantics, or UDT/meta binding.
 
@@ -16,7 +16,7 @@ The current implementation checks `Meta.lock` from several consumer scripts:
 
 That duplicates a cell-owned invariant in scripts that merely consume meta state. In CKB's cell model, a type script should enforce invariants for its own live output cells. Consumers should only verify the cross-cell facts they depend on.
 
-The current implementation also has a blacklist access-control gap. xUDT can validate only the AccessList shards supplied by the transaction. In blacklist mode, missing shards must not mean "not listed"; otherwise a transaction can omit the shard that would reject it. Blacklist therefore needs a complete shard chain, not a partial lookup set.
+The current implementation also has an access-control proof gap. xUDT can only validate the AccessList shards supplied by the transaction. In blacklist mode, missing shards must not mean "not listed"; otherwise a transaction can omit the shard that would reject it. xUDT should therefore require a covering shard proof for each checked lock hash, while AccessListType remains responsible for the global shard chain invariant.
 
 ## Ownership Rules
 
@@ -47,6 +47,7 @@ They must still validate the cross-cell facts they depend on:
 - Mint/protocol-burn uses the relevant authority.
 - Tracked supply changes must match input/output meta state.
 - xUDT transfer/mint/burn must enforce paused, access, and extension behavior.
+- For xUDT `output_amount < input_amount`, a visible meta in `CellDep` marks the operation as user destruction. Protocol burn is selected only when no `CellDep` meta is supplied and an input meta is being consumed.
 
 ### AccessListType Owns Shard Cells
 
@@ -61,6 +62,8 @@ They must still validate the cross-cell facts they depend on:
 - Disabled mode may remove stale shard cells but must not create replacement shard outputs.
 
 `access-list` should not validate `Meta.lock`; it only reads meta to determine access mode and access authority.
+
+`xudt-meta` owns access-mode transition completeness constraints that cannot be proven by an individual AccessList group alone. In particular, switching from blacklist mode to disabled mode must consume AccessList input shards covering the full lock-hash domain, so stale blacklist shards cannot remain live after access is disabled.
 
 ## Blacklist Shard Chain Invariant
 
@@ -82,25 +85,27 @@ The current suffix-only check on `start[31]` / `end[31]` is not the intended buc
 
 ## xUDT Access Reader Rules
 
-xUDT's access reader must validate enough shard structure to make the access decision fail closed.
+xUDT's access reader is a consumer of AccessList state. It must not revalidate the complete blacklist shard chain. It only validates enough visible shard data to prove the access decision for the checked `GroupInput` lock hashes.
 
 For blacklist mode:
 
 - Collect visible AccessList shards from `CellDep` and `Input` whose type script is `ACCESS_LIST_CODE_HASH`, `Data2`, and `args == meta_type_hash`.
-- Parse each shard with the same data invariants used by AccessListType.
+- Parse each shard strictly enough for proof validation: decode shard data, require `start <= end`, require entries sorted and unique, require entries to be within the shard range, and enforce the entries-per-shard limit.
 - Sort by `(start, end)`.
-- Require the complete blacklist shard chain invariant.
-- Then reject if any checked `GroupInput` lock hash is listed.
+- For each checked `GroupInput` lock hash, require at least one visible shard whose range covers the hash.
+- That covering shard is the non-membership proof: if the hash appears in any covering shard's entries, reject; if no covering shard is visible, reject.
 
 For whitelist mode:
 
 - Collect visible AccessList shards from `CellDep` and `Input`.
-- Parse each shard with the same data invariants.
+- Parse each shard strictly enough for proof validation.
 - Sort by `(start, end)`.
-- Require ordered, non-overlapping ranges.
-- Do not require full-domain coverage; missing coverage naturally fails closed because an unlisted lock hash is rejected.
+- For each checked `GroupInput` lock hash, require at least one visible shard whose range covers the hash and whose entries contain the hash.
+- That covering entry is the membership proof; missing coverage or missing entry rejects.
 
 The checked lock set remains `GroupInput` lock hashes.
+
+xUDT must not reject a proof shard solely because visible shards do not form a complete chain, do not cover the full domain, or are not prefix-bucket aligned. Those are AccessListType-owned state invariants.
 
 ## Meta Discovery Rules
 
@@ -127,8 +132,9 @@ New or changed tests must prove:
 - `sudt-meta` rejects a created or updated meta output with a non-whitelisted lock.
 - `xudt-meta` rejects a created or updated meta output with a non-whitelisted lock.
 - `access-list` rejects created or updated shard outputs with non-whitelisted locks.
-- xUDT blacklist rejects a transaction that omits part of the blacklist shard chain, even if the omitted shard contains no listed lock for the user.
-- xUDT blacklist rejects suffix-only nibble-aligned ranges that are not prefix-bucket aligned.
+- AccessListType rejects blacklist updates that break complete chain coverage or prefix-bucket nibble alignment.
+- xUDT blacklist rejects when a checked input lock hash has no visible covering shard proof.
+- xUDT blacklist rejects when a visible covering shard contains the checked input lock hash.
 - xUDT whitelist still fails closed when the relevant lock hash is not covered/listed.
 
 ## Out of Scope

@@ -36,13 +36,13 @@ impl Error {
             Self::SysMaxFdsCreated => 9,
             Self::SysTypeIdError => 10,
             Self::SyscallUnknown => 11,
-            Self::InvalidArgs => 12,
-            Self::InvalidTypeId => 13,
-            Self::InvalidMetaData => 14,
-            Self::InvalidSupply => 15,
-            Self::ImmutableSupplyMode => 16,
-            Self::AuthorityMissing => 17,
-            Self::AuthorityFailed => 18,
+            Self::InvalidArgs => 20,
+            Self::InvalidTypeId => 21,
+            Self::InvalidMetaData => 30,
+            Self::InvalidSupply => 31,
+            Self::ImmutableSupplyMode => 32,
+            Self::AuthorityMissing => 50,
+            Self::AuthorityFailed => 51,
         }
     }
 }

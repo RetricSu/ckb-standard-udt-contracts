@@ -18,7 +18,8 @@ pub(super) struct ParsedXudtMeta {
 }
 
 pub struct MetaContext {
-    pub output_config_flags: u8,
+    pub input_config_flags: Option<u8>,
+    pub output_config_flags: Option<u8>,
     pub access_authority: Option<ParsedAuthority>,
 }
 
@@ -39,23 +40,20 @@ pub fn load_meta_context(meta_type_hash: &[u8; 32]) -> Result<MetaContext, Error
     let output = find_meta_in_source(meta_type_hash, Source::Output)?;
     let cell_dep = find_meta_in_source(meta_type_hash, Source::CellDep)?;
 
-    if cell_dep.is_some() && (input.is_some() || output.is_some()) {
-        return Err(Error::MetaNotUnique);
-    }
-
     let authority_meta = input
         .as_ref()
         .or(cell_dep.as_ref())
         .or(output.as_ref())
         .ok_or(Error::MetaMissing)?;
-    let output_meta = output
-        .as_ref()
-        .or(input.as_ref())
-        .or(cell_dep.as_ref())
-        .unwrap();
-
     Ok(MetaContext {
-        output_config_flags: output_meta.config_flags,
+        input_config_flags: input
+            .as_ref()
+            .or(cell_dep.as_ref())
+            .map(|meta| meta.config_flags),
+        output_config_flags: output
+            .as_ref()
+            .or(cell_dep.as_ref())
+            .map(|meta| meta.config_flags),
         access_authority: authority_meta.access_authority.clone(),
     })
 }

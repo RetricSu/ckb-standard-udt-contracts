@@ -26,7 +26,6 @@ pub enum Error {
     AuthorityMissing,
     AuthorityFailed,
     UnsupportedAuthorityLocation,
-    MetaLockNotAllowed,
 }
 
 impl Error {
@@ -42,21 +41,20 @@ impl Error {
             Self::SysMaxVmsSpawned => 8,
             Self::SysMaxFdsCreated => 9,
             Self::SyscallUnknown => 10,
-            Self::InvalidArgs => 11,
-            Self::AmountEncoding => 12,
-            Self::AmountOverflow => 13,
-            Self::SupplyOverflow => 14,
-            Self::SupplyUnderflow => 15,
-            Self::InvalidMetaData => 16,
-            Self::MetaMissing => 17,
-            Self::MetaNotUnique => 18,
-            Self::MetaInputMissing => 19,
-            Self::MetaOutputMissing => 20,
-            Self::MetaStateMismatch => 21,
-            Self::AuthorityMissing => 22,
-            Self::AuthorityFailed => 23,
-            Self::UnsupportedAuthorityLocation => 24,
-            Self::MetaLockNotAllowed => 25,
+            Self::InvalidArgs => 20,
+            Self::AmountEncoding => 30,
+            Self::AmountOverflow => 31,
+            Self::SupplyOverflow => 32,
+            Self::SupplyUnderflow => 33,
+            Self::InvalidMetaData => 40,
+            Self::MetaMissing => 41,
+            Self::MetaNotUnique => 42,
+            Self::MetaInputMissing => 43,
+            Self::MetaOutputMissing => 44,
+            Self::MetaStateMismatch => 45,
+            Self::AuthorityMissing => 50,
+            Self::AuthorityFailed => 51,
+            Self::UnsupportedAuthorityLocation => 52,
         }
     }
 }

@@ -109,6 +109,14 @@ fn full_domain_shard(entries: Vec<[u8; 32]>) -> Bytes {
     build_access_list_shard_bytes([0u8; 32], [0xffu8; 32], entries)
 }
 
+fn custom_shard(start: [u8; 32], end: [u8; 32], entries: Vec<[u8; 32]>) -> Bytes {
+    build_access_list_shard_bytes(start, end, entries)
+}
+
+fn exact_shard(lock_hash: [u8; 32], entries: Vec<[u8; 32]>) -> Bytes {
+    custom_shard(lock_hash, lock_hash, entries)
+}
+
 fn calculate_type_id(input: &CellInput, output_index: u64) -> [u8; 32] {
     let mut type_id = [0u8; 32];
     let mut hasher = new_blake2b();
@@ -194,23 +202,6 @@ impl XudtFixture {
         let out_point = create_typed_cell(
             &mut self.context,
             &self.lock.script,
-            &self.meta.script,
-            100_000_000_000,
-            xudt_meta_data(config_flags, supply, mint_authority, Vec::new()),
-        );
-        CellInput::new_builder().previous_output(out_point).build()
-    }
-
-    fn live_meta_input_with_lock(
-        &mut self,
-        lock: &Script,
-        config_flags: u8,
-        supply: u128,
-        mint_authority: Option<Authority>,
-    ) -> CellInput {
-        let out_point = create_typed_cell(
-            &mut self.context,
-            lock,
             &self.meta.script,
             100_000_000_000,
             xudt_meta_data(config_flags, supply, mint_authority, Vec::new()),
@@ -475,29 +466,23 @@ fn xudt_mint_allows_visible_meta_with_non_whitelisted_lock() {
     let mut fixture = XudtFixture::new();
     let meta_lock = non_whitelisted_lock(&mut fixture.context);
     let authority = input_lock_authority(fixture.lock.script_hash);
-    let input_lock = fixture.lock.script.clone();
-    let meta_input = fixture.live_meta_input_with_lock(
-        &input_lock,
-        CONFIG_SUPPLY_TRACKED,
-        0,
-        Some(authority.clone()),
+    let meta_dep = create_typed_cell(
+        &mut fixture.context,
+        &meta_lock.script,
+        &fixture.meta.script,
+        100_000_000_000,
+        xudt_meta_data(0, 0, Some(authority.clone()), Vec::new()),
     );
     let funding = create_funding_input(&mut fixture.context, &fixture.lock.script, 100_000_000_000);
 
     let tx = TransactionBuilder::default()
-        .input(meta_input)
         .input(funding)
-        .output(typed_output(
-            &meta_lock.script,
-            &fixture.meta.script,
-            100_000_000_000,
-        ))
+        .cell_dep(cell_dep(meta_dep))
         .output(typed_output(
             &fixture.lock.script,
             &fixture.xudt.script,
             100_000_000_000,
         ))
-        .output_data(xudt_meta_data(CONFIG_SUPPLY_TRACKED, 50, Some(authority), Vec::new()).pack())
         .output_data(udt_amount_bytes(50).pack())
         .cell_dep(cell_dep_for_script(&meta_lock))
         .build();
@@ -630,7 +615,7 @@ fn xudt_protocol_burn_requires_mint_authority_and_updates_supply() {
 }
 
 #[test]
-fn xudt_protocol_burn_rejects_duplicate_visible_meta_dep() {
+fn xudt_burn_with_meta_dep_is_user_destruction_even_with_input_meta() {
     let mut fixture = XudtFixture::new();
     let meta_input = fixture.live_meta_input(CONFIG_SUPPLY_TRACKED, 100, true);
     let duplicate_meta_dep = fixture.live_meta_dep(CONFIG_SUPPLY_TRACKED, 100, true);
@@ -663,7 +648,7 @@ fn xudt_protocol_burn_rejects_duplicate_visible_meta_dep() {
         .build();
     let tx = fixture.complete(tx);
 
-    expect_tx_fail_with_code(&fixture.context, &tx, "error code 18");
+    expect_tx_pass(&fixture.context, &tx);
 }
 
 #[test]
@@ -676,6 +661,28 @@ fn xudt_user_destruction_skips_access_and_extensions() {
     let tx = TransactionBuilder::default()
         .input(udt_input)
         .cell_dep(cell_dep(access_list.previous_output()))
+        .build();
+    let tx = fixture.complete(tx);
+
+    expect_tx_pass(&fixture.context, &tx);
+}
+
+#[test]
+fn xudt_user_destruction_with_meta_dep_skips_protocol_burn_authority() {
+    let mut fixture = XudtFixture::new();
+    let meta_input = fixture.live_meta_input(CONFIG_SUPPLY_TRACKED, 100, false);
+    let udt_input = fixture.live_udt_input(100);
+
+    let tx = TransactionBuilder::default()
+        .input(meta_input.clone())
+        .input(udt_input)
+        .cell_dep(cell_dep(meta_input.previous_output()))
+        .output(typed_output(
+            &fixture.lock.script,
+            &fixture.meta.script,
+            100_000_000_000,
+        ))
+        .output_data(xudt_meta_data(CONFIG_SUPPLY_TRACKED, 100, None, Vec::new()).pack())
         .build();
     let tx = fixture.complete(tx);
 
@@ -707,6 +714,53 @@ fn xudt_blacklist_rejects_listed_input_lock() {
 }
 
 #[test]
+fn xudt_blacklist_rejects_missing_non_membership_proof() {
+    let mut fixture = XudtFixture::new();
+    let meta_dep = fixture.live_meta_dep(CONFIG_ACCESS_ENABLED, 0, false);
+    let udt_input = fixture.live_udt_input(100);
+    let non_covering =
+        fixture.live_access_list_input(custom_shard([0u8; 32], [0u8; 32], Vec::new()));
+
+    let tx = TransactionBuilder::default()
+        .input(udt_input)
+        .cell_dep(cell_dep(meta_dep.previous_output()))
+        .cell_dep(cell_dep(non_covering.previous_output()))
+        .output(typed_output(
+            &fixture.lock.script,
+            &fixture.xudt.script,
+            100_000_000_000,
+        ))
+        .output_data(udt_amount_bytes(100).pack())
+        .build();
+    let tx = fixture.complete(tx);
+
+    expect_tx_fail_with_code(&fixture.context, &tx, "error code 60");
+}
+
+#[test]
+fn xudt_blacklist_accepts_covering_non_membership_proof() {
+    let mut fixture = XudtFixture::new();
+    let meta_dep = fixture.live_meta_dep(CONFIG_ACCESS_ENABLED, 0, false);
+    let udt_input = fixture.live_udt_input(100);
+    let proof = fixture.live_access_list_input(exact_shard(fixture.lock.script_hash, Vec::new()));
+
+    let tx = TransactionBuilder::default()
+        .input(udt_input)
+        .cell_dep(cell_dep(meta_dep.previous_output()))
+        .cell_dep(cell_dep(proof.previous_output()))
+        .output(typed_output(
+            &fixture.lock.script,
+            &fixture.xudt.script,
+            100_000_000_000,
+        ))
+        .output_data(udt_amount_bytes(100).pack())
+        .build();
+    let tx = fixture.complete(tx);
+
+    expect_tx_pass(&fixture.context, &tx);
+}
+
+#[test]
 fn xudt_whitelist_rejects_missing_input_lock() {
     let mut fixture = XudtFixture::new();
     let meta_dep = fixture.live_meta_dep(CONFIG_ACCESS_ENABLED | CONFIG_ACCESS_WHITELIST, 0, false);
@@ -728,6 +782,32 @@ fn xudt_whitelist_rejects_missing_input_lock() {
     let tx = fixture.complete(tx);
 
     expect_tx_fail(&fixture.context, &tx);
+}
+
+#[test]
+fn xudt_whitelist_accepts_covering_membership_proof() {
+    let mut fixture = XudtFixture::new();
+    let meta_dep = fixture.live_meta_dep(CONFIG_ACCESS_ENABLED | CONFIG_ACCESS_WHITELIST, 0, false);
+    let udt_input = fixture.live_udt_input(100);
+    let proof = fixture.live_access_list_input(exact_shard(
+        fixture.lock.script_hash,
+        vec![fixture.lock.script_hash],
+    ));
+
+    let tx = TransactionBuilder::default()
+        .input(udt_input)
+        .cell_dep(cell_dep(meta_dep.previous_output()))
+        .cell_dep(cell_dep(proof.previous_output()))
+        .output(typed_output(
+            &fixture.lock.script,
+            &fixture.xudt.script,
+            100_000_000_000,
+        ))
+        .output_data(udt_amount_bytes(100).pack())
+        .build();
+    let tx = fixture.complete(tx);
+
+    expect_tx_pass(&fixture.context, &tx);
 }
 
 #[test]
@@ -753,7 +833,7 @@ fn xudt_whitelist_ignores_non_data2_access_list_shards() {
         .build();
     let tx = fixture.complete(tx);
 
-    expect_tx_fail_with_code(&fixture.context, &tx, "error code 27");
+    expect_tx_fail_with_code(&fixture.context, &tx, "error code 61");
 }
 
 #[test]
@@ -784,7 +864,7 @@ fn xudt_protocol_burn_access_mode_switch_still_requires_mint_authority() {
         .build();
     let tx = fixture.complete(tx);
 
-    expect_tx_fail_with_code(&fixture.context, &tx, "error code 22");
+    expect_tx_fail_with_code(&fixture.context, &tx, "error code 50");
 }
 
 #[test]
@@ -823,5 +903,5 @@ fn xudt_protocol_burn_access_mode_switch_does_not_skip_access_checks() {
         .build();
     let tx = fixture.complete(tx);
 
-    expect_tx_fail_with_code(&fixture.context, &tx, "error code 27");
+    expect_tx_fail_with_code(&fixture.context, &tx, "error code 61");
 }

@@ -29,7 +29,6 @@ pub fn validate_if_enabled(meta_type_hash: &[u8; 32], meta: &ParsedXudtMeta) -> 
     }
 
     let shards = collect_visible_shards(meta_type_hash)?;
-    validate_ordered_non_overlapping(&shards)?;
 
     let mut index = 0;
     loop {
@@ -47,22 +46,49 @@ fn validate_lock_hash(
     lock_hash: [u8; 32],
     shards: &[AccessListShard],
 ) -> Result<(), Error> {
-    match (whitelist, is_listed(&lock_hash, shards)) {
-        (false, true) => Err(Error::AccessDenied),
-        (false, false) => Ok(()),
-        (true, true) => Ok(()),
-        (true, false) => Err(Error::AccessDenied),
+    if whitelist {
+        validate_membership_proof(&lock_hash, shards)
+    } else {
+        validate_non_membership_proof(&lock_hash, shards)
     }
 }
 
-fn is_listed(lock_hash: &[u8; 32], shards: &[AccessListShard]) -> bool {
+fn validate_non_membership_proof(
+    lock_hash: &[u8; 32],
+    shards: &[AccessListShard],
+) -> Result<(), Error> {
+    let mut covered = false;
     for shard in shards {
-        if lock_hash < &shard.start || lock_hash > &shard.end {
+        if !shard_covers(shard, lock_hash) {
             continue;
         }
-        return shard.entries.binary_search(lock_hash).is_ok();
+        covered = true;
+        if shard.entries.binary_search(lock_hash).is_ok() {
+            return Err(Error::AccessDenied);
+        }
     }
-    false
+
+    if covered {
+        Ok(())
+    } else {
+        Err(Error::InvalidShardData)
+    }
+}
+
+fn validate_membership_proof(
+    lock_hash: &[u8; 32],
+    shards: &[AccessListShard],
+) -> Result<(), Error> {
+    for shard in shards {
+        if shard_covers(shard, lock_hash) && shard.entries.binary_search(lock_hash).is_ok() {
+            return Ok(());
+        }
+    }
+    Err(Error::AccessDenied)
+}
+
+fn shard_covers(shard: &AccessListShard, lock_hash: &[u8; 32]) -> bool {
+    shard.start <= *lock_hash && *lock_hash <= shard.end
 }
 
 fn collect_visible_shards(meta_type_hash: &[u8; 32]) -> Result<Vec<AccessListShard>, Error> {
@@ -113,7 +139,7 @@ fn parse_access_list_shard(data: &[u8]) -> Result<AccessListShard, Error> {
 
     let start = meta::byte32_field(data, offsets[0], offsets[0] + 32)?;
     let end = meta::byte32_field(data, offsets[0] + 32, offsets[1])?;
-    if start > end || !is_nibble_aligned_range(&start, &end) {
+    if start > end {
         return Err(Error::InvalidShardData);
     }
 
@@ -156,17 +182,4 @@ fn parse_byte32_vec(data: &[u8]) -> Result<Vec<[u8; 32]>, Error> {
     }
 
     Ok(entries)
-}
-
-fn validate_ordered_non_overlapping(shards: &[AccessListShard]) -> Result<(), Error> {
-    for pair in shards.windows(2) {
-        if pair[1].start <= pair[0].end {
-            return Err(Error::InvalidShardData);
-        }
-    }
-    Ok(())
-}
-
-fn is_nibble_aligned_range(start: &[u8; 32], end: &[u8; 32]) -> bool {
-    start[31] & 0x0f == 0 && end[31] & 0x0f == 0x0f
 }

@@ -1,7 +1,7 @@
 use crate::{
     fixtures::{
-        cell_dep_for_script, create_typed_cell, expect_tx_fail_with_code, expect_tx_pass,
-        typed_output,
+        cell_dep, cell_dep_for_script, create_typed_cell, expect_tx_fail, expect_tx_fail_with_code,
+        expect_tx_pass, typed_output,
     },
     metadata_builders::{
         build_access_list_shard_bytes, build_xudt_meta_bytes, dynamic_linking_authority,
@@ -163,6 +163,10 @@ fn full_domain_shard() -> Bytes {
     build_access_list_shard_bytes([0u8; 32], [0xffu8; 32], Vec::new())
 }
 
+fn half_domain_shard() -> Bytes {
+    build_access_list_shard_bytes([0u8; 32], [0x7fu8; 32], Vec::new())
+}
+
 fn access_list_shard_with_extra_field() -> Bytes {
     let mut data = Vec::new();
     data.extend_from_slice(&84u32.to_le_bytes());
@@ -235,11 +239,63 @@ where
             ExtraCell::Dep { cell_dep } => {
                 builder = builder.cell_dep(cell_dep_for_script(&cell_dep));
             }
+            ExtraCell::CellDep { previous_output } => {
+                builder = builder.cell_dep(cell_dep(previous_output));
+            }
         }
     }
 
     let tx = context.complete_tx(builder.build());
     UpdateCase { context, tx }
+}
+
+fn access_mode_transition_tx(
+    input_flags: u8,
+    output_flags: u8,
+    include_full_input: bool,
+    include_full_output: bool,
+) -> UpdateCase {
+    update_meta_tx(|context, lock, meta| {
+        let authority = input_lock_authority(lock.script_hash);
+        let mut extra_cells = Vec::new();
+
+        if include_full_input {
+            let access_list = access_list_script(context, meta.script_hash);
+            extra_cells.push(ExtraCell::Input {
+                previous_output: create_typed_cell(
+                    context,
+                    &lock.script,
+                    &access_list.script,
+                    100_000_000_000,
+                    full_domain_shard(),
+                ),
+                cell_dep: access_list,
+            });
+        }
+
+        if include_full_output {
+            let access_list = access_list_script(context, meta.script_hash);
+            extra_cells.push(ExtraCell::Output {
+                lock: lock.script.clone(),
+                type_script: access_list.script.clone(),
+                data: full_domain_shard(),
+                cell_dep: access_list,
+            });
+        }
+
+        (
+            xudt_meta_data(
+                input_flags,
+                0,
+                None,
+                None,
+                Some(authority.clone()),
+                Vec::new(),
+            ),
+            xudt_meta_data(output_flags, 0, None, None, Some(authority), Vec::new()),
+            extra_cells,
+        )
+    })
 }
 
 fn update_meta_tx_with_output_lock<F>(build_lock: F) -> UpdateCase
@@ -308,6 +364,9 @@ enum ExtraCell {
     Dep {
         cell_dep: DeployedScript,
     },
+    CellDep {
+        previous_output: ckb_testtool::ckb_types::packed::OutPoint,
+    },
 }
 
 #[test]
@@ -318,7 +377,7 @@ fn xudt_meta_rejects_invalid_config_flags() {
         (input, output, Vec::new())
     });
 
-    expect_tx_fail_with_code(&case.context, &case.tx, "error code 14");
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 30");
 }
 
 #[test]
@@ -328,7 +387,7 @@ fn xudt_meta_rejects_malformed_name_bytes_field() {
         (data.clone(), data, Vec::new())
     });
 
-    expect_tx_fail_with_code(&case.context, &case.tx, "error code 14");
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 30");
 }
 
 #[test]
@@ -338,14 +397,134 @@ fn xudt_meta_rejects_oversized_name_field() {
         (data.clone(), data, Vec::new())
     });
 
-    expect_tx_fail_with_code(&case.context, &case.tx, "error code 14");
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 30");
 }
 
 #[test]
 fn xudt_meta_rejects_non_whitelisted_output_lock() {
     let case = update_meta_tx_with_output_lock(non_whitelisted_lock);
 
-    expect_tx_fail_with_code(&case.context, &case.tx, "error code 12");
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 20");
+}
+
+#[test]
+fn xudt_meta_blacklist_to_whitelist_requires_full_domain_inputs_and_outputs() {
+    let missing_input = access_mode_transition_tx(
+        CONFIG_ACCESS_ENABLED,
+        CONFIG_ACCESS_ENABLED | CONFIG_ACCESS_WHITELIST,
+        false,
+        true,
+    );
+    expect_tx_fail(&missing_input.context, &missing_input.tx);
+
+    let missing_output = access_mode_transition_tx(
+        CONFIG_ACCESS_ENABLED,
+        CONFIG_ACCESS_ENABLED | CONFIG_ACCESS_WHITELIST,
+        true,
+        false,
+    );
+    expect_tx_fail(&missing_output.context, &missing_output.tx);
+
+    let full_replace = access_mode_transition_tx(
+        CONFIG_ACCESS_ENABLED,
+        CONFIG_ACCESS_ENABLED | CONFIG_ACCESS_WHITELIST,
+        true,
+        true,
+    );
+    expect_tx_pass(&full_replace.context, &full_replace.tx);
+}
+
+#[test]
+fn xudt_meta_whitelist_to_blacklist_requires_full_domain_inputs_and_outputs() {
+    let missing_input = access_mode_transition_tx(
+        CONFIG_ACCESS_ENABLED | CONFIG_ACCESS_WHITELIST,
+        CONFIG_ACCESS_ENABLED,
+        false,
+        true,
+    );
+    expect_tx_fail(&missing_input.context, &missing_input.tx);
+
+    let missing_output = access_mode_transition_tx(
+        CONFIG_ACCESS_ENABLED | CONFIG_ACCESS_WHITELIST,
+        CONFIG_ACCESS_ENABLED,
+        true,
+        false,
+    );
+    expect_tx_fail(&missing_output.context, &missing_output.tx);
+
+    let full_replace = access_mode_transition_tx(
+        CONFIG_ACCESS_ENABLED | CONFIG_ACCESS_WHITELIST,
+        CONFIG_ACCESS_ENABLED,
+        true,
+        true,
+    );
+    expect_tx_pass(&full_replace.context, &full_replace.tx);
+}
+
+#[test]
+fn xudt_meta_whitelist_to_disabled_requires_full_domain_inputs() {
+    let missing_input = access_mode_transition_tx(
+        CONFIG_ACCESS_ENABLED | CONFIG_ACCESS_WHITELIST,
+        0,
+        false,
+        false,
+    );
+    expect_tx_fail_with_code(&missing_input.context, &missing_input.tx, "error code 60");
+
+    let full_input = access_mode_transition_tx(
+        CONFIG_ACCESS_ENABLED | CONFIG_ACCESS_WHITELIST,
+        0,
+        true,
+        false,
+    );
+    expect_tx_pass(&full_input.context, &full_input.tx);
+}
+
+#[test]
+fn xudt_meta_active_transition_rejects_partial_access_list_domain() {
+    let partial_input = update_meta_tx(|context, lock, meta| {
+        let authority = input_lock_authority(lock.script_hash);
+        let input_access_list = access_list_script(context, meta.script_hash);
+        let output_access_list = access_list_script(context, meta.script_hash);
+        (
+            xudt_meta_data(
+                CONFIG_ACCESS_ENABLED | CONFIG_ACCESS_WHITELIST,
+                0,
+                None,
+                None,
+                Some(authority.clone()),
+                Vec::new(),
+            ),
+            xudt_meta_data(
+                CONFIG_ACCESS_ENABLED,
+                0,
+                None,
+                None,
+                Some(authority),
+                Vec::new(),
+            ),
+            vec![
+                ExtraCell::Input {
+                    previous_output: create_typed_cell(
+                        context,
+                        &lock.script,
+                        &input_access_list.script,
+                        100_000_000_000,
+                        half_domain_shard(),
+                    ),
+                    cell_dep: input_access_list,
+                },
+                ExtraCell::Output {
+                    lock: lock.script.clone(),
+                    type_script: output_access_list.script.clone(),
+                    data: full_domain_shard(),
+                    cell_dep: output_access_list,
+                },
+            ],
+        )
+    });
+
+    expect_tx_fail_with_code(&partial_input.context, &partial_input.tx, "error code 60");
 }
 
 #[test]
@@ -365,7 +544,7 @@ fn xudt_meta_disabled_to_blacklist_requires_full_domain_shards() {
             Vec::new(),
         )
     });
-    expect_tx_fail_with_code(&missing_shard.context, &missing_shard.tx, "error code 19");
+    expect_tx_fail_with_code(&missing_shard.context, &missing_shard.tx, "error code 60");
 
     let with_shard = update_meta_tx(|context, lock, meta| {
         let authority = input_lock_authority(lock.script_hash);
@@ -408,7 +587,7 @@ fn xudt_meta_disabled_to_whitelist_requires_one_shard() {
             Vec::new(),
         )
     });
-    expect_tx_fail_with_code(&missing_shard.context, &missing_shard.tx, "error code 19");
+    expect_tx_fail_with_code(&missing_shard.context, &missing_shard.tx, "error code 60");
 
     let with_shard = update_meta_tx(|context, lock, meta| {
         let authority = input_lock_authority(lock.script_hash);
@@ -441,6 +620,13 @@ fn xudt_meta_access_mode_switch_rejects_same_token_xudt_cells() {
         let access_list = access_list_script(context, meta.script_hash);
         let input_xudt = xudt_script(context, meta.script_hash);
         let output_xudt = xudt_script(context, meta.script_hash);
+        let access_list_dep = create_typed_cell(
+            context,
+            &lock.script,
+            &access_list.script,
+            100_000_000_000,
+            full_domain_shard(),
+        );
         let previous_output = create_typed_cell(
             context,
             &lock.script,
@@ -482,11 +668,14 @@ fn xudt_meta_access_mode_switch_rejects_same_token_xudt_cells() {
                     data: udt_amount_bytes(1),
                     cell_dep: output_xudt,
                 },
+                ExtraCell::CellDep {
+                    previous_output: access_list_dep,
+                },
             ],
         )
     });
 
-    expect_tx_fail_with_code(&case.context, &case.tx, "error code 20");
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 61");
 }
 
 #[test]
@@ -501,7 +690,7 @@ fn xudt_meta_access_authority_controls_pause_and_access_mode() {
     expect_tx_fail_with_code(
         &without_authority.context,
         &without_authority.tx,
-        "error code 17",
+        "error code 50",
     );
 
     let with_authority = update_meta_tx(|context, lock, meta| {
@@ -575,7 +764,7 @@ fn xudt_meta_access_update_with_dynamic_linking_authority_passes() {
 fn xudt_meta_access_update_with_dynamic_linking_authority_denies() {
     let case = xudt_meta_access_update_with_plugin_authority("authority-dl-deny", false);
 
-    expect_tx_fail_with_code(&case.context, &case.tx, "error code 18");
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 51");
 }
 
 #[test]
@@ -589,7 +778,7 @@ fn xudt_meta_access_update_with_spawn_authority_passes() {
 fn xudt_meta_access_update_with_spawn_authority_denies() {
     let case = xudt_meta_access_update_with_plugin_authority("authority-spawn-deny", true);
 
-    expect_tx_fail_with_code(&case.context, &case.tx, "error code 18");
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 51");
 }
 
 #[test]
@@ -625,7 +814,7 @@ fn xudt_meta_disabled_to_blacklist_rejects_overlapping_access_list_outputs() {
         )
     });
 
-    expect_tx_fail_with_code(&case.context, &case.tx, "error code 14");
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 61");
 }
 
 #[test]
@@ -654,7 +843,7 @@ fn xudt_meta_disabled_to_whitelist_rejects_access_list_start_after_end() {
         )
     });
 
-    expect_tx_fail_with_code(&case.context, &case.tx, "error code 14");
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 60");
 }
 
 #[test]
@@ -681,7 +870,7 @@ fn xudt_meta_disabled_to_whitelist_rejects_access_list_extra_table_field() {
         )
     });
 
-    expect_tx_fail_with_code(&case.context, &case.tx, "error code 14");
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 60");
 }
 
 #[test]
@@ -709,7 +898,7 @@ fn xudt_meta_disabled_to_whitelist_rejects_duplicate_access_list_entries() {
         )
     });
 
-    expect_tx_fail_with_code(&case.context, &case.tx, "error code 14");
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 60");
 }
 
 #[test]
@@ -736,11 +925,12 @@ fn xudt_meta_blacklist_to_whitelist_requires_legal_output_shard() {
             Vec::new(),
         )
     });
-    expect_tx_fail_with_code(&missing_shard.context, &missing_shard.tx, "error code 19");
+    expect_tx_fail_with_code(&missing_shard.context, &missing_shard.tx, "error code 60");
 
     let with_shard = update_meta_tx(|context, lock, meta| {
         let authority = input_lock_authority(lock.script_hash);
-        let access_list = access_list_script(context, meta.script_hash);
+        let input_access_list = access_list_script(context, meta.script_hash);
+        let output_access_list = access_list_script(context, meta.script_hash);
         (
             xudt_meta_data(
                 CONFIG_ACCESS_ENABLED,
@@ -758,12 +948,24 @@ fn xudt_meta_blacklist_to_whitelist_requires_legal_output_shard() {
                 Some(authority),
                 Vec::new(),
             ),
-            vec![ExtraCell::Output {
-                lock: lock.script.clone(),
-                type_script: access_list.script.clone(),
-                data: full_domain_shard(),
-                cell_dep: access_list,
-            }],
+            vec![
+                ExtraCell::Input {
+                    previous_output: create_typed_cell(
+                        context,
+                        &lock.script,
+                        &input_access_list.script,
+                        100_000_000_000,
+                        full_domain_shard(),
+                    ),
+                    cell_dep: input_access_list,
+                },
+                ExtraCell::Output {
+                    lock: lock.script.clone(),
+                    type_script: output_access_list.script.clone(),
+                    data: full_domain_shard(),
+                    cell_dep: output_access_list,
+                },
+            ],
         )
     });
     expect_tx_pass(&with_shard.context, &with_shard.tx);
@@ -773,7 +975,8 @@ fn xudt_meta_blacklist_to_whitelist_requires_legal_output_shard() {
 fn xudt_meta_blacklist_to_whitelist_rejects_malformed_access_list_output() {
     let case = update_meta_tx(|context, lock, meta| {
         let authority = input_lock_authority(lock.script_hash);
-        let access_list = access_list_script(context, meta.script_hash);
+        let input_access_list = access_list_script(context, meta.script_hash);
+        let output_access_list = access_list_script(context, meta.script_hash);
         (
             xudt_meta_data(
                 CONFIG_ACCESS_ENABLED,
@@ -791,14 +994,100 @@ fn xudt_meta_blacklist_to_whitelist_rejects_malformed_access_list_output() {
                 Some(authority),
                 Vec::new(),
             ),
-            vec![ExtraCell::Output {
-                lock: lock.script.clone(),
-                type_script: access_list.script.clone(),
-                data: access_list_shard_with_extra_field(),
+            vec![
+                ExtraCell::Input {
+                    previous_output: create_typed_cell(
+                        context,
+                        &lock.script,
+                        &input_access_list.script,
+                        100_000_000_000,
+                        full_domain_shard(),
+                    ),
+                    cell_dep: input_access_list,
+                },
+                ExtraCell::Output {
+                    lock: lock.script.clone(),
+                    type_script: output_access_list.script.clone(),
+                    data: access_list_shard_with_extra_field(),
+                    cell_dep: output_access_list,
+                },
+            ],
+        )
+    });
+
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 60");
+}
+
+#[test]
+fn xudt_meta_blacklist_to_disabled_requires_full_domain_access_list_inputs() {
+    let missing_input = update_meta_tx(|_, lock, _| {
+        let authority = input_lock_authority(lock.script_hash);
+        (
+            xudt_meta_data(
+                CONFIG_ACCESS_ENABLED,
+                0,
+                None,
+                None,
+                Some(authority.clone()),
+                Vec::new(),
+            ),
+            xudt_meta_data(0, 0, None, None, Some(authority), Vec::new()),
+            Vec::new(),
+        )
+    });
+    expect_tx_fail_with_code(&missing_input.context, &missing_input.tx, "error code 60");
+
+    let partial_input = update_meta_tx(|context, lock, meta| {
+        let authority = input_lock_authority(lock.script_hash);
+        let access_list = access_list_script(context, meta.script_hash);
+        (
+            xudt_meta_data(
+                CONFIG_ACCESS_ENABLED,
+                0,
+                None,
+                None,
+                Some(authority.clone()),
+                Vec::new(),
+            ),
+            xudt_meta_data(0, 0, None, None, Some(authority), Vec::new()),
+            vec![ExtraCell::Input {
+                previous_output: create_typed_cell(
+                    context,
+                    &lock.script,
+                    &access_list.script,
+                    100_000_000_000,
+                    build_access_list_shard_bytes([0u8; 32], [0x7fu8; 32], Vec::new()),
+                ),
                 cell_dep: access_list,
             }],
         )
     });
+    expect_tx_fail_with_code(&partial_input.context, &partial_input.tx, "error code 60");
 
-    expect_tx_fail_with_code(&case.context, &case.tx, "error code 14");
+    let full_input = update_meta_tx(|context, lock, meta| {
+        let authority = input_lock_authority(lock.script_hash);
+        let access_list = access_list_script(context, meta.script_hash);
+        (
+            xudt_meta_data(
+                CONFIG_ACCESS_ENABLED,
+                0,
+                None,
+                None,
+                Some(authority.clone()),
+                Vec::new(),
+            ),
+            xudt_meta_data(0, 0, None, None, Some(authority), Vec::new()),
+            vec![ExtraCell::Input {
+                previous_output: create_typed_cell(
+                    context,
+                    &lock.script,
+                    &access_list.script,
+                    100_000_000_000,
+                    full_domain_shard(),
+                ),
+                cell_dep: access_list,
+            }],
+        )
+    });
+    expect_tx_pass(&full_input.context, &full_input.tx);
 }

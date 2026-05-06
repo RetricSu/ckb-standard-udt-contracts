@@ -45,6 +45,9 @@ pub fn main() -> Result<(), Error> {
         let delta = input_amount
             .checked_sub(output_amount)
             .ok_or(Error::AmountOverflow)?;
+        if meta::find_meta_in_source(&meta_type_hash, Source::CellDep)?.is_some() {
+            return Ok(());
+        }
         let Some(input_meta) = meta::find_meta_in_source(&meta_type_hash, Source::Input)? else {
             return Ok(());
         };

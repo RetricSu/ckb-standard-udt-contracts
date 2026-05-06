@@ -2,9 +2,13 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Move lock ownership checks to MetaType/AccessListType and make xUDT blacklist access control require a complete AccessList shard chain.
+**Goal:** Move lock ownership checks to MetaType/AccessListType and make xUDT access control require explicit membership or non-membership proofs for checked lock hashes.
 
-**Architecture:** First add failing tests that encode the cell-model responsibility boundary. Then remove consumer-side meta lock checks, add owner-side output lock checks, and share the blacklist shard chain validation semantics between AccessListType and xUDT's access reader. Keep the existing schema and authority runtime unchanged.
+**Architecture:** First add failing tests that encode the cell-model responsibility boundary. Then remove consumer-side meta lock checks, add owner-side output lock checks, keep blacklist shard chain validation owned by AccessListType, and make xUDT's access reader consume shard proofs only. Keep the existing schema and authority runtime unchanged.
+
+Follow-up decisions:
+- xUDT treats `output_amount < input_amount` with a visible `CellDep` meta as user destruction, even if a meta input is also present for an accompanying meta update.
+- `xudt-meta` requires blacklist -> disabled transitions to consume AccessList input shards covering the full lock-hash domain.
 
 **Tech Stack:** Rust no_std CKB contracts, `ckb-std` high-level cell APIs, `ckb-testtool` integration tests, current Makefile build/test flow.
 
@@ -19,7 +23,7 @@
 - Modify `contracts/xudt-meta/src/meta_cell/cells.rs`: validate only `GroupOutput` meta locks, not `GroupInput` locks.
 - Modify `contracts/access-list/src/entry.rs`: validate `GroupOutput` shard locks before accepting shard outputs.
 - Modify `contracts/access-list/src/shards.rs`: switch nibble alignment to prefix-bucket semantics, keep blacklist chain validation explicit, and set `MAX_ACCESSLIST_ENTRIES` to `4096`.
-- Modify `contracts/xudt/src/access.rs`: add blacklist complete-chain validation, prefix-bucket nibble alignment, and set `MAX_ACCESSLIST_ENTRIES` to `4096` in the access reader.
+- Modify `contracts/xudt/src/access.rs`: require membership/non-membership shard proofs for checked lock hashes, remove any complete-chain or prefix-bucket validation from the access reader, and set `MAX_ACCESSLIST_ENTRIES` to `4096`.
 - Modify `contracts/xudt-meta/src/meta_cell/access_list.rs`: set the access-list initialization parser limit to `4096`.
 - Modify tests in `tests/src/tests/sudt.rs`, `tests/src/tests/xudt.rs`, `tests/src/tests/access_list.rs`, `tests/src/tests/sudt_meta.rs`, and `tests/src/tests/xudt_meta.rs`.
 
@@ -44,10 +48,10 @@ Rename it to:
 fn sudt_mint_allows_visible_meta_with_non_whitelisted_lock()
 ```
 
-Keep the transaction shape with a non-whitelisted visible meta lock, but change:
+Keep the transaction shape with a non-whitelisted visible meta lock, but change the previous `MetaLockNotAllowed` failure expectation:
 
 ```rust
-expect_tx_fail_with_code(&case.context, &case.tx, "error code 25");
+expect_tx_fail(&case.context, &case.tx);
 ```
 
 to:
@@ -378,7 +382,7 @@ Then add:
 fn xudt_meta_rejects_non_whitelisted_output_lock() {
     let case = update_meta_tx_with_output_lock(non_whitelisted_lock);
 
-    expect_tx_fail_with_code(&case.context, &case.tx, "error code 12");
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 20");
 }
 ```
 
@@ -451,7 +455,7 @@ fn access_list_rejects_non_whitelisted_output_lock() {
         full_domain_shard(vec![entry(0x10)]),
     ]);
 
-    expect_tx_fail_with_code(&case.context, &case.tx, "error code 11");
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 20");
 }
 ```
 
@@ -662,13 +666,13 @@ git commit -m "fix: enforce access list shard output locks"
 
 ---
 
-### Task 4: Blacklist Chain Tests
+### Task 4: Access Proof Tests
 
 **Files:**
 - Modify: `tests/src/tests/xudt.rs`
 - Modify: `tests/src/tests/access_list.rs`
 
-- [ ] **Step 1: Add xUDT missing-blacklist-shard rejection**
+- [ ] **Step 1: Add xUDT missing blacklist proof rejection**
 
 In `tests/src/tests/xudt.rs`, add this helper near `full_domain_shard`:
 
@@ -682,18 +686,18 @@ Add:
 
 ```rust
 #[test]
-fn xudt_blacklist_rejects_incomplete_visible_shard_chain() {
+fn xudt_blacklist_rejects_missing_non_membership_proof() {
     let mut fixture = XudtFixture::new();
     let meta_dep = fixture.live_meta_dep(CONFIG_ACCESS_ENABLED, 0, false);
     let udt_input = fixture.live_udt_input(100);
     let mut end = [0xff; 32];
     end[0] = 0x0f;
-    let partial = fixture.live_access_list_input(custom_shard([0u8; 32], end, Vec::new()));
+    let non_covering = fixture.live_access_list_input(custom_shard([0u8; 32], end, Vec::new()));
 
     let tx = TransactionBuilder::default()
         .input(udt_input)
         .cell_dep(cell_dep(meta_dep.previous_output()))
-        .cell_dep(cell_dep(partial.previous_output()))
+        .cell_dep(cell_dep(non_covering.previous_output()))
         .output(typed_output(
             &fixture.lock.script,
             &fixture.xudt.script,
@@ -702,11 +706,11 @@ fn xudt_blacklist_rejects_incomplete_visible_shard_chain() {
         .output_data(udt_amount_bytes(100).pack())
         .build();
     let tx = fixture.complete(tx);
-    expect_tx_fail_with_code(&fixture.context, &tx, "error code 26");
+    expect_tx_fail_with_code(&fixture.context, &tx, "error code 60");
 }
 ```
 
-- [ ] **Step 2: Add prefix-bucket nibble alignment tests**
+- [ ] **Step 2: Add AccessList prefix-bucket nibble alignment test**
 
 In `tests/src/tests/access_list.rs`, add a blacklist shard output whose range is suffix-aligned but not prefix-bucket aligned:
 
@@ -723,31 +727,28 @@ fn access_list_blacklist_rejects_suffix_only_nibble_alignment() {
         ],
     );
 
-    expect_tx_fail_with_code(&case.context, &case.tx, "error code 19");
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 60");
 }
 ```
 
-In `tests/src/tests/xudt.rs`, add the same malformed shard as a visible dependency and assert xUDT fails closed:
+Do not add an xUDT test that rejects suffix-only alignment by revalidating the complete chain. xUDT is a consumer; AccessListType owns the shard-chain and prefix-bucket invariants.
+
+- [ ] **Step 3: Add xUDT blacklist covering non-membership proof pass**
+
+In `tests/src/tests/xudt.rs`, add a visible shard whose range covers the checked input lock hash but does not list it:
 
 ```rust
 #[test]
-fn xudt_blacklist_rejects_suffix_only_nibble_alignment() {
+fn xudt_blacklist_accepts_covering_non_membership_proof() {
     let mut fixture = XudtFixture::new();
     let meta_dep = fixture.live_meta_dep(CONFIG_ACCESS_ENABLED, 0, false);
     let udt_input = fixture.live_udt_input(100);
-    let mut first_end = [0u8; 32];
-    first_end[31] = 0x0f;
-    let mut second_start = [0u8; 32];
-    second_start[31] = 0x10;
-    let first_shard = fixture.live_access_list_input(custom_shard([0u8; 32], first_end, Vec::new()));
-    let second_shard =
-        fixture.live_access_list_input(custom_shard(second_start, [0xffu8; 32], Vec::new()));
+    let proof = fixture.live_access_list_input(full_domain_shard(Vec::new()));
 
     let tx = TransactionBuilder::default()
         .input(udt_input)
         .cell_dep(cell_dep(meta_dep.previous_output()))
-        .cell_dep(cell_dep(first_shard.previous_output()))
-        .cell_dep(cell_dep(second_shard.previous_output()))
+        .cell_dep(cell_dep(proof.previous_output()))
         .output(typed_output(
             &fixture.lock.script,
             &fixture.xudt.script,
@@ -757,31 +758,31 @@ fn xudt_blacklist_rejects_suffix_only_nibble_alignment() {
         .build();
     let tx = fixture.complete(tx);
 
-    expect_tx_fail_with_code(&fixture.context, &tx, "error code 26");
+    expect_tx_pass(&fixture.context, &tx);
 }
 ```
 
-- [ ] **Step 3: Confirm tests fail before implementation**
+- [ ] **Step 4: Confirm tests fail before implementation**
 
 Run:
 
 ```bash
-RUSTUP_TOOLCHAIN=1.92.0 MODE=debug make test CARGO_ARGS="blacklist_rejects_incomplete_visible_shard_chain -- --nocapture"
-RUSTUP_TOOLCHAIN=1.92.0 MODE=debug make test CARGO_ARGS="suffix_only_nibble_alignment -- --nocapture"
+RUSTUP_TOOLCHAIN=1.92.0 MODE=debug make test CARGO_ARGS="blacklist_rejects_missing_non_membership_proof -- --nocapture"
+RUSTUP_TOOLCHAIN=1.92.0 MODE=debug make test CARGO_ARGS="access_list_blacklist_rejects_suffix_only_nibble_alignment -- --nocapture"
 ```
 
 Expected: fail before implementation.
 
-- [ ] **Step 4: Commit failing tests**
+- [ ] **Step 5: Commit failing tests**
 
 ```bash
 git add tests/src/tests/xudt.rs tests/src/tests/access_list.rs tests/src
-git commit -m "test: require blacklist shard chain"
+git commit -m "test: require access list proofs"
 ```
 
 ---
 
-### Task 5: Prefix-Bucket Chain Validation
+### Task 5: Prefix-Bucket Chain Validation and xUDT Proofs
 
 **Files:**
 - Modify: `contracts/access-list/src/shards.rs`
@@ -813,84 +814,63 @@ fn is_nibble_aligned_end(end: &[u8; 32]) -> bool {
 }
 ```
 
-- [ ] **Step 2: Add xUDT blacklist chain validation**
+- [ ] **Step 2: Add xUDT proof-based access validation**
 
-In `contracts/xudt/src/access.rs`, add:
-
-```rust
-const FULL_START: [u8; 32] = [0u8; 32];
-const FULL_END: [u8; 32] = [0xffu8; 32];
-```
-
-After `validate_ordered_non_overlapping(&shards)?;` in `validate_if_enabled`, add:
+In `contracts/xudt/src/access.rs`, do not add complete-chain validation or prefix-bucket validation. If those checks already exist, remove them from xUDT. After collecting and parsing visible shards, validate each checked `GroupInput` lock hash against the visible proof shards:
 
 ```rust
-if !meta.is_whitelist() {
-    validate_full_domain_chain(&shards)?;
+fn find_covering_shard<'a>(
+    shards: &'a [AccessListShard],
+    lock_hash: &[u8; 32],
+) -> Option<&'a AccessListShard> {
+    shards
+        .iter()
+        .find(|shard| shard.start <= *lock_hash && *lock_hash <= shard.end)
 }
 ```
 
-Add:
+For blacklist mode:
 
 ```rust
-fn validate_full_domain_chain(shards: &[AccessListShard]) -> Result<(), Error> {
-    if shards.is_empty() || shards[0].start != FULL_START {
-        return Err(Error::InvalidShardData);
-    }
-
-    let mut expected_start = FULL_START;
-    for shard in shards {
-        if shard.start != expected_start {
-            return Err(Error::InvalidShardData);
-        }
-        let Some(next_start) = increment_byte32(&shard.end) else {
-            return if shard.end == FULL_END {
-                Ok(())
-            } else {
-                Err(Error::InvalidShardData)
-            };
-        };
-        expected_start = next_start;
-    }
-
-    Err(Error::InvalidShardData)
-}
-
-fn increment_byte32(value: &[u8; 32]) -> Option<[u8; 32]> {
-    let mut next = *value;
-    for byte in next.iter_mut().rev() {
-        if *byte == 0xff {
-            *byte = 0;
-        } else {
-            *byte += 1;
-            return Some(next);
-        }
-    }
-    None
+let Some(shard) = find_covering_shard(&shards, &lock_hash) else {
+    return Err(Error::InvalidShardData);
+};
+if shard.entries.binary_search(&lock_hash).is_ok() {
+    return Err(Error::AccessDenied);
 }
 ```
 
-- [ ] **Step 3: Update xUDT nibble alignment**
+For whitelist mode:
 
-In `contracts/xudt/src/access.rs`, replace the suffix-only `is_nibble_aligned_range` with the same prefix-bucket implementation from Step 1.
+```rust
+let Some(shard) = find_covering_shard(&shards, &lock_hash) else {
+    return Err(Error::AccessDenied);
+};
+if shard.entries.binary_search(&lock_hash).is_err() {
+    return Err(Error::AccessDenied);
+}
+```
 
-- [ ] **Step 4: Run blacklist tests**
+Keep local shard parsing strict enough for proof validation: shard data decoding, `start <= end`, entry sorting, uniqueness, range containment, and `MAX_ACCESSLIST_ENTRIES`. Do not require visible shards to cover the full domain, form a complete chain, or use prefix-bucket alignment.
+
+- [ ] **Step 3: Run blacklist tests**
 
 Run:
 
 ```bash
 RUSTUP_TOOLCHAIN=1.92.0 make build MODE=debug
 RUSTUP_TOOLCHAIN=1.92.0 MODE=debug make test CARGO_ARGS="blacklist -- --nocapture"
-RUSTUP_TOOLCHAIN=1.92.0 MODE=debug make test CARGO_ARGS="suffix_only_nibble_alignment -- --nocapture"
+RUSTUP_TOOLCHAIN=1.92.0 MODE=debug make test CARGO_ARGS="proof -- --nocapture"
+RUSTUP_TOOLCHAIN=1.92.0 MODE=debug make test CARGO_ARGS="access_list_blacklist_rejects_suffix_only_nibble_alignment -- --nocapture"
 ```
 
-Expected: blacklist tests pass.
+Expected: AccessList blacklist chain tests pass, xUDT proof tests pass, and xUDT does not require complete visible chain coverage.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 4: Commit**
 
 ```bash
 git add contracts/access-list/src/shards.rs contracts/xudt/src/access.rs tests/src/tests/xudt.rs tests/src/tests/access_list.rs
-git commit -m "fix: require blacklist shard chain"
+git commit -m "fix: require access list proofs"
 ```
 
 ---
@@ -912,7 +892,7 @@ In `ref/Enhanced UDT Standard V1.md`, change the dependency notes to:
 In the xUDT access section, replace "Blacklist must cover full domain" with:
 
 ```markdown
-Blacklist 必须携带完整 AccessList shard chain：首片 start=00..00，尾片 end=ff..ff，相邻片满足 next.start=prev.end+1，且所有片满足 prefix-bucket nibble alignment。
+Blacklist 的完整 AccessList shard chain 由 AccessListType 在 shard 更新时验证；xUDT 作为使用者只要求每个被检查的 input lock hash 都有可见 covering shard 作为不包含证明，若 proof 缺失或 covering shard 中包含该 lock hash 则拒绝。Whitelist 要求可见 covering shard 且 entries 包含该 lock hash 作为包含证明。
 ```
 
 - [ ] **Step 2: Run complete verification**

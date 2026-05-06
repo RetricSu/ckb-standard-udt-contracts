@@ -352,21 +352,21 @@ fn sudt_meta_create_tracked_supply_matches_initial_outputs() {
 fn sudt_meta_create_tracked_supply_mismatch_rejects() {
     let (context, tx) = create_meta_tx(101, Some(100), None, true);
 
-    expect_tx_fail_with_code(&context, &tx, "error code 15");
+    expect_tx_fail_with_code(&context, &tx, "error code 31");
 }
 
 #[test]
 fn sudt_meta_create_ignores_fake_data2_udt_outputs() {
     let (context, tx) = create_meta_tx(100, None, Some(100), true);
 
-    expect_tx_fail_with_code(&context, &tx, "error code 15");
+    expect_tx_fail_with_code(&context, &tx, "error code 31");
 }
 
 #[test]
 fn sudt_meta_create_rejects_type_id_mismatch() {
     let (context, tx) = create_meta_tx(100, Some(100), None, false);
 
-    expect_tx_fail_with_code(&context, &tx, "error code 13");
+    expect_tx_fail_with_code(&context, &tx, "error code 21");
 }
 
 #[test]
@@ -410,7 +410,7 @@ fn sudt_meta_rejects_untracked_nonzero_supply() {
         .build();
     let tx = context.complete_tx(tx);
 
-    expect_tx_fail_with_code(&context, &tx, "error code 15");
+    expect_tx_fail_with_code(&context, &tx, "error code 31");
 }
 
 #[test]
@@ -427,7 +427,7 @@ fn sudt_meta_update_metadata_change_requires_metadata_authority() {
         ),
     );
 
-    expect_tx_fail_with_code(&context, &tx, "error code 17");
+    expect_tx_fail_with_code(&context, &tx, "error code 50");
 }
 
 #[test]
@@ -502,7 +502,7 @@ fn sudt_meta_update_rejects_metadata_authority_recreation() {
         )
     });
 
-    expect_tx_fail_with_code(&context, &tx, "error code 17");
+    expect_tx_fail_with_code(&context, &tx, "error code 50");
 }
 
 #[test]
@@ -548,7 +548,7 @@ fn sudt_meta_update_rejects_mint_authority_recreation() {
         )
     });
 
-    expect_tx_fail_with_code(&context, &tx, "error code 17");
+    expect_tx_fail_with_code(&context, &tx, "error code 50");
 }
 
 #[test]
@@ -562,7 +562,7 @@ fn sudt_meta_update_metadata_change_with_dynamic_linking_authority_passes() {
 fn sudt_meta_update_metadata_change_with_dynamic_linking_authority_denies() {
     let (context, tx) = update_meta_tx_with_plugin_authority("authority-dl-deny", false);
 
-    expect_tx_fail_with_code(&context, &tx, "error code 18");
+    expect_tx_fail_with_code(&context, &tx, "error code 51");
 }
 
 #[test]
@@ -576,5 +576,5 @@ fn sudt_meta_update_metadata_change_with_spawn_authority_passes() {
 fn sudt_meta_update_metadata_change_with_spawn_authority_denies() {
     let (context, tx) = update_meta_tx_with_plugin_authority("authority-spawn-deny", true);
 
-    expect_tx_fail_with_code(&context, &tx, "error code 18");
+    expect_tx_fail_with_code(&context, &tx, "error code 51");
 }

@@ -74,7 +74,9 @@ fn load_group_meta(source: Source) -> Result<Option<ParsedXudtMeta>, Error> {
                 if found.is_some() {
                     return Err(Error::InvalidArgs);
                 }
-                validate_meta_lock(index, source)?;
+                if source == Source::GroupOutput {
+                    validate_meta_lock(index, source)?;
+                }
                 found = Some(parse_meta(&data)?);
                 index += 1;
             }

@@ -16,6 +16,14 @@ pub struct AccessListShard {
     pub entries: Vec<[u8; 32]>,
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum AccessListLifecycle {
+    Create,
+    Update,
+    Destroy,
+    Replace,
+}
+
 pub fn collect_group_shards(source: Source) -> Result<Vec<AccessListShard>, Error> {
     let mut shards = Vec::new();
     let mut index = 0;
@@ -32,44 +40,63 @@ pub fn collect_group_shards(source: Source) -> Result<Vec<AccessListShard>, Erro
     }
 }
 
-pub fn validate_shards_for_mode(
-    mode: AccessMode,
+pub fn validate_shards_for_modes(
+    input_mode: AccessMode,
+    output_mode: AccessMode,
     input_shards: &[AccessListShard],
     output_shards: &[AccessListShard],
 ) -> Result<(), Error> {
     validate_ordered_non_overlapping(input_shards)?;
     validate_ordered_non_overlapping(output_shards)?;
 
-    match mode {
-        AccessMode::Disabled => {
-            if output_shards.is_empty() {
-                Ok(())
-            } else {
-                Err(Error::InvalidShardSet)
-            }
-        }
-        AccessMode::Blacklist => {
+    match classify_lifecycle(input_mode, output_mode)? {
+        AccessListLifecycle::Create => {
             if !input_shards.is_empty() {
-                validate_full_domain(input_shards)?;
+                return Err(Error::InvalidShardSet);
             }
-            validate_full_domain(output_shards)?;
-            validate_blacklist_diff(input_shards, output_shards)
+            validate_full_domain(output_shards)
         }
-        AccessMode::Whitelist => {
+        AccessListLifecycle::Destroy => {
+            validate_full_domain(input_shards)?;
             if output_shards.is_empty() {
-                Err(Error::InvalidShardSet)
-            } else {
                 Ok(())
+            } else {
+                Err(Error::InvalidShardSet)
             }
+        }
+        AccessListLifecycle::Replace => {
+            validate_full_domain(input_shards)?;
+            validate_full_domain(output_shards)
+        }
+        AccessListLifecycle::Update => {
+            validate_local_replacement_range(input_shards, output_shards)?;
+            validate_update_diff(input_shards, output_shards)
         }
     }
 }
 
-fn validate_blacklist_diff(
+fn classify_lifecycle(
+    input_mode: AccessMode,
+    output_mode: AccessMode,
+) -> Result<AccessListLifecycle, Error> {
+    match (is_active(input_mode), is_active(output_mode)) {
+        (false, false) => Err(Error::InvalidShardSet),
+        (false, true) => Ok(AccessListLifecycle::Create),
+        (true, false) => Ok(AccessListLifecycle::Destroy),
+        (true, true) if input_mode == output_mode => Ok(AccessListLifecycle::Update),
+        (true, true) => Ok(AccessListLifecycle::Replace),
+    }
+}
+
+fn is_active(mode: AccessMode) -> bool {
+    mode != AccessMode::Disabled
+}
+
+fn validate_update_diff(
     input_shards: &[AccessListShard],
     output_shards: &[AccessListShard],
 ) -> Result<(), Error> {
-    if input_shards.is_empty() || have_identical_ranges(input_shards, output_shards) {
+    if have_identical_ranges(input_shards, output_shards) {
         return Ok(());
     }
 
@@ -78,6 +105,45 @@ fn validate_blacklist_diff(
     }
 
     validate_split_merge_boundaries(input_shards, output_shards)
+}
+
+fn validate_local_replacement_range(
+    input_shards: &[AccessListShard],
+    output_shards: &[AccessListShard],
+) -> Result<(), Error> {
+    validate_contiguous_local_range(input_shards)?;
+    validate_contiguous_local_range(output_shards)?;
+
+    let input_start = input_shards.first().ok_or(Error::InvalidShardSet)?.start;
+    let input_end = input_shards.last().ok_or(Error::InvalidShardSet)?.end;
+    let output_start = output_shards.first().ok_or(Error::InvalidShardSet)?.start;
+    let output_end = output_shards.last().ok_or(Error::InvalidShardSet)?.end;
+
+    if input_start == output_start && input_end == output_end {
+        Ok(())
+    } else {
+        Err(Error::InvalidShardSet)
+    }
+}
+
+fn validate_contiguous_local_range(shards: &[AccessListShard]) -> Result<(), Error> {
+    if shards.is_empty() {
+        return Err(Error::InvalidShardSet);
+    }
+
+    let mut expected_start = shards[0].start;
+    for shard in shards {
+        if shard.start != expected_start {
+            return Err(Error::InvalidShardSet);
+        }
+
+        let Some(next_start) = increment_byte32(&shard.end) else {
+            return Ok(());
+        };
+        expected_start = next_start;
+    }
+
+    Ok(())
 }
 
 fn have_identical_ranges(
@@ -282,7 +348,15 @@ fn parse_byte32_vec(data: &[u8]) -> Result<Vec<[u8; 32]>, Error> {
 }
 
 fn is_nibble_aligned_range(start: &[u8; 32], end: &[u8; 32]) -> bool {
-    start[31] & 0x0f == 0 && end[31] & 0x0f == 0x0f
+    is_nibble_aligned_start(start) && is_nibble_aligned_end(end)
+}
+
+fn is_nibble_aligned_start(start: &[u8; 32]) -> bool {
+    start[0] & 0x0f == 0x00 && start[1..].iter().all(|byte| *byte == 0x00)
+}
+
+fn is_nibble_aligned_end(end: &[u8; 32]) -> bool {
+    end[0] & 0x0f == 0x0f && end[1..].iter().all(|byte| *byte == 0xff)
 }
 
 fn increment_byte32(value: &[u8; 32]) -> Option<[u8; 32]> {

@@ -1,6 +1,6 @@
 use crate::{
     fixtures::{
-        cell_dep_for_script, create_typed_cell, expect_tx_fail, expect_tx_fail_with_code,
+        cell_dep, cell_dep_for_script, create_typed_cell, expect_tx_fail, expect_tx_fail_with_code,
         expect_tx_pass, typed_output,
     },
     metadata_builders::{
@@ -118,6 +118,18 @@ fn custom_shard(start: [u8; 32], end: [u8; 32], entries: Vec<[u8; 32]>) -> Bytes
     build_access_list_shard_bytes(start, end, entries)
 }
 
+fn prefix_start(first: u8) -> [u8; 32] {
+    let mut start = [0u8; 32];
+    start[0] = first;
+    start
+}
+
+fn prefix_end(first: u8) -> [u8; 32] {
+    let mut end = [0xffu8; 32];
+    end[0] = first;
+    end
+}
+
 fn full_domain_shard(entries: Vec<[u8; 32]>) -> Bytes {
     build_access_list_shard_bytes([0u8; 32], [0xffu8; 32], entries)
 }
@@ -125,6 +137,12 @@ fn full_domain_shard(entries: Vec<[u8; 32]>) -> Bytes {
 fn entry(last: u8) -> [u8; 32] {
     let mut value = [0u8; 32];
     value[31] = last;
+    value
+}
+
+fn prefix_entry(first: u8) -> [u8; 32] {
+    let mut value = [0u8; 32];
+    value[0] = first;
     value
 }
 
@@ -220,6 +238,79 @@ fn access_list_update_tx(
     AccessListCase { context, tx }
 }
 
+fn access_list_transition_tx(
+    input_config_flags: u8,
+    output_config_flags: u8,
+    include_authority_input: bool,
+    input_shards: Vec<Bytes>,
+    output_shards: Vec<Bytes>,
+) -> AccessListCase {
+    let mut context = Context::default();
+    let authority = always_success_lock(&mut context, Bytes::from(vec![1u8]));
+    let cell_lock = always_success_lock(&mut context, Bytes::from(vec![2u8]));
+    let meta = always_success_lock(&mut context, Bytes::from(vec![3u8; 32]));
+    let access_list = access_list_script(&mut context, meta.script_hash);
+
+    let meta_out_point = create_typed_cell(
+        &mut context,
+        &cell_lock.script,
+        &meta.script,
+        100_000_000_000,
+        xudt_meta_data(input_config_flags, &authority),
+    );
+    let mut builder = TransactionBuilder::default()
+        .input(
+            CellInput::new_builder()
+                .previous_output(meta_out_point)
+                .build(),
+        )
+        .output(typed_output(
+            &cell_lock.script,
+            &meta.script,
+            100_000_000_000,
+        ))
+        .output_data(xudt_meta_data(output_config_flags, &authority).pack())
+        .cell_dep(cell_dep_for_script(&cell_lock))
+        .cell_dep(cell_dep_for_script(&authority))
+        .cell_dep(cell_dep_for_script(&meta))
+        .cell_dep(cell_dep_for_script(&access_list));
+
+    if include_authority_input {
+        let out_point = context.create_cell(
+            ckb_testtool::ckb_types::packed::CellOutput::new_builder()
+                .capacity(100_000_000_000u64.pack())
+                .lock(authority.script.clone())
+                .build(),
+            Bytes::new(),
+        );
+        builder = builder.input(CellInput::new_builder().previous_output(out_point).build());
+    }
+
+    for data in input_shards {
+        let out_point = create_typed_cell(
+            &mut context,
+            &cell_lock.script,
+            &access_list.script,
+            100_000_000_000,
+            data,
+        );
+        builder = builder.input(CellInput::new_builder().previous_output(out_point).build());
+    }
+
+    for data in output_shards {
+        builder = builder
+            .output(typed_output(
+                &cell_lock.script,
+                &access_list.script,
+                100_000_000_000,
+            ))
+            .output_data(data.pack());
+    }
+
+    let tx = context.complete_tx(builder.build());
+    AccessListCase { context, tx }
+}
+
 fn access_list_update_tx_with_non_whitelisted_meta_lock(
     config_flags: u8,
     input_shards: Vec<Bytes>,
@@ -235,23 +326,13 @@ fn access_list_update_tx_with_non_whitelisted_meta_lock(
 
     let meta_out_point = create_typed_cell(
         &mut context,
-        &cell_lock.script,
+        &meta_lock.script,
         &meta.script,
         100_000_000_000,
         meta_data,
     );
     let mut builder = TransactionBuilder::default()
-        .input(
-            CellInput::new_builder()
-                .previous_output(meta_out_point)
-                .build(),
-        )
-        .output(typed_output(
-            &meta_lock.script,
-            &meta.script,
-            100_000_000_000,
-        ))
-        .output_data(xudt_meta_data(config_flags, &authority).pack())
+        .cell_dep(cell_dep(meta_out_point))
         .cell_dep(cell_dep_for_script(&cell_lock))
         .cell_dep(cell_dep_for_script(&authority))
         .cell_dep(cell_dep_for_script(&meta_lock))
@@ -443,6 +524,221 @@ fn access_list_update_tx_with_plugin_authority(
 }
 
 #[test]
+fn access_list_disabled_to_disabled_rejects_access_list_inputs_or_outputs() {
+    let with_input =
+        access_list_transition_tx(0, 0, true, vec![full_domain_shard(Vec::new())], Vec::new());
+    expect_tx_fail_with_code(&with_input.context, &with_input.tx, "error code 61");
+
+    let with_output =
+        access_list_transition_tx(0, 0, true, Vec::new(), vec![full_domain_shard(Vec::new())]);
+    expect_tx_fail_with_code(&with_output.context, &with_output.tx, "error code 61");
+}
+
+#[test]
+fn access_list_whitelist_create_requires_full_domain_outputs() {
+    let partial = access_list_transition_tx(
+        0,
+        CONFIG_ACCESS_ENABLED | CONFIG_ACCESS_WHITELIST,
+        true,
+        Vec::new(),
+        vec![custom_shard([0u8; 32], prefix_end(0x7f), Vec::new())],
+    );
+    expect_tx_fail_with_code(&partial.context, &partial.tx, "error code 61");
+
+    let full = access_list_transition_tx(
+        0,
+        CONFIG_ACCESS_ENABLED | CONFIG_ACCESS_WHITELIST,
+        true,
+        Vec::new(),
+        vec![full_domain_shard(Vec::new())],
+    );
+    expect_tx_pass(&full.context, &full.tx);
+}
+
+#[test]
+fn access_list_whitelist_rejects_repeated_create_from_empty_inputs() {
+    let case = access_list_transition_tx(
+        CONFIG_ACCESS_ENABLED | CONFIG_ACCESS_WHITELIST,
+        CONFIG_ACCESS_ENABLED | CONFIG_ACCESS_WHITELIST,
+        true,
+        Vec::new(),
+        vec![full_domain_shard(Vec::new())],
+    );
+
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 61");
+}
+
+#[test]
+fn access_list_blacklist_rejects_repeated_create_from_empty_inputs() {
+    let case = access_list_transition_tx(
+        CONFIG_ACCESS_ENABLED,
+        CONFIG_ACCESS_ENABLED,
+        true,
+        Vec::new(),
+        vec![full_domain_shard(Vec::new())],
+    );
+
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 61");
+}
+
+#[test]
+fn access_list_whitelist_allows_same_range_insert_delete() {
+    let case = access_list_transition_tx(
+        CONFIG_ACCESS_ENABLED | CONFIG_ACCESS_WHITELIST,
+        CONFIG_ACCESS_ENABLED | CONFIG_ACCESS_WHITELIST,
+        true,
+        vec![custom_shard([0u8; 32], prefix_end(0x0f), vec![entry(0x10)])],
+        vec![custom_shard(
+            [0u8; 32],
+            prefix_end(0x0f),
+            vec![entry(0x10), entry(0x20)],
+        )],
+    );
+
+    expect_tx_pass(&case.context, &case.tx);
+}
+
+#[test]
+fn access_list_whitelist_allows_split_preserving_entries() {
+    let case = access_list_transition_tx(
+        CONFIG_ACCESS_ENABLED | CONFIG_ACCESS_WHITELIST,
+        CONFIG_ACCESS_ENABLED | CONFIG_ACCESS_WHITELIST,
+        true,
+        vec![custom_shard(
+            [0u8; 32],
+            prefix_end(0x2f),
+            vec![prefix_entry(0x08), prefix_entry(0x20)],
+        )],
+        vec![
+            custom_shard([0u8; 32], prefix_end(0x0f), vec![prefix_entry(0x08)]),
+            custom_shard(
+                prefix_start(0x10),
+                prefix_end(0x2f),
+                vec![prefix_entry(0x20)],
+            ),
+        ],
+    );
+
+    expect_tx_pass(&case.context, &case.tx);
+}
+
+#[test]
+fn access_list_whitelist_rejects_split_that_changes_entries() {
+    let case = access_list_transition_tx(
+        CONFIG_ACCESS_ENABLED | CONFIG_ACCESS_WHITELIST,
+        CONFIG_ACCESS_ENABLED | CONFIG_ACCESS_WHITELIST,
+        true,
+        vec![custom_shard(
+            [0u8; 32],
+            prefix_end(0x2f),
+            vec![prefix_entry(0x08)],
+        )],
+        vec![
+            custom_shard([0u8; 32], prefix_end(0x0f), vec![prefix_entry(0x08)]),
+            custom_shard(
+                prefix_start(0x10),
+                prefix_end(0x2f),
+                vec![prefix_entry(0x20)],
+            ),
+        ],
+    );
+
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 61");
+}
+
+#[test]
+fn access_list_blacklist_allows_local_same_range_insert_delete() {
+    let case = access_list_transition_tx(
+        CONFIG_ACCESS_ENABLED,
+        CONFIG_ACCESS_ENABLED,
+        true,
+        vec![custom_shard([0u8; 32], prefix_end(0x0f), vec![entry(0x10)])],
+        vec![custom_shard(
+            [0u8; 32],
+            prefix_end(0x0f),
+            vec![entry(0x10), entry(0x20)],
+        )],
+    );
+
+    expect_tx_pass(&case.context, &case.tx);
+}
+
+#[test]
+fn access_list_blacklist_allows_local_split_preserving_entries() {
+    let case = access_list_transition_tx(
+        CONFIG_ACCESS_ENABLED,
+        CONFIG_ACCESS_ENABLED,
+        true,
+        vec![custom_shard(
+            [0u8; 32],
+            prefix_end(0x2f),
+            vec![prefix_entry(0x08), prefix_entry(0x20)],
+        )],
+        vec![
+            custom_shard([0u8; 32], prefix_end(0x0f), vec![prefix_entry(0x08)]),
+            custom_shard(
+                prefix_start(0x10),
+                prefix_end(0x2f),
+                vec![prefix_entry(0x20)],
+            ),
+        ],
+    );
+
+    expect_tx_pass(&case.context, &case.tx);
+}
+
+#[test]
+fn access_list_active_destroy_requires_full_domain_inputs_and_empty_outputs() {
+    let partial = access_list_transition_tx(
+        CONFIG_ACCESS_ENABLED | CONFIG_ACCESS_WHITELIST,
+        0,
+        true,
+        vec![custom_shard([0u8; 32], prefix_end(0x7f), Vec::new())],
+        Vec::new(),
+    );
+    expect_tx_fail_with_code(&partial.context, &partial.tx, "error code 61");
+
+    let with_output = access_list_transition_tx(
+        CONFIG_ACCESS_ENABLED | CONFIG_ACCESS_WHITELIST,
+        0,
+        true,
+        vec![full_domain_shard(Vec::new())],
+        vec![full_domain_shard(Vec::new())],
+    );
+    expect_tx_fail_with_code(&with_output.context, &with_output.tx, "error code 61");
+
+    let full_destroy = access_list_transition_tx(
+        CONFIG_ACCESS_ENABLED | CONFIG_ACCESS_WHITELIST,
+        0,
+        true,
+        vec![full_domain_shard(Vec::new())],
+        Vec::new(),
+    );
+    expect_tx_pass(&full_destroy.context, &full_destroy.tx);
+}
+
+#[test]
+fn access_list_mode_replace_requires_full_domain_inputs_and_outputs_but_allows_entry_reset() {
+    let missing_input = access_list_transition_tx(
+        CONFIG_ACCESS_ENABLED,
+        CONFIG_ACCESS_ENABLED | CONFIG_ACCESS_WHITELIST,
+        true,
+        Vec::new(),
+        vec![full_domain_shard(vec![entry(0x20)])],
+    );
+    expect_tx_fail_with_code(&missing_input.context, &missing_input.tx, "error code 61");
+
+    let full_replace = access_list_transition_tx(
+        CONFIG_ACCESS_ENABLED,
+        CONFIG_ACCESS_ENABLED | CONFIG_ACCESS_WHITELIST,
+        true,
+        vec![full_domain_shard(vec![entry(0x10)])],
+        vec![full_domain_shard(vec![entry(0x20)])],
+    );
+    expect_tx_pass(&full_replace.context, &full_replace.tx);
+}
+
+#[test]
 fn access_list_blacklist_requires_full_domain_coverage() {
     let case = access_list_update_tx(
         CONFIG_ACCESS_ENABLED,
@@ -452,6 +748,21 @@ fn access_list_blacklist_requires_full_domain_coverage() {
     );
 
     expect_tx_fail(&case.context, &case.tx);
+}
+
+#[test]
+fn access_list_blacklist_rejects_suffix_only_nibble_alignment() {
+    let case = access_list_update_tx(
+        CONFIG_ACCESS_ENABLED,
+        true,
+        vec![full_domain_shard(Vec::new())],
+        vec![
+            bounded_shard(0x00, 0x0f, Vec::new()),
+            tail_shard(0x10, Vec::new()),
+        ],
+    );
+
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 60");
 }
 
 #[test]
@@ -496,7 +807,7 @@ fn access_list_rejects_non_whitelisted_output_lock() {
     let case =
         access_list_update_tx_with_non_whitelisted_output_lock(vec![full_domain_shard(Vec::new())]);
 
-    expect_tx_fail_with_code(&case.context, &case.tx, "error code 11");
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 20");
 }
 
 #[test]
@@ -572,10 +883,13 @@ fn access_list_blacklist_allows_split_preserving_entries() {
     let case = access_list_update_tx(
         CONFIG_ACCESS_ENABLED,
         true,
-        vec![full_domain_shard(vec![entry(0x08), entry(0x20)])],
+        vec![full_domain_shard(vec![
+            prefix_entry(0x08),
+            prefix_entry(0x20),
+        ])],
         vec![
-            bounded_shard(0x00, 0x0f, vec![entry(0x08)]),
-            tail_shard(0x10, vec![entry(0x20)]),
+            custom_shard([0u8; 32], prefix_end(0x0f), vec![prefix_entry(0x08)]),
+            custom_shard(prefix_start(0x10), [0xffu8; 32], vec![prefix_entry(0x20)]),
         ],
     );
 
