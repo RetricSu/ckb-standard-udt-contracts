@@ -5,13 +5,13 @@
 #[cfg(any(feature = "library", test))]
 extern crate alloc;
 
+#[path = "entry.rs"]
+mod entry;
 #[path = "error.rs"]
 mod error;
 mod meta;
 #[path = "mode.rs"]
 mod mode;
-#[path = "run.rs"]
-mod run;
 #[path = "shards.rs"]
 mod shards;
 
@@ -27,7 +27,7 @@ ckb_std::entry!(program_entry);
 ckb_std::default_alloc!(16384, 1258306, 64);
 
 pub fn program_entry() -> i8 {
-    match crate::run::run() {
+    match crate::entry::main() {
         Ok(()) => 0,
         Err(error) => error.into(),
     }

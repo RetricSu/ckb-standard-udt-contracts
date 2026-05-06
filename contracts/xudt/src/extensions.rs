@@ -10,7 +10,7 @@ use ckb_std::{
     syscalls::wait,
 };
 
-use crate::{error::Error, meta::ScriptAttr, run::Operation};
+use crate::{entry::Operation, error::Error, meta::ScriptAttr};
 
 type ExtensionFn = unsafe extern "C" fn(*const u8, u8, u8, *const u8, usize, u8) -> i8;
 

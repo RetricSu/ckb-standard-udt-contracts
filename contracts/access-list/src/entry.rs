@@ -5,7 +5,7 @@ use crate::{
     shards::{collect_group_shards, validate_shards_for_mode},
 };
 
-pub fn run() -> Result<(), Error> {
+pub fn main() -> Result<(), Error> {
     let meta_type_hash = load_meta_type_hash_arg()?;
     let meta_context = load_meta_context(&meta_type_hash)?;
     let input_shards = collect_group_shards(ckb_std::ckb_constants::Source::GroupInput)?;

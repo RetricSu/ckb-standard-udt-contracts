@@ -24,7 +24,7 @@ impl Operation {
     }
 }
 
-pub fn run() -> Result<(), Error> {
+pub fn main() -> Result<(), Error> {
     let meta_type_hash = meta::load_meta_type_hash_arg()?;
     let input_amount = meta::collect_group_amount(Source::GroupInput)?;
     let output_amount = meta::collect_group_amount(Source::GroupOutput)?;

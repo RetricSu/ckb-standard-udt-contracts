@@ -5,9 +5,9 @@
 extern crate alloc;
 
 mod constants;
+mod entry;
 mod error;
 mod meta_cell;
-mod run;
 mod update;
 
 #[cfg(not(any(feature = "library", test)))]
@@ -22,7 +22,7 @@ ckb_std::entry!(program_entry);
 ckb_std::default_alloc!(16384, 1258306, 64);
 
 pub fn program_entry() -> i8 {
-    match run::run() {
+    match entry::main() {
         Ok(()) => 0,
         Err(error) => error.into(),
     }

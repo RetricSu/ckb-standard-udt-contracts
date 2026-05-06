@@ -17,13 +17,13 @@ ckb_std::default_alloc!(16384, 1258306, 64);
 
 mod access;
 mod config;
+mod entry;
 mod error;
 mod extensions;
 mod meta;
-mod run;
 
 pub fn program_entry() -> i8 {
-    match run::run() {
+    match entry::main() {
         Ok(()) => 0,
         Err(error) => error.into(),
     }

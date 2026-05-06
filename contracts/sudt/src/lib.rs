@@ -4,15 +4,15 @@
 extern crate alloc;
 
 #[cfg(feature = "library")]
+pub mod entry;
+#[cfg(feature = "library")]
 pub mod error;
 #[cfg(feature = "library")]
 pub mod meta;
-#[cfg(feature = "library")]
-pub mod run;
 
 #[cfg(feature = "library")]
 pub fn program_entry() -> i8 {
-    match run::run() {
+    match entry::main() {
         Ok(()) => 0,
         Err(error) => error.into(),
     }
