@@ -269,7 +269,7 @@ fn xudt_meta_rejects_supply_decrease_without_udt_delta() {
 }
 ```
 
-- [ ] **Step 3: Add matching-delta and mismatch tests**
+- [x] **Step 3: Add matching-delta and mismatch tests**
 
 Deferred from Task 2 red stage: same-token xUDT input/output cells can activate the xUDT type script before the planned `xudt-meta` fix, so these tests are not clean meta-side assertions yet.
 
@@ -292,7 +292,14 @@ fn xudt_meta_accepts_supply_decrease_matching_udt_delta() {
 
 #[test]
 fn xudt_meta_rejects_supply_delta_mismatch() {
-    let case = update_meta_tx_with_udt_delta(100, 125, None, Some(24));
+    let case = update_meta_tx_with_udt_delta(100, 125, Some(24), Some(24));
+
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 31");
+}
+
+#[test]
+fn xudt_meta_ignores_fake_data2_udt_outputs() {
+    let case = update_meta_tx_with_fake_udt_output(100, 125, 25);
 
     expect_tx_fail_with_code(&case.context, &case.tx, "error code 31");
 }
@@ -595,7 +602,7 @@ Expected: all sUDT meta tests pass, including the new supply delta tests.
 - Modify: `contracts/xudt-meta/src/meta_cell/mod.rs`
 - Modify: `contracts/xudt-meta/src/update.rs`
 
-- [ ] **Step 1: Reuse the shared output sum in xUDT meta create validation**
+- [x] **Step 1: Reuse the shared output sum in xUDT meta create validation**
 
 In `contracts/xudt-meta/src/meta_cell/token.rs`, add imports:
 
@@ -635,7 +642,7 @@ Update `contracts/xudt-meta/src/meta_cell/mod.rs` so the public re-export no lon
 pub use token::{has_same_token_cells, validate_create};
 ```
 
-- [ ] **Step 2: Add tracked supply delta validation in update**
+- [x] **Step 2: Add tracked supply delta validation in update**
 
 In `contracts/xudt-meta/src/update.rs`, add imports:
 
@@ -686,12 +693,12 @@ fn map_supply_error(error: ScriptError) -> Error {
 }
 ```
 
-- [ ] **Step 3: Run xUDT meta tests**
+- [x] **Step 3: Run xUDT meta tests**
 
 Run:
 
 ```bash
-RUSTUP_TOOLCHAIN=1.92.0 cargo test -p tests xudt_meta_ -- --nocapture
+RUSTUP_TOOLCHAIN=1.92.0 MODE=debug cargo test -p tests xudt_meta_ -- --nocapture
 ```
 
 Expected: all xUDT meta tests pass, including the new supply delta tests.

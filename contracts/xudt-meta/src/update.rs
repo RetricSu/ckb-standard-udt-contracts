@@ -1,4 +1,5 @@
 use crate::{
+    constants::XUDT_CODE_HASH,
     error::Error,
     meta_cell::{
         CONFIG_SUPPLY_TRACKED, access_enabled, has_full_domain_access_list_inputs,
@@ -8,6 +9,7 @@ use crate::{
 };
 use standard_udt_script_utils::{
     authority::check_authority as check_runtime_authority, error::ScriptError,
+    supply::apply_supply_delta, token::transaction_token_delta,
 };
 use standard_udt_types::metadata::{Authority, XudtMeta};
 
@@ -22,6 +24,10 @@ pub fn validate_update(
 
     if !is_supply_tracked(output.config_flags) && output.current_supply != 0 {
         return Err(Error::InvalidSupply);
+    }
+
+    if is_supply_tracked(output.config_flags) {
+        validate_supply_delta(input.current_supply, output.current_supply, meta_type_hash)?;
     }
 
     let access_state_changed = access_enabled(input.config_flags)
@@ -62,6 +68,32 @@ pub fn validate_update(
     validate_access_mode_transition(input.config_flags, output.config_flags, meta_type_hash)?;
 
     Ok(())
+}
+
+fn validate_supply_delta(
+    input_supply: u128,
+    output_supply: u128,
+    meta_type_hash: &[u8; 32],
+) -> Result<(), Error> {
+    let delta =
+        transaction_token_delta(meta_type_hash, &XUDT_CODE_HASH).map_err(map_supply_error)?;
+    let expected = apply_supply_delta(input_supply, delta).map_err(map_supply_error)?;
+    if output_supply == expected {
+        Ok(())
+    } else {
+        Err(Error::InvalidSupply)
+    }
+}
+
+fn map_supply_error(error: ScriptError) -> Error {
+    match error {
+        ScriptError::AmountEncoding
+        | ScriptError::AmountOverflow
+        | ScriptError::SupplyOverflow
+        | ScriptError::SupplyUnderflow => Error::InvalidSupply,
+        ScriptError::SyscallUnknown => Error::SyscallUnknown,
+        _ => Error::SyscallUnknown,
+    }
 }
 
 fn validate_access_mode_transition(

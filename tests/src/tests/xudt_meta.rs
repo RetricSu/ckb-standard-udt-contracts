@@ -10,7 +10,7 @@ use crate::{
     test_helpers::{
         access_list_script, always_success_lock_empty as always_success_lock, custom_shard,
         deploy_data2_script, deploy_data_script, empty_full_domain_shard as full_domain_shard,
-        non_whitelisted_lock, xudt_meta_data_with_authorities as xudt_meta_data,
+        fake_data2_script, non_whitelisted_lock, xudt_meta_data_with_authorities as xudt_meta_data,
         xudt_meta_script as meta_script, xudt_script,
     },
 };
@@ -287,6 +287,62 @@ fn update_meta_tx_with_udt_delta(
     }
 
     let tx = context.complete_tx(builder.build());
+    UpdateCase { context, tx }
+}
+
+fn update_meta_tx_with_fake_udt_output(
+    input_supply: u128,
+    output_supply: u128,
+    fake_udt_amount: u128,
+) -> UpdateCase {
+    let mut context = Context::default();
+    let lock = always_success_lock(&mut context);
+    let meta = meta_script(&mut context);
+    let fake_udt = fake_data2_script(&mut context, meta.script_hash);
+    let authority = input_lock_authority(lock.script_hash);
+    let input_meta_data = xudt_meta_data(
+        CONFIG_SUPPLY_TRACKED,
+        input_supply,
+        Some(authority.clone()),
+        None,
+        None,
+        Vec::new(),
+    );
+    let output_meta_data = xudt_meta_data(
+        CONFIG_SUPPLY_TRACKED,
+        output_supply,
+        Some(authority),
+        None,
+        None,
+        Vec::new(),
+    );
+    let input_out_point = create_typed_cell(
+        &mut context,
+        &lock.script,
+        &meta.script,
+        100_000_000_000,
+        input_meta_data,
+    );
+
+    let tx = TransactionBuilder::default()
+        .input(
+            CellInput::new_builder()
+                .previous_output(input_out_point)
+                .build(),
+        )
+        .output(typed_output(&lock.script, &meta.script, 100_000_000_000))
+        .output_data(output_meta_data.pack())
+        .output(typed_output(
+            &lock.script,
+            &fake_udt.script,
+            100_000_000_000,
+        ))
+        .output_data(udt_amount_bytes(fake_udt_amount).pack())
+        .cell_dep(cell_dep_for_script(&lock))
+        .cell_dep(cell_dep_for_script(&meta))
+        .cell_dep(cell_dep_for_script(&fake_udt))
+        .build();
+    let tx = context.complete_tx(tx);
     UpdateCase { context, tx }
 }
 
@@ -746,6 +802,34 @@ fn xudt_meta_rejects_supply_increase_without_udt_delta() {
 #[test]
 fn xudt_meta_rejects_supply_decrease_without_udt_delta() {
     let case = update_meta_tx_with_udt_delta(100, 99, None, None);
+
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 31");
+}
+
+#[test]
+fn xudt_meta_accepts_supply_increase_matching_udt_delta() {
+    let case = update_meta_tx_with_udt_delta(100, 125, None, Some(25));
+
+    expect_tx_pass(&case.context, &case.tx);
+}
+
+#[test]
+fn xudt_meta_accepts_supply_decrease_matching_udt_delta() {
+    let case = update_meta_tx_with_udt_delta(100, 75, Some(25), None);
+
+    expect_tx_pass(&case.context, &case.tx);
+}
+
+#[test]
+fn xudt_meta_rejects_supply_delta_mismatch() {
+    let case = update_meta_tx_with_udt_delta(100, 125, Some(24), Some(24));
+
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 31");
+}
+
+#[test]
+fn xudt_meta_ignores_fake_data2_udt_outputs() {
+    let case = update_meta_tx_with_fake_udt_output(100, 125, 25);
 
     expect_tx_fail_with_code(&case.context, &case.tx, "error code 31");
 }
