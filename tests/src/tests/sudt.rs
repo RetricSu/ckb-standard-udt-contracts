@@ -4,7 +4,8 @@ use crate::{
         expect_tx_fail_with_code, expect_tx_pass, typed_output,
     },
     metadata_builders::{
-        build_sudt_meta_bytes, input_lock_authority, script_hash, udt_amount_bytes, DeployedScript,
+        build_sudt_meta_bytes, dynamic_linking_authority, input_lock_authority, script_hash,
+        spawn_authority, udt_amount_bytes, DeployedScript,
     },
     Loader,
 };
@@ -18,13 +19,26 @@ use ckb_testtool::{
     },
     context::Context,
 };
-use standard_udt_types::metadata::CONFIG_SUPPLY_TRACKED;
+use standard_udt_types::metadata::{Authority, CONFIG_SUPPLY_TRACKED};
 
 fn deploy_data2_script(context: &mut Context, binary_name: &str, args: Bytes) -> DeployedScript {
     let out_point = context.deploy_cell(Loader::default().load_binary(binary_name));
     let script = context
         .build_script_with_hash_type(&out_point, ScriptHashType::Data2, args)
         .expect("build deployed Data2 script");
+    let script_hash = script_hash(&script);
+    DeployedScript {
+        out_point,
+        script,
+        script_hash,
+    }
+}
+
+fn deploy_data_script(context: &mut Context, binary_name: &str, args: Bytes) -> DeployedScript {
+    let out_point = context.deploy_cell(Loader::default().load_binary(binary_name));
+    let script = context
+        .build_script_with_hash_type(&out_point, ScriptHashType::Data, args)
+        .expect("build deployed Data script");
     let script_hash = script_hash(&script);
     DeployedScript {
         out_point,
@@ -68,12 +82,14 @@ fn non_whitelisted_lock(context: &mut Context) -> DeployedScript {
 }
 
 fn tracked_meta_data(current_supply: u128, lock_hash: Option<[u8; 32]>) -> Bytes {
-    build_sudt_meta_bytes(
-        CONFIG_SUPPLY_TRACKED,
-        current_supply,
-        lock_hash.map(input_lock_authority),
-        None,
-    )
+    tracked_meta_data_with_authority(current_supply, lock_hash.map(input_lock_authority))
+}
+
+fn tracked_meta_data_with_authority(
+    current_supply: u128,
+    mint_authority: Option<Authority>,
+) -> Bytes {
+    build_sudt_meta_bytes(CONFIG_SUPPLY_TRACKED, current_supply, mint_authority, None)
 }
 
 struct SudtFixture {
@@ -133,6 +149,29 @@ impl SudtFixture {
         CellInput::new_builder().previous_output(out_point).build()
     }
 
+    fn live_meta_dep_with_authority(
+        &mut self,
+        supply: u128,
+        mint_authority: Option<Authority>,
+    ) -> CellInput {
+        let out_point = create_typed_cell(
+            &mut self.context,
+            &self.lock.script,
+            &self.meta.script,
+            100_000_000_000,
+            tracked_meta_data_with_authority(supply, mint_authority),
+        );
+        CellInput::new_builder().previous_output(out_point).build()
+    }
+
+    fn live_meta_input_with_authority(
+        &mut self,
+        supply: u128,
+        mint_authority: Option<Authority>,
+    ) -> CellInput {
+        self.live_meta_dep_with_authority(supply, mint_authority)
+    }
+
     fn complete(&mut self, tx: TransactionView) -> TransactionView {
         let tx = tx
             .as_advanced_builder()
@@ -142,6 +181,83 @@ impl SudtFixture {
             .build();
         self.context.complete_tx(tx)
     }
+}
+
+fn sudt_mint_with_plugin_authority(plugin_name: &str, spawn: bool) -> bool {
+    let mut fixture = SudtFixture::new();
+    let plugin = if spawn {
+        deploy_data2_script(
+            &mut fixture.context,
+            plugin_name,
+            Bytes::from_static(b"allow"),
+        )
+    } else {
+        deploy_data_script(
+            &mut fixture.context,
+            plugin_name,
+            Bytes::from_static(b"allow"),
+        )
+    };
+    let authority = if spawn {
+        spawn_authority(&plugin)
+    } else {
+        dynamic_linking_authority(&plugin)
+    };
+    let meta_input = fixture.live_meta_input_with_authority(0, Some(authority.clone()));
+    let funding = create_funding_input(&mut fixture.context, &fixture.lock.script, 100_000_000_000);
+
+    let tx = TransactionBuilder::default()
+        .input(meta_input)
+        .input(funding)
+        .output(typed_output(
+            &fixture.lock.script,
+            &fixture.meta.script,
+            100_000_000_000,
+        ))
+        .output(typed_output(
+            &fixture.lock.script,
+            &fixture.udt.script,
+            100_000_000_000,
+        ))
+        .output_data(tracked_meta_data_with_authority(50, Some(authority)).pack())
+        .output_data(udt_amount_bytes(50).pack())
+        .build();
+    let tx = fixture
+        .complete(tx)
+        .as_advanced_builder()
+        .cell_dep(cell_dep_for_script(&plugin))
+        .build();
+
+    fixture
+        .context
+        .verify_tx(&tx, crate::fixtures::MAX_CYCLES)
+        .is_ok()
+}
+
+#[test]
+fn sudt_mint_with_dynamic_linking_authority_passes() {
+    assert!(sudt_mint_with_plugin_authority("authority-dl-allow", false));
+}
+
+#[test]
+fn sudt_mint_with_dynamic_linking_authority_denies() {
+    assert!(!sudt_mint_with_plugin_authority("authority-dl-deny", false));
+}
+
+#[test]
+fn sudt_mint_with_spawn_authority_passes() {
+    assert!(sudt_mint_with_plugin_authority(
+        "authority-spawn-allow",
+        true
+    ));
+}
+
+#[test]
+fn sudt_mint_with_spawn_authority_denies() {
+    assert!(!sudt_mint_with_plugin_authority(
+        "authority-spawn-deny",
+        true
+    ));
 }
 
 #[test]

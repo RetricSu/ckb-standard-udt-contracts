@@ -33,8 +33,8 @@ SIM_BUILD ?= auto
 CLEAN_BUILD_DIR_FIRST := true
 BUILD_DIR := build/$(MODE)
 CONTRACTS := sudt sudt-meta access-list xudt xudt-meta
-TEST_PLUGINS := dl-allow dl-deny spawn-allow spawn-deny
-TEST_SHARED_PLUGINS := dl-shared-allow dl-shared-deny
+TEST_PLUGINS := dl-allow dl-deny spawn-allow spawn-deny authority-spawn-allow authority-spawn-deny
+TEST_SHARED_PLUGINS := dl-shared-allow dl-shared-deny authority-dl-allow authority-dl-deny
 TEST_REQUIRED_BINARIES := $(addprefix $(BUILD_DIR)/,$(CONTRACTS) $(TEST_PLUGINS) $(TEST_SHARED_PLUGINS))
 
 ifeq (release,$(MODE))

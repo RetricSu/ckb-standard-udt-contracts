@@ -1,6 +1,8 @@
 use ckb_testtool::ckb_types::{bytes::Bytes, packed::Script, prelude::*};
+use ckb_types_120::{packed::Script as MetadataScript, prelude::Entity};
 use standard_udt_types::metadata::{
-    AccessListRange, AccessListShard, Authority, AuthorityType, Extension, SudtMeta, XudtMeta,
+    AccessListRange, AccessListShard, Authority, AuthorityType, Extension, ExtensionType, SudtMeta,
+    XudtMeta,
 };
 
 pub struct DeployedScript {
@@ -15,6 +17,40 @@ pub fn input_lock_authority(script_hash: [u8; 32]) -> Authority {
         script_hash,
         script: None,
     }
+}
+
+pub fn dynamic_linking_authority(deployed: &DeployedScript) -> Authority {
+    Authority {
+        authority_type: AuthorityType::DynamicLinking,
+        script_hash: deployed.script_hash,
+        script: Some(metadata_script(deployed)),
+    }
+}
+
+pub fn spawn_authority(deployed: &DeployedScript) -> Authority {
+    Authority {
+        authority_type: AuthorityType::Spawn,
+        script_hash: deployed.script_hash,
+        script: Some(metadata_script(deployed)),
+    }
+}
+
+pub fn dynamic_linking_extension(deployed: &DeployedScript) -> Extension {
+    Extension {
+        extension_type: ExtensionType::DynamicLinking,
+        script: metadata_script(deployed),
+    }
+}
+
+pub fn spawn_extension(deployed: &DeployedScript) -> Extension {
+    Extension {
+        extension_type: ExtensionType::Spawn,
+        script: metadata_script(deployed),
+    }
+}
+
+fn metadata_script(deployed: &DeployedScript) -> MetadataScript {
+    MetadataScript::from_slice(deployed.script.as_slice()).expect("convert script")
 }
 
 pub fn build_sudt_meta_bytes(

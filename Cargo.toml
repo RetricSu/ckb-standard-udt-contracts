@@ -7,6 +7,8 @@ members = [
   # @@INSERTION_POINT@@
   "lib/types",
   "lib/script-utils",
+  "tests/plugins/authority-spawn-deny",
+  "tests/plugins/authority-spawn-allow",
   "tests/plugins/spawn-deny",
   "tests/plugins/spawn-allow",
   "tests/plugins/dl-deny",
