@@ -2,14 +2,20 @@ import blockchain;
 
 array Uint128 [byte; 16];
 
-table ScriptAttr {
-    location: byte,
+table Authority {
+    authority_type: byte,
     script_hash: Byte32,
     script: ScriptOpt,
 }
 
-option ScriptAttrOpt (ScriptAttr);
-vector ScriptAttrVec <ScriptAttr>;
+option AuthorityOpt (Authority);
+
+table Extension {
+    extension_type: byte,
+    script: Script,
+}
+
+vector ExtensionVec <Extension>;
 
 table SudtMeta {
     config_flags: byte,
@@ -19,8 +25,8 @@ table SudtMeta {
     symbol: Bytes,
     uri: Bytes,
     extra_data: Bytes,
-    mint_authority: ScriptAttrOpt,
-    metadata_authority: ScriptAttrOpt,
+    mint_authority: AuthorityOpt,
+    metadata_authority: AuthorityOpt,
 }
 
 table XudtMeta {
@@ -31,10 +37,10 @@ table XudtMeta {
     symbol: Bytes,
     uri: Bytes,
     extra_data: Bytes,
-    mint_authority: ScriptAttrOpt,
-    metadata_authority: ScriptAttrOpt,
-    access_authority: ScriptAttrOpt,
-    extensions: ScriptAttrVec,
+    mint_authority: AuthorityOpt,
+    metadata_authority: AuthorityOpt,
+    access_authority: AuthorityOpt,
+    extensions: ExtensionVec,
 }
 
 struct AccessListRange {

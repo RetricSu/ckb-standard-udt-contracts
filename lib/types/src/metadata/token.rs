@@ -5,15 +5,13 @@ use molecule::prelude::{Builder, Entity};
 use crate::{error::Error, generated};
 
 use super::{
+    authority::{pack_authority_opt, unpack_authority_opt, Authority},
     codec::{pack_bytes, pack_u128, unpack_limited_bytes, unpack_u128, validate_metadata_sizes},
     config::{
         validate_sudt_config, validate_xudt_config, MAX_METADATA_EXTRA_DATA_BYTES,
         MAX_METADATA_NAME_BYTES, MAX_METADATA_SYMBOL_BYTES, MAX_METADATA_URI_BYTES,
     },
-    script_attr::{
-        pack_script_attr_opt, pack_script_attr_vec, unpack_script_attr_opt, unpack_script_attr_vec,
-        validate_extensions, ScriptAttr,
-    },
+    extension::{pack_extension_vec, unpack_extension_vec, validate_extensions, Extension},
 };
 
 #[derive(Clone, Debug, PartialEq)]
@@ -25,8 +23,8 @@ pub struct SudtMeta {
     pub symbol: Vec<u8>,
     pub uri: Vec<u8>,
     pub extra_data: Vec<u8>,
-    pub mint_authority: Option<ScriptAttr>,
-    pub metadata_authority: Option<ScriptAttr>,
+    pub mint_authority: Option<Authority>,
+    pub metadata_authority: Option<Authority>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -38,10 +36,10 @@ pub struct XudtMeta {
     pub symbol: Vec<u8>,
     pub uri: Vec<u8>,
     pub extra_data: Vec<u8>,
-    pub mint_authority: Option<ScriptAttr>,
-    pub metadata_authority: Option<ScriptAttr>,
-    pub access_authority: Option<ScriptAttr>,
-    pub extensions: Vec<ScriptAttr>,
+    pub mint_authority: Option<Authority>,
+    pub metadata_authority: Option<Authority>,
+    pub access_authority: Option<Authority>,
+    pub extensions: Vec<Extension>,
 }
 
 impl SudtMeta {
@@ -60,8 +58,8 @@ impl SudtMeta {
             .symbol(pack_bytes(&self.symbol))
             .uri(pack_bytes(&self.uri))
             .extra_data(pack_bytes(&self.extra_data))
-            .mint_authority(pack_script_attr_opt(&self.mint_authority)?)
-            .metadata_authority(pack_script_attr_opt(&self.metadata_authority)?)
+            .mint_authority(pack_authority_opt(&self.mint_authority)?)
+            .metadata_authority(pack_authority_opt(&self.metadata_authority)?)
             .build())
     }
 
@@ -83,8 +81,8 @@ impl TryFrom<&[u8]> for SudtMeta {
             symbol: unpack_limited_bytes(raw.symbol(), MAX_METADATA_SYMBOL_BYTES)?,
             uri: unpack_limited_bytes(raw.uri(), MAX_METADATA_URI_BYTES)?,
             extra_data: unpack_limited_bytes(raw.extra_data(), MAX_METADATA_EXTRA_DATA_BYTES)?,
-            mint_authority: unpack_script_attr_opt(raw.mint_authority())?,
-            metadata_authority: unpack_script_attr_opt(raw.metadata_authority())?,
+            mint_authority: unpack_authority_opt(raw.mint_authority())?,
+            metadata_authority: unpack_authority_opt(raw.metadata_authority())?,
         };
         validate_sudt_config(meta.config_flags, meta.current_supply)?;
         Ok(meta)
@@ -108,10 +106,10 @@ impl XudtMeta {
             .symbol(pack_bytes(&self.symbol))
             .uri(pack_bytes(&self.uri))
             .extra_data(pack_bytes(&self.extra_data))
-            .mint_authority(pack_script_attr_opt(&self.mint_authority)?)
-            .metadata_authority(pack_script_attr_opt(&self.metadata_authority)?)
-            .access_authority(pack_script_attr_opt(&self.access_authority)?)
-            .extensions(pack_script_attr_vec(&self.extensions)?)
+            .mint_authority(pack_authority_opt(&self.mint_authority)?)
+            .metadata_authority(pack_authority_opt(&self.metadata_authority)?)
+            .access_authority(pack_authority_opt(&self.access_authority)?)
+            .extensions(pack_extension_vec(&self.extensions)?)
             .build())
     }
 
@@ -133,10 +131,10 @@ impl TryFrom<&[u8]> for XudtMeta {
             symbol: unpack_limited_bytes(raw.symbol(), MAX_METADATA_SYMBOL_BYTES)?,
             uri: unpack_limited_bytes(raw.uri(), MAX_METADATA_URI_BYTES)?,
             extra_data: unpack_limited_bytes(raw.extra_data(), MAX_METADATA_EXTRA_DATA_BYTES)?,
-            mint_authority: unpack_script_attr_opt(raw.mint_authority())?,
-            metadata_authority: unpack_script_attr_opt(raw.metadata_authority())?,
-            access_authority: unpack_script_attr_opt(raw.access_authority())?,
-            extensions: unpack_script_attr_vec(raw.extensions())?,
+            mint_authority: unpack_authority_opt(raw.mint_authority())?,
+            metadata_authority: unpack_authority_opt(raw.metadata_authority())?,
+            access_authority: unpack_authority_opt(raw.access_authority())?,
+            extensions: unpack_extension_vec(raw.extensions())?,
         };
         validate_xudt_config(meta.config_flags, meta.current_supply)?;
         Ok(meta)

@@ -1,6 +1,6 @@
 use ckb_testtool::ckb_types::{bytes::Bytes, packed::Script, prelude::*};
 use standard_udt_types::metadata::{
-    AccessListRange, AccessListShard, ScriptAttr, ScriptLocation, SudtMeta, XudtMeta,
+    AccessListRange, AccessListShard, Authority, AuthorityType, Extension, SudtMeta, XudtMeta,
 };
 
 pub struct DeployedScript {
@@ -9,9 +9,9 @@ pub struct DeployedScript {
     pub script_hash: [u8; 32],
 }
 
-pub fn input_lock_authority(script_hash: [u8; 32]) -> ScriptAttr {
-    ScriptAttr {
-        location: ScriptLocation::InputLock,
+pub fn input_lock_authority(script_hash: [u8; 32]) -> Authority {
+    Authority {
+        authority_type: AuthorityType::InputLock,
         script_hash,
         script: None,
     }
@@ -20,8 +20,8 @@ pub fn input_lock_authority(script_hash: [u8; 32]) -> ScriptAttr {
 pub fn build_sudt_meta_bytes(
     config_flags: u8,
     current_supply: u128,
-    mint_authority: Option<ScriptAttr>,
-    metadata_authority: Option<ScriptAttr>,
+    mint_authority: Option<Authority>,
+    metadata_authority: Option<Authority>,
 ) -> Bytes {
     let metadata = SudtMeta {
         config_flags,
@@ -40,10 +40,10 @@ pub fn build_sudt_meta_bytes(
 pub fn build_xudt_meta_bytes(
     config_flags: u8,
     current_supply: u128,
-    mint_authority: Option<ScriptAttr>,
-    metadata_authority: Option<ScriptAttr>,
-    access_authority: Option<ScriptAttr>,
-    extensions: Vec<ScriptAttr>,
+    mint_authority: Option<Authority>,
+    metadata_authority: Option<Authority>,
+    access_authority: Option<Authority>,
+    extensions: Vec<Extension>,
 ) -> Bytes {
     let metadata = XudtMeta {
         config_flags,

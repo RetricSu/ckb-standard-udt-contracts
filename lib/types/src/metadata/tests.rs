@@ -75,11 +75,10 @@ fn build_script(tag: u8) -> Script {
         .build()
 }
 
-fn sorted_attr(location: ScriptLocation, tag: u8) -> ScriptAttr {
-    ScriptAttr {
-        location,
-        script_hash: [tag; 32],
-        script: None,
+fn extension(extension_type: ExtensionType, tag: u8) -> Extension {
+    Extension {
+        extension_type,
+        script: build_script(tag),
     }
 }
 
@@ -125,12 +124,12 @@ fn xudt_rejects_access_mode_when_access_disabled() {
 }
 
 #[test]
-fn script_attr_enforces_location_shape_and_hash() {
+fn authority_enforces_type_shape_and_hash() {
     let script = build_script(0x22);
     let script_hash: [u8; 32] = script.calc_script_hash().unpack();
 
-    let forbidden_script = ScriptAttr {
-        location: ScriptLocation::InputLock,
+    let forbidden_script = Authority {
+        authority_type: AuthorityType::InputLock,
         script_hash,
         script: Some(script.clone()),
     };
@@ -139,8 +138,8 @@ fn script_attr_enforces_location_shape_and_hash() {
         Err(Error::InvalidScriptShape)
     ));
 
-    let missing_script = ScriptAttr {
-        location: ScriptLocation::Spawn,
+    let missing_script = Authority {
+        authority_type: AuthorityType::Spawn,
         script_hash,
         script: None,
     };
@@ -149,8 +148,8 @@ fn script_attr_enforces_location_shape_and_hash() {
         Err(Error::InvalidScriptShape)
     ));
 
-    let wrong_hash = ScriptAttr {
-        location: ScriptLocation::DynamicLinking,
+    let wrong_hash = Authority {
+        authority_type: AuthorityType::DynamicLinking,
         script_hash: [0u8; 32],
         script: Some(script),
     };
@@ -164,8 +163,8 @@ fn script_attr_enforces_location_shape_and_hash() {
 fn xudt_rejects_unsorted_and_duplicate_extensions() {
     let mut unsorted = empty_xudt(0, 0);
     unsorted.extensions = vec![
-        sorted_attr(ScriptLocation::InputType, 2),
-        sorted_attr(ScriptLocation::InputLock, 1),
+        extension(ExtensionType::Spawn, 1),
+        extension(ExtensionType::DynamicLinking, 2),
     ];
     assert!(matches!(
         unsorted.to_bytes(),
@@ -174,8 +173,8 @@ fn xudt_rejects_unsorted_and_duplicate_extensions() {
 
     let mut duplicated = empty_xudt(0, 0);
     duplicated.extensions = vec![
-        sorted_attr(ScriptLocation::InputLock, 1),
-        sorted_attr(ScriptLocation::InputLock, 1),
+        extension(ExtensionType::DynamicLinking, 1),
+        extension(ExtensionType::DynamicLinking, 1),
     ];
     assert!(matches!(
         duplicated.to_bytes(),
@@ -238,12 +237,12 @@ fn metadata_rejects_byte_fields_over_limit() {
         .uri(generated::blockchain::Bytes::default())
         .extra_data(generated::blockchain::Bytes::default())
         .mint_authority(
-            generated::metadata::ScriptAttrOpt::new_builder()
+            generated::metadata::AuthorityOpt::new_builder()
                 .set(None)
                 .build(),
         )
         .metadata_authority(
-            generated::metadata::ScriptAttrOpt::new_builder()
+            generated::metadata::AuthorityOpt::new_builder()
                 .set(None)
                 .build(),
         )

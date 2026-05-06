@@ -19,7 +19,7 @@ use ckb_testtool::{
     context::Context,
 };
 use ckb_types_120::{packed::Script as MetadataScript, prelude::Entity};
-use standard_udt_types::metadata::{ScriptAttr, ScriptLocation, CONFIG_SUPPLY_TRACKED};
+use standard_udt_types::metadata::{Authority, Extension, ExtensionType, CONFIG_SUPPLY_TRACKED};
 
 fn deploy_data2_script(context: &mut Context, binary_name: &str, args: Bytes) -> DeployedScript {
     let out_point = context.deploy_cell(Loader::default().load_binary(binary_name));
@@ -72,20 +72,19 @@ fn deploy_data_script(context: &mut Context, binary_name: &str, args: Bytes) -> 
     }
 }
 
-fn extension_attr(location: ScriptLocation, deployed: &DeployedScript) -> ScriptAttr {
+fn extension_attr(extension_type: ExtensionType, deployed: &DeployedScript) -> Extension {
     let script = MetadataScript::from_slice(deployed.script.as_slice()).expect("convert script");
-    ScriptAttr {
-        location,
-        script_hash: deployed.script_hash,
-        script: Some(script),
+    Extension {
+        extension_type,
+        script,
     }
 }
 
 fn xudt_meta_data(
     config_flags: u8,
     current_supply: u128,
-    mint_authority: Option<ScriptAttr>,
-    extensions: Vec<ScriptAttr>,
+    mint_authority: Option<Authority>,
+    extensions: Vec<Extension>,
 ) -> Bytes {
     build_xudt_meta_bytes(
         config_flags,
@@ -134,7 +133,7 @@ impl PluginFixture {
         &mut self,
         config_flags: u8,
         supply: u128,
-        extensions: Vec<ScriptAttr>,
+        extensions: Vec<Extension>,
     ) -> CellInput {
         let out_point = create_typed_cell(
             &mut self.context,
@@ -171,7 +170,7 @@ impl PluginFixture {
         self.complete(tx)
     }
 
-    fn mint_tx(&mut self, meta_input: CellInput, extensions: Vec<ScriptAttr>) -> TransactionView {
+    fn mint_tx(&mut self, meta_input: CellInput, extensions: Vec<Extension>) -> TransactionView {
         let funding = create_funding_input(&mut self.context, &self.lock.script, 100_000_000_000);
         let tx = TransactionBuilder::default()
             .input(meta_input)
@@ -203,7 +202,7 @@ impl PluginFixture {
     fn protocol_burn_tx(
         &mut self,
         meta_input: CellInput,
-        extensions: Vec<ScriptAttr>,
+        extensions: Vec<Extension>,
     ) -> TransactionView {
         let udt_input = self.live_udt_input(100);
         let tx = TransactionBuilder::default()
@@ -248,7 +247,7 @@ impl PluginFixture {
 fn xudt_extension_allow_plugin_passes() {
     let mut fixture = PluginFixture::new();
     let plugin = dynamic_library_script(&mut fixture.context, "dl-shared-allow", Bytes::new());
-    let extension = extension_attr(ScriptLocation::DynamicLinking, &plugin);
+    let extension = extension_attr(ExtensionType::DynamicLinking, &plugin);
     let meta_input = fixture.live_meta_input(0, 0, vec![extension.clone()]);
     let udt_input = fixture.live_udt_input(100);
 
@@ -265,7 +264,7 @@ fn xudt_extension_allow_plugin_passes() {
 fn xudt_extension_deny_plugin_rejects() {
     let mut fixture = PluginFixture::new();
     let plugin = dynamic_library_script(&mut fixture.context, "dl-shared-deny", Bytes::new());
-    let extension = extension_attr(ScriptLocation::DynamicLinking, &plugin);
+    let extension = extension_attr(ExtensionType::DynamicLinking, &plugin);
     let meta_input = fixture.live_meta_input(0, 0, vec![extension]);
     let udt_input = fixture.live_udt_input(100);
 
@@ -282,7 +281,7 @@ fn xudt_extension_deny_plugin_rejects() {
 fn xudt_executable_dynamic_linking_fixture_fails_closed() {
     let mut fixture = PluginFixture::new();
     let plugin = deploy_script_with_args(&mut fixture.context, "dl-deny", Bytes::new());
-    let extension = extension_attr(ScriptLocation::DynamicLinking, &plugin);
+    let extension = extension_attr(ExtensionType::DynamicLinking, &plugin);
     let meta_input = fixture.live_meta_input(0, 0, vec![extension]);
     let udt_input = fixture.live_udt_input(100);
 
@@ -299,7 +298,7 @@ fn xudt_executable_dynamic_linking_fixture_fails_closed() {
 fn xudt_spawn_extension_allow_plugin_passes() {
     let mut fixture = PluginFixture::new();
     let plugin = deploy_script_with_args(&mut fixture.context, "spawn-allow", Bytes::new());
-    let extension = extension_attr(ScriptLocation::Spawn, &plugin);
+    let extension = extension_attr(ExtensionType::Spawn, &plugin);
     let meta_input = fixture.live_meta_input(0, 0, vec![extension.clone()]);
     let udt_input = fixture.live_udt_input(100);
 
@@ -316,7 +315,7 @@ fn xudt_spawn_extension_allow_plugin_passes() {
 fn xudt_spawn_extension_deny_plugin_rejects() {
     let mut fixture = PluginFixture::new();
     let plugin = deploy_script_with_args(&mut fixture.context, "spawn-deny", Bytes::new());
-    let extension = extension_attr(ScriptLocation::Spawn, &plugin);
+    let extension = extension_attr(ExtensionType::Spawn, &plugin);
     let meta_input = fixture.live_meta_input(0, 0, vec![extension]);
     let udt_input = fixture.live_udt_input(100);
 
@@ -337,7 +336,7 @@ fn xudt_transfer_extension_receives_mint_authority_none() {
         "dl-shared-allow",
         Bytes::from_static(b"require_mint_none"),
     );
-    let extension = extension_attr(ScriptLocation::DynamicLinking, &plugin);
+    let extension = extension_attr(ExtensionType::DynamicLinking, &plugin);
     let meta_input = fixture.live_meta_input(0, 0, vec![extension.clone()]);
     let udt_input = fixture.live_udt_input(100);
 
@@ -358,7 +357,7 @@ fn xudt_spawn_transfer_extension_receives_mint_authority_none() {
         "spawn-allow",
         Bytes::from_static(b"require_mint_none"),
     );
-    let extension = extension_attr(ScriptLocation::Spawn, &plugin);
+    let extension = extension_attr(ExtensionType::Spawn, &plugin);
     let meta_input = fixture.live_meta_input(0, 0, vec![extension.clone()]);
     let udt_input = fixture.live_udt_input(100);
 
@@ -379,7 +378,7 @@ fn xudt_mint_extension_receives_mint_authority_checked() {
         "dl-shared-allow",
         Bytes::from_static(b"require_mint_checked"),
     );
-    let extension = extension_attr(ScriptLocation::DynamicLinking, &plugin);
+    let extension = extension_attr(ExtensionType::DynamicLinking, &plugin);
     let meta_input = fixture.live_meta_input(CONFIG_SUPPLY_TRACKED, 0, vec![extension.clone()]);
 
     let tx = fixture
@@ -399,7 +398,7 @@ fn xudt_protocol_burn_extension_receives_mint_authority_none() {
         "dl-shared-allow",
         Bytes::from_static(b"require_mint_none"),
     );
-    let extension = extension_attr(ScriptLocation::DynamicLinking, &plugin);
+    let extension = extension_attr(ExtensionType::DynamicLinking, &plugin);
     let meta_input = fixture.live_meta_input(CONFIG_SUPPLY_TRACKED, 100, vec![extension.clone()]);
 
     let tx = fixture

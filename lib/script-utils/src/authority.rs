@@ -3,16 +3,16 @@ use ckb_std::{
     error::SysError,
     high_level::{load_cell_lock_hash, load_cell_type_hash},
 };
-use standard_udt_types::metadata::{ScriptAttr, ScriptLocation};
+use standard_udt_types::metadata::{Authority, AuthorityType};
 
 use crate::error::ScriptError;
 
-pub fn check_authority(attr: &ScriptAttr) -> Result<bool, ScriptError> {
-    match attr.location {
-        ScriptLocation::InputLock => has_input_lock_hash(&attr.script_hash),
-        ScriptLocation::InputType => has_input_type_hash(&attr.script_hash),
-        ScriptLocation::OutputType => has_output_type_hash(&attr.script_hash),
-        ScriptLocation::DynamicLinking | ScriptLocation::Spawn => {
+pub fn check_authority(authority: &Authority) -> Result<bool, ScriptError> {
+    match authority.authority_type {
+        AuthorityType::InputLock => has_input_lock_hash(&authority.script_hash),
+        AuthorityType::InputType => has_input_type_hash(&authority.script_hash),
+        AuthorityType::OutputType => has_output_type_hash(&authority.script_hash),
+        AuthorityType::DynamicLinking | AuthorityType::Spawn => {
             Err(ScriptError::UnsupportedAuthorityLocation)
         }
     }
@@ -72,9 +72,9 @@ where
 mod tests {
     use super::*;
 
-    fn attr(location: ScriptLocation) -> ScriptAttr {
-        ScriptAttr {
-            location,
+    fn attr(authority_type: AuthorityType) -> Authority {
+        Authority {
+            authority_type,
             script_hash: [7u8; 32],
             script: None,
         }
@@ -139,11 +139,11 @@ mod tests {
     #[test]
     fn unsupported_authority_locations_do_not_scan_cells() {
         assert_eq!(
-            check_authority(&attr(ScriptLocation::DynamicLinking)),
+            check_authority(&attr(AuthorityType::DynamicLinking)),
             Err(ScriptError::UnsupportedAuthorityLocation)
         );
         assert_eq!(
-            check_authority(&attr(ScriptLocation::Spawn)),
+            check_authority(&attr(AuthorityType::Spawn)),
             Err(ScriptError::UnsupportedAuthorityLocation)
         );
     }

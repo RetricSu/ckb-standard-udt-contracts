@@ -433,8 +433,8 @@ impl<'a> From<&'a Uint128Reader<'a>> for &'a [u8; 16usize] {
     }
 }
 #[derive(Clone)]
-pub struct ScriptAttr(molecule::bytes::Bytes);
-impl ::core::fmt::LowerHex for ScriptAttr {
+pub struct Authority(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for Authority {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         use molecule::hex_string;
         if f.alternate() {
@@ -443,15 +443,15 @@ impl ::core::fmt::LowerHex for ScriptAttr {
         write!(f, "{}", hex_string(self.as_slice()))
     }
 }
-impl ::core::fmt::Debug for ScriptAttr {
+impl ::core::fmt::Debug for Authority {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{}({:#x})", Self::NAME, self)
     }
 }
-impl ::core::fmt::Display for ScriptAttr {
+impl ::core::fmt::Display for Authority {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "location", self.location())?;
+        write!(f, "{}: {}", "authority_type", self.authority_type())?;
         write!(f, ", {}: {}", "script_hash", self.script_hash())?;
         write!(f, ", {}: {}", "script", self.script())?;
         let extra_count = self.count_extra_fields();
@@ -461,13 +461,13 @@ impl ::core::fmt::Display for ScriptAttr {
         write!(f, " }}")
     }
 }
-impl ::core::default::Default for ScriptAttr {
+impl ::core::default::Default for Authority {
     fn default() -> Self {
         let v = molecule::bytes::Bytes::from_static(&Self::DEFAULT_VALUE);
-        ScriptAttr::new_unchecked(v)
+        Authority::new_unchecked(v)
     }
 }
-impl ScriptAttr {
+impl Authority {
     const DEFAULT_VALUE: [u8; 49] = [
         49, 0, 0, 0, 16, 0, 0, 0, 17, 0, 0, 0, 49, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
@@ -489,7 +489,7 @@ impl ScriptAttr {
     pub fn has_extra_fields(&self) -> bool {
         Self::FIELD_COUNT != self.field_count()
     }
-    pub fn location(&self) -> Byte {
+    pub fn authority_type(&self) -> Byte {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[4..]) as usize;
         let end = molecule::unpack_number(&slice[8..]) as usize;
@@ -511,15 +511,15 @@ impl ScriptAttr {
             ScriptOpt::new_unchecked(self.0.slice(start..))
         }
     }
-    pub fn as_reader<'r>(&'r self) -> ScriptAttrReader<'r> {
-        ScriptAttrReader::new_unchecked(self.as_slice())
+    pub fn as_reader<'r>(&'r self) -> AuthorityReader<'r> {
+        AuthorityReader::new_unchecked(self.as_slice())
     }
 }
-impl molecule::prelude::Entity for ScriptAttr {
-    type Builder = ScriptAttrBuilder;
-    const NAME: &'static str = "ScriptAttr";
+impl molecule::prelude::Entity for Authority {
+    type Builder = AuthorityBuilder;
+    const NAME: &'static str = "Authority";
     fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
-        ScriptAttr(data)
+        Authority(data)
     }
     fn as_bytes(&self) -> molecule::bytes::Bytes {
         self.0.clone()
@@ -528,24 +528,24 @@ impl molecule::prelude::Entity for ScriptAttr {
         &self.0[..]
     }
     fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        ScriptAttrReader::from_slice(slice).map(|reader| reader.to_entity())
+        AuthorityReader::from_slice(slice).map(|reader| reader.to_entity())
     }
     fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        ScriptAttrReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
+        AuthorityReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
     }
     fn new_builder() -> Self::Builder {
         ::core::default::Default::default()
     }
     fn as_builder(self) -> Self::Builder {
         Self::new_builder()
-            .location(self.location())
+            .authority_type(self.authority_type())
             .script_hash(self.script_hash())
             .script(self.script())
     }
 }
 #[derive(Clone, Copy)]
-pub struct ScriptAttrReader<'r>(&'r [u8]);
-impl<'r> ::core::fmt::LowerHex for ScriptAttrReader<'r> {
+pub struct AuthorityReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for AuthorityReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         use molecule::hex_string;
         if f.alternate() {
@@ -554,15 +554,15 @@ impl<'r> ::core::fmt::LowerHex for ScriptAttrReader<'r> {
         write!(f, "{}", hex_string(self.as_slice()))
     }
 }
-impl<'r> ::core::fmt::Debug for ScriptAttrReader<'r> {
+impl<'r> ::core::fmt::Debug for AuthorityReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{}({:#x})", Self::NAME, self)
     }
 }
-impl<'r> ::core::fmt::Display for ScriptAttrReader<'r> {
+impl<'r> ::core::fmt::Display for AuthorityReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
-        write!(f, "{}: {}", "location", self.location())?;
+        write!(f, "{}: {}", "authority_type", self.authority_type())?;
         write!(f, ", {}: {}", "script_hash", self.script_hash())?;
         write!(f, ", {}: {}", "script", self.script())?;
         let extra_count = self.count_extra_fields();
@@ -572,7 +572,7 @@ impl<'r> ::core::fmt::Display for ScriptAttrReader<'r> {
         write!(f, " }}")
     }
 }
-impl<'r> ScriptAttrReader<'r> {
+impl<'r> AuthorityReader<'r> {
     pub const FIELD_COUNT: usize = 3;
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
@@ -590,7 +590,7 @@ impl<'r> ScriptAttrReader<'r> {
     pub fn has_extra_fields(&self) -> bool {
         Self::FIELD_COUNT != self.field_count()
     }
-    pub fn location(&self) -> ByteReader<'r> {
+    pub fn authority_type(&self) -> ByteReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[4..]) as usize;
         let end = molecule::unpack_number(&slice[8..]) as usize;
@@ -613,14 +613,14 @@ impl<'r> ScriptAttrReader<'r> {
         }
     }
 }
-impl<'r> molecule::prelude::Reader<'r> for ScriptAttrReader<'r> {
-    type Entity = ScriptAttr;
-    const NAME: &'static str = "ScriptAttrReader";
+impl<'r> molecule::prelude::Reader<'r> for AuthorityReader<'r> {
+    type Entity = Authority;
+    const NAME: &'static str = "AuthorityReader";
     fn to_entity(&self) -> Self::Entity {
         Self::Entity::new_unchecked(self.as_slice().to_owned().into())
     }
     fn new_unchecked(slice: &'r [u8]) -> Self {
-        ScriptAttrReader(slice)
+        AuthorityReader(slice)
     }
     fn as_slice(&self) -> &'r [u8] {
         self.0
@@ -666,15 +666,15 @@ impl<'r> molecule::prelude::Reader<'r> for ScriptAttrReader<'r> {
     }
 }
 #[derive(Clone, Debug, Default)]
-pub struct ScriptAttrBuilder {
-    pub(crate) location: Byte,
+pub struct AuthorityBuilder {
+    pub(crate) authority_type: Byte,
     pub(crate) script_hash: Byte32,
     pub(crate) script: ScriptOpt,
 }
-impl ScriptAttrBuilder {
+impl AuthorityBuilder {
     pub const FIELD_COUNT: usize = 3;
-    pub fn location(mut self, v: Byte) -> Self {
-        self.location = v;
+    pub fn authority_type(mut self, v: Byte) -> Self {
+        self.authority_type = v;
         self
     }
     pub fn script_hash(mut self, v: Byte32) -> Self {
@@ -686,12 +686,12 @@ impl ScriptAttrBuilder {
         self
     }
 }
-impl molecule::prelude::Builder for ScriptAttrBuilder {
-    type Entity = ScriptAttr;
-    const NAME: &'static str = "ScriptAttrBuilder";
+impl molecule::prelude::Builder for AuthorityBuilder {
+    type Entity = Authority;
+    const NAME: &'static str = "AuthorityBuilder";
     fn expected_length(&self) -> usize {
         molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1)
-            + self.location.as_slice().len()
+            + self.authority_type.as_slice().len()
             + self.script_hash.as_slice().len()
             + self.script.as_slice().len()
     }
@@ -699,7 +699,7 @@ impl molecule::prelude::Builder for ScriptAttrBuilder {
         let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
         let mut offsets = Vec::with_capacity(Self::FIELD_COUNT);
         offsets.push(total_size);
-        total_size += self.location.as_slice().len();
+        total_size += self.authority_type.as_slice().len();
         offsets.push(total_size);
         total_size += self.script_hash.as_slice().len();
         offsets.push(total_size);
@@ -708,7 +708,7 @@ impl molecule::prelude::Builder for ScriptAttrBuilder {
         for offset in offsets.into_iter() {
             writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
         }
-        writer.write_all(self.location.as_slice())?;
+        writer.write_all(self.authority_type.as_slice())?;
         writer.write_all(self.script_hash.as_slice())?;
         writer.write_all(self.script.as_slice())?;
         Ok(())
@@ -717,12 +717,12 @@ impl molecule::prelude::Builder for ScriptAttrBuilder {
         let mut inner = Vec::with_capacity(self.expected_length());
         self.write(&mut inner)
             .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
-        ScriptAttr::new_unchecked(inner.into())
+        Authority::new_unchecked(inner.into())
     }
 }
 #[derive(Clone)]
-pub struct ScriptAttrOpt(molecule::bytes::Bytes);
-impl ::core::fmt::LowerHex for ScriptAttrOpt {
+pub struct AuthorityOpt(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for AuthorityOpt {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         use molecule::hex_string;
         if f.alternate() {
@@ -731,12 +731,12 @@ impl ::core::fmt::LowerHex for ScriptAttrOpt {
         write!(f, "{}", hex_string(self.as_slice()))
     }
 }
-impl ::core::fmt::Debug for ScriptAttrOpt {
+impl ::core::fmt::Debug for AuthorityOpt {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{}({:#x})", Self::NAME, self)
     }
 }
-impl ::core::fmt::Display for ScriptAttrOpt {
+impl ::core::fmt::Display for AuthorityOpt {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         if let Some(v) = self.to_opt() {
             write!(f, "{}(Some({}))", Self::NAME, v)
@@ -745,13 +745,13 @@ impl ::core::fmt::Display for ScriptAttrOpt {
         }
     }
 }
-impl ::core::default::Default for ScriptAttrOpt {
+impl ::core::default::Default for AuthorityOpt {
     fn default() -> Self {
         let v = molecule::bytes::Bytes::from_static(&Self::DEFAULT_VALUE);
-        ScriptAttrOpt::new_unchecked(v)
+        AuthorityOpt::new_unchecked(v)
     }
 }
-impl ScriptAttrOpt {
+impl AuthorityOpt {
     const DEFAULT_VALUE: [u8; 0] = [];
     pub fn is_none(&self) -> bool {
         self.0.is_empty()
@@ -759,22 +759,22 @@ impl ScriptAttrOpt {
     pub fn is_some(&self) -> bool {
         !self.0.is_empty()
     }
-    pub fn to_opt(&self) -> Option<ScriptAttr> {
+    pub fn to_opt(&self) -> Option<Authority> {
         if self.is_none() {
             None
         } else {
-            Some(ScriptAttr::new_unchecked(self.0.clone()))
+            Some(Authority::new_unchecked(self.0.clone()))
         }
     }
-    pub fn as_reader<'r>(&'r self) -> ScriptAttrOptReader<'r> {
-        ScriptAttrOptReader::new_unchecked(self.as_slice())
+    pub fn as_reader<'r>(&'r self) -> AuthorityOptReader<'r> {
+        AuthorityOptReader::new_unchecked(self.as_slice())
     }
 }
-impl molecule::prelude::Entity for ScriptAttrOpt {
-    type Builder = ScriptAttrOptBuilder;
-    const NAME: &'static str = "ScriptAttrOpt";
+impl molecule::prelude::Entity for AuthorityOpt {
+    type Builder = AuthorityOptBuilder;
+    const NAME: &'static str = "AuthorityOpt";
     fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
-        ScriptAttrOpt(data)
+        AuthorityOpt(data)
     }
     fn as_bytes(&self) -> molecule::bytes::Bytes {
         self.0.clone()
@@ -783,10 +783,10 @@ impl molecule::prelude::Entity for ScriptAttrOpt {
         &self.0[..]
     }
     fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        ScriptAttrOptReader::from_slice(slice).map(|reader| reader.to_entity())
+        AuthorityOptReader::from_slice(slice).map(|reader| reader.to_entity())
     }
     fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        ScriptAttrOptReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
+        AuthorityOptReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
     }
     fn new_builder() -> Self::Builder {
         ::core::default::Default::default()
@@ -796,8 +796,8 @@ impl molecule::prelude::Entity for ScriptAttrOpt {
     }
 }
 #[derive(Clone, Copy)]
-pub struct ScriptAttrOptReader<'r>(&'r [u8]);
-impl<'r> ::core::fmt::LowerHex for ScriptAttrOptReader<'r> {
+pub struct AuthorityOptReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for AuthorityOptReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         use molecule::hex_string;
         if f.alternate() {
@@ -806,12 +806,12 @@ impl<'r> ::core::fmt::LowerHex for ScriptAttrOptReader<'r> {
         write!(f, "{}", hex_string(self.as_slice()))
     }
 }
-impl<'r> ::core::fmt::Debug for ScriptAttrOptReader<'r> {
+impl<'r> ::core::fmt::Debug for AuthorityOptReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{}({:#x})", Self::NAME, self)
     }
 }
-impl<'r> ::core::fmt::Display for ScriptAttrOptReader<'r> {
+impl<'r> ::core::fmt::Display for AuthorityOptReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         if let Some(v) = self.to_opt() {
             write!(f, "{}(Some({}))", Self::NAME, v)
@@ -820,51 +820,51 @@ impl<'r> ::core::fmt::Display for ScriptAttrOptReader<'r> {
         }
     }
 }
-impl<'r> ScriptAttrOptReader<'r> {
+impl<'r> AuthorityOptReader<'r> {
     pub fn is_none(&self) -> bool {
         self.0.is_empty()
     }
     pub fn is_some(&self) -> bool {
         !self.0.is_empty()
     }
-    pub fn to_opt(&self) -> Option<ScriptAttrReader<'r>> {
+    pub fn to_opt(&self) -> Option<AuthorityReader<'r>> {
         if self.is_none() {
             None
         } else {
-            Some(ScriptAttrReader::new_unchecked(self.as_slice()))
+            Some(AuthorityReader::new_unchecked(self.as_slice()))
         }
     }
 }
-impl<'r> molecule::prelude::Reader<'r> for ScriptAttrOptReader<'r> {
-    type Entity = ScriptAttrOpt;
-    const NAME: &'static str = "ScriptAttrOptReader";
+impl<'r> molecule::prelude::Reader<'r> for AuthorityOptReader<'r> {
+    type Entity = AuthorityOpt;
+    const NAME: &'static str = "AuthorityOptReader";
     fn to_entity(&self) -> Self::Entity {
         Self::Entity::new_unchecked(self.as_slice().to_owned().into())
     }
     fn new_unchecked(slice: &'r [u8]) -> Self {
-        ScriptAttrOptReader(slice)
+        AuthorityOptReader(slice)
     }
     fn as_slice(&self) -> &'r [u8] {
         self.0
     }
     fn verify(slice: &[u8], compatible: bool) -> molecule::error::VerificationResult<()> {
         if !slice.is_empty() {
-            ScriptAttrReader::verify(&slice[..], compatible)?;
+            AuthorityReader::verify(&slice[..], compatible)?;
         }
         Ok(())
     }
 }
 #[derive(Clone, Debug, Default)]
-pub struct ScriptAttrOptBuilder(pub(crate) Option<ScriptAttr>);
-impl ScriptAttrOptBuilder {
-    pub fn set(mut self, v: Option<ScriptAttr>) -> Self {
+pub struct AuthorityOptBuilder(pub(crate) Option<Authority>);
+impl AuthorityOptBuilder {
+    pub fn set(mut self, v: Option<Authority>) -> Self {
         self.0 = v;
         self
     }
 }
-impl molecule::prelude::Builder for ScriptAttrOptBuilder {
-    type Entity = ScriptAttrOpt;
-    const NAME: &'static str = "ScriptAttrOptBuilder";
+impl molecule::prelude::Builder for AuthorityOptBuilder {
+    type Entity = AuthorityOpt;
+    const NAME: &'static str = "AuthorityOptBuilder";
     fn expected_length(&self) -> usize {
         self.0
             .as_ref()
@@ -881,17 +881,17 @@ impl molecule::prelude::Builder for ScriptAttrOptBuilder {
         let mut inner = Vec::with_capacity(self.expected_length());
         self.write(&mut inner)
             .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
-        ScriptAttrOpt::new_unchecked(inner.into())
+        AuthorityOpt::new_unchecked(inner.into())
     }
 }
-impl From<ScriptAttr> for ScriptAttrOpt {
-    fn from(value: ScriptAttr) -> Self {
+impl From<Authority> for AuthorityOpt {
+    fn from(value: Authority) -> Self {
         Self::new_builder().set(Some(value)).build()
     }
 }
 #[derive(Clone)]
-pub struct ScriptAttrVec(molecule::bytes::Bytes);
-impl ::core::fmt::LowerHex for ScriptAttrVec {
+pub struct Extension(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for Extension {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         use molecule::hex_string;
         if f.alternate() {
@@ -900,12 +900,276 @@ impl ::core::fmt::LowerHex for ScriptAttrVec {
         write!(f, "{}", hex_string(self.as_slice()))
     }
 }
-impl ::core::fmt::Debug for ScriptAttrVec {
+impl ::core::fmt::Debug for Extension {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{}({:#x})", Self::NAME, self)
     }
 }
-impl ::core::fmt::Display for ScriptAttrVec {
+impl ::core::fmt::Display for Extension {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} {{ ", Self::NAME)?;
+        write!(f, "{}: {}", "extension_type", self.extension_type())?;
+        write!(f, ", {}: {}", "script", self.script())?;
+        let extra_count = self.count_extra_fields();
+        if extra_count != 0 {
+            write!(f, ", .. ({} fields)", extra_count)?;
+        }
+        write!(f, " }}")
+    }
+}
+impl ::core::default::Default for Extension {
+    fn default() -> Self {
+        let v = molecule::bytes::Bytes::from_static(&Self::DEFAULT_VALUE);
+        Extension::new_unchecked(v)
+    }
+}
+impl Extension {
+    const DEFAULT_VALUE: [u8; 66] = [
+        66, 0, 0, 0, 12, 0, 0, 0, 13, 0, 0, 0, 0, 53, 0, 0, 0, 16, 0, 0, 0, 48, 0, 0, 0, 49, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
+    ];
+    pub const FIELD_COUNT: usize = 2;
+    pub fn total_size(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
+    }
+    pub fn field_count(&self) -> usize {
+        if self.total_size() == molecule::NUMBER_SIZE {
+            0
+        } else {
+            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
+        }
+    }
+    pub fn count_extra_fields(&self) -> usize {
+        self.field_count() - Self::FIELD_COUNT
+    }
+    pub fn has_extra_fields(&self) -> bool {
+        Self::FIELD_COUNT != self.field_count()
+    }
+    pub fn extension_type(&self) -> Byte {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[4..]) as usize;
+        let end = molecule::unpack_number(&slice[8..]) as usize;
+        Byte::new_unchecked(self.0.slice(start..end))
+    }
+    pub fn script(&self) -> Script {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[8..]) as usize;
+        if self.has_extra_fields() {
+            let end = molecule::unpack_number(&slice[12..]) as usize;
+            Script::new_unchecked(self.0.slice(start..end))
+        } else {
+            Script::new_unchecked(self.0.slice(start..))
+        }
+    }
+    pub fn as_reader<'r>(&'r self) -> ExtensionReader<'r> {
+        ExtensionReader::new_unchecked(self.as_slice())
+    }
+}
+impl molecule::prelude::Entity for Extension {
+    type Builder = ExtensionBuilder;
+    const NAME: &'static str = "Extension";
+    fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
+        Extension(data)
+    }
+    fn as_bytes(&self) -> molecule::bytes::Bytes {
+        self.0.clone()
+    }
+    fn as_slice(&self) -> &[u8] {
+        &self.0[..]
+    }
+    fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        ExtensionReader::from_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
+        ExtensionReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
+    }
+    fn new_builder() -> Self::Builder {
+        ::core::default::Default::default()
+    }
+    fn as_builder(self) -> Self::Builder {
+        Self::new_builder()
+            .extension_type(self.extension_type())
+            .script(self.script())
+    }
+}
+#[derive(Clone, Copy)]
+pub struct ExtensionReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for ExtensionReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl<'r> ::core::fmt::Debug for ExtensionReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl<'r> ::core::fmt::Display for ExtensionReader<'r> {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{} {{ ", Self::NAME)?;
+        write!(f, "{}: {}", "extension_type", self.extension_type())?;
+        write!(f, ", {}: {}", "script", self.script())?;
+        let extra_count = self.count_extra_fields();
+        if extra_count != 0 {
+            write!(f, ", .. ({} fields)", extra_count)?;
+        }
+        write!(f, " }}")
+    }
+}
+impl<'r> ExtensionReader<'r> {
+    pub const FIELD_COUNT: usize = 2;
+    pub fn total_size(&self) -> usize {
+        molecule::unpack_number(self.as_slice()) as usize
+    }
+    pub fn field_count(&self) -> usize {
+        if self.total_size() == molecule::NUMBER_SIZE {
+            0
+        } else {
+            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
+        }
+    }
+    pub fn count_extra_fields(&self) -> usize {
+        self.field_count() - Self::FIELD_COUNT
+    }
+    pub fn has_extra_fields(&self) -> bool {
+        Self::FIELD_COUNT != self.field_count()
+    }
+    pub fn extension_type(&self) -> ByteReader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[4..]) as usize;
+        let end = molecule::unpack_number(&slice[8..]) as usize;
+        ByteReader::new_unchecked(&self.as_slice()[start..end])
+    }
+    pub fn script(&self) -> ScriptReader<'r> {
+        let slice = self.as_slice();
+        let start = molecule::unpack_number(&slice[8..]) as usize;
+        if self.has_extra_fields() {
+            let end = molecule::unpack_number(&slice[12..]) as usize;
+            ScriptReader::new_unchecked(&self.as_slice()[start..end])
+        } else {
+            ScriptReader::new_unchecked(&self.as_slice()[start..])
+        }
+    }
+}
+impl<'r> molecule::prelude::Reader<'r> for ExtensionReader<'r> {
+    type Entity = Extension;
+    const NAME: &'static str = "ExtensionReader";
+    fn to_entity(&self) -> Self::Entity {
+        Self::Entity::new_unchecked(self.as_slice().to_owned().into())
+    }
+    fn new_unchecked(slice: &'r [u8]) -> Self {
+        ExtensionReader(slice)
+    }
+    fn as_slice(&self) -> &'r [u8] {
+        self.0
+    }
+    fn verify(slice: &[u8], compatible: bool) -> molecule::error::VerificationResult<()> {
+        use molecule::verification_error as ve;
+        let slice_len = slice.len();
+        if slice_len < molecule::NUMBER_SIZE {
+            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE, slice_len);
+        }
+        let total_size = molecule::unpack_number(slice) as usize;
+        if slice_len != total_size {
+            return ve!(Self, TotalSizeNotMatch, total_size, slice_len);
+        }
+        if slice_len < molecule::NUMBER_SIZE * 2 {
+            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE * 2, slice_len);
+        }
+        let offset_first = molecule::unpack_number(&slice[molecule::NUMBER_SIZE..]) as usize;
+        if offset_first % molecule::NUMBER_SIZE != 0 || offset_first < molecule::NUMBER_SIZE * 2 {
+            return ve!(Self, OffsetsNotMatch);
+        }
+        if slice_len < offset_first {
+            return ve!(Self, HeaderIsBroken, offset_first, slice_len);
+        }
+        let field_count = offset_first / molecule::NUMBER_SIZE - 1;
+        if field_count < Self::FIELD_COUNT {
+            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
+        } else if !compatible && field_count > Self::FIELD_COUNT {
+            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
+        };
+        let mut offsets: Vec<usize> = slice[molecule::NUMBER_SIZE..offset_first]
+            .chunks_exact(molecule::NUMBER_SIZE)
+            .map(|x| molecule::unpack_number(x) as usize)
+            .collect();
+        offsets.push(total_size);
+        if offsets.windows(2).any(|i| i[0] > i[1]) {
+            return ve!(Self, OffsetsNotMatch);
+        }
+        ByteReader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
+        ScriptReader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
+        Ok(())
+    }
+}
+#[derive(Clone, Debug, Default)]
+pub struct ExtensionBuilder {
+    pub(crate) extension_type: Byte,
+    pub(crate) script: Script,
+}
+impl ExtensionBuilder {
+    pub const FIELD_COUNT: usize = 2;
+    pub fn extension_type(mut self, v: Byte) -> Self {
+        self.extension_type = v;
+        self
+    }
+    pub fn script(mut self, v: Script) -> Self {
+        self.script = v;
+        self
+    }
+}
+impl molecule::prelude::Builder for ExtensionBuilder {
+    type Entity = Extension;
+    const NAME: &'static str = "ExtensionBuilder";
+    fn expected_length(&self) -> usize {
+        molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1)
+            + self.extension_type.as_slice().len()
+            + self.script.as_slice().len()
+    }
+    fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
+        let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
+        let mut offsets = Vec::with_capacity(Self::FIELD_COUNT);
+        offsets.push(total_size);
+        total_size += self.extension_type.as_slice().len();
+        offsets.push(total_size);
+        total_size += self.script.as_slice().len();
+        writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
+        for offset in offsets.into_iter() {
+            writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
+        }
+        writer.write_all(self.extension_type.as_slice())?;
+        writer.write_all(self.script.as_slice())?;
+        Ok(())
+    }
+    fn build(&self) -> Self::Entity {
+        let mut inner = Vec::with_capacity(self.expected_length());
+        self.write(&mut inner)
+            .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
+        Extension::new_unchecked(inner.into())
+    }
+}
+#[derive(Clone)]
+pub struct ExtensionVec(molecule::bytes::Bytes);
+impl ::core::fmt::LowerHex for ExtensionVec {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        use molecule::hex_string;
+        if f.alternate() {
+            write!(f, "0x")?;
+        }
+        write!(f, "{}", hex_string(self.as_slice()))
+    }
+}
+impl ::core::fmt::Debug for ExtensionVec {
+    fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
+        write!(f, "{}({:#x})", Self::NAME, self)
+    }
+}
+impl ::core::fmt::Display for ExtensionVec {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} [", Self::NAME)?;
         for i in 0..self.len() {
@@ -918,13 +1182,13 @@ impl ::core::fmt::Display for ScriptAttrVec {
         write!(f, "]")
     }
 }
-impl ::core::default::Default for ScriptAttrVec {
+impl ::core::default::Default for ExtensionVec {
     fn default() -> Self {
         let v = molecule::bytes::Bytes::from_static(&Self::DEFAULT_VALUE);
-        ScriptAttrVec::new_unchecked(v)
+        ExtensionVec::new_unchecked(v)
     }
 }
-impl ScriptAttrVec {
+impl ExtensionVec {
     const DEFAULT_VALUE: [u8; 4] = [4, 0, 0, 0];
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
@@ -942,34 +1206,34 @@ impl ScriptAttrVec {
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
-    pub fn get(&self, idx: usize) -> Option<ScriptAttr> {
+    pub fn get(&self, idx: usize) -> Option<Extension> {
         if idx >= self.len() {
             None
         } else {
             Some(self.get_unchecked(idx))
         }
     }
-    pub fn get_unchecked(&self, idx: usize) -> ScriptAttr {
+    pub fn get_unchecked(&self, idx: usize) -> Extension {
         let slice = self.as_slice();
         let start_idx = molecule::NUMBER_SIZE * (1 + idx);
         let start = molecule::unpack_number(&slice[start_idx..]) as usize;
         if idx == self.len() - 1 {
-            ScriptAttr::new_unchecked(self.0.slice(start..))
+            Extension::new_unchecked(self.0.slice(start..))
         } else {
             let end_idx = start_idx + molecule::NUMBER_SIZE;
             let end = molecule::unpack_number(&slice[end_idx..]) as usize;
-            ScriptAttr::new_unchecked(self.0.slice(start..end))
+            Extension::new_unchecked(self.0.slice(start..end))
         }
     }
-    pub fn as_reader<'r>(&'r self) -> ScriptAttrVecReader<'r> {
-        ScriptAttrVecReader::new_unchecked(self.as_slice())
+    pub fn as_reader<'r>(&'r self) -> ExtensionVecReader<'r> {
+        ExtensionVecReader::new_unchecked(self.as_slice())
     }
 }
-impl molecule::prelude::Entity for ScriptAttrVec {
-    type Builder = ScriptAttrVecBuilder;
-    const NAME: &'static str = "ScriptAttrVec";
+impl molecule::prelude::Entity for ExtensionVec {
+    type Builder = ExtensionVecBuilder;
+    const NAME: &'static str = "ExtensionVec";
     fn new_unchecked(data: molecule::bytes::Bytes) -> Self {
-        ScriptAttrVec(data)
+        ExtensionVec(data)
     }
     fn as_bytes(&self) -> molecule::bytes::Bytes {
         self.0.clone()
@@ -978,10 +1242,10 @@ impl molecule::prelude::Entity for ScriptAttrVec {
         &self.0[..]
     }
     fn from_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        ScriptAttrVecReader::from_slice(slice).map(|reader| reader.to_entity())
+        ExtensionVecReader::from_slice(slice).map(|reader| reader.to_entity())
     }
     fn from_compatible_slice(slice: &[u8]) -> molecule::error::VerificationResult<Self> {
-        ScriptAttrVecReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
+        ExtensionVecReader::from_compatible_slice(slice).map(|reader| reader.to_entity())
     }
     fn new_builder() -> Self::Builder {
         ::core::default::Default::default()
@@ -991,8 +1255,8 @@ impl molecule::prelude::Entity for ScriptAttrVec {
     }
 }
 #[derive(Clone, Copy)]
-pub struct ScriptAttrVecReader<'r>(&'r [u8]);
-impl<'r> ::core::fmt::LowerHex for ScriptAttrVecReader<'r> {
+pub struct ExtensionVecReader<'r>(&'r [u8]);
+impl<'r> ::core::fmt::LowerHex for ExtensionVecReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         use molecule::hex_string;
         if f.alternate() {
@@ -1001,12 +1265,12 @@ impl<'r> ::core::fmt::LowerHex for ScriptAttrVecReader<'r> {
         write!(f, "{}", hex_string(self.as_slice()))
     }
 }
-impl<'r> ::core::fmt::Debug for ScriptAttrVecReader<'r> {
+impl<'r> ::core::fmt::Debug for ExtensionVecReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{}({:#x})", Self::NAME, self)
     }
 }
-impl<'r> ::core::fmt::Display for ScriptAttrVecReader<'r> {
+impl<'r> ::core::fmt::Display for ExtensionVecReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} [", Self::NAME)?;
         for i in 0..self.len() {
@@ -1019,7 +1283,7 @@ impl<'r> ::core::fmt::Display for ScriptAttrVecReader<'r> {
         write!(f, "]")
     }
 }
-impl<'r> ScriptAttrVecReader<'r> {
+impl<'r> ExtensionVecReader<'r> {
     pub fn total_size(&self) -> usize {
         molecule::unpack_number(self.as_slice()) as usize
     }
@@ -1036,34 +1300,34 @@ impl<'r> ScriptAttrVecReader<'r> {
     pub fn is_empty(&self) -> bool {
         self.len() == 0
     }
-    pub fn get(&self, idx: usize) -> Option<ScriptAttrReader<'r>> {
+    pub fn get(&self, idx: usize) -> Option<ExtensionReader<'r>> {
         if idx >= self.len() {
             None
         } else {
             Some(self.get_unchecked(idx))
         }
     }
-    pub fn get_unchecked(&self, idx: usize) -> ScriptAttrReader<'r> {
+    pub fn get_unchecked(&self, idx: usize) -> ExtensionReader<'r> {
         let slice = self.as_slice();
         let start_idx = molecule::NUMBER_SIZE * (1 + idx);
         let start = molecule::unpack_number(&slice[start_idx..]) as usize;
         if idx == self.len() - 1 {
-            ScriptAttrReader::new_unchecked(&self.as_slice()[start..])
+            ExtensionReader::new_unchecked(&self.as_slice()[start..])
         } else {
             let end_idx = start_idx + molecule::NUMBER_SIZE;
             let end = molecule::unpack_number(&slice[end_idx..]) as usize;
-            ScriptAttrReader::new_unchecked(&self.as_slice()[start..end])
+            ExtensionReader::new_unchecked(&self.as_slice()[start..end])
         }
     }
 }
-impl<'r> molecule::prelude::Reader<'r> for ScriptAttrVecReader<'r> {
-    type Entity = ScriptAttrVec;
-    const NAME: &'static str = "ScriptAttrVecReader";
+impl<'r> molecule::prelude::Reader<'r> for ExtensionVecReader<'r> {
+    type Entity = ExtensionVec;
+    const NAME: &'static str = "ExtensionVecReader";
     fn to_entity(&self) -> Self::Entity {
         Self::Entity::new_unchecked(self.as_slice().to_owned().into())
     }
     fn new_unchecked(slice: &'r [u8]) -> Self {
-        ScriptAttrVecReader(slice)
+        ExtensionVecReader(slice)
     }
     fn as_slice(&self) -> &'r [u8] {
         self.0
@@ -1107,37 +1371,37 @@ impl<'r> molecule::prelude::Reader<'r> for ScriptAttrVecReader<'r> {
         for pair in offsets.windows(2) {
             let start = pair[0];
             let end = pair[1];
-            ScriptAttrReader::verify(&slice[start..end], compatible)?;
+            ExtensionReader::verify(&slice[start..end], compatible)?;
         }
         Ok(())
     }
 }
 #[derive(Clone, Debug, Default)]
-pub struct ScriptAttrVecBuilder(pub(crate) Vec<ScriptAttr>);
-impl ScriptAttrVecBuilder {
-    pub fn set(mut self, v: Vec<ScriptAttr>) -> Self {
+pub struct ExtensionVecBuilder(pub(crate) Vec<Extension>);
+impl ExtensionVecBuilder {
+    pub fn set(mut self, v: Vec<Extension>) -> Self {
         self.0 = v;
         self
     }
-    pub fn push(mut self, v: ScriptAttr) -> Self {
+    pub fn push(mut self, v: Extension) -> Self {
         self.0.push(v);
         self
     }
-    pub fn extend<T: ::core::iter::IntoIterator<Item = ScriptAttr>>(mut self, iter: T) -> Self {
+    pub fn extend<T: ::core::iter::IntoIterator<Item = Extension>>(mut self, iter: T) -> Self {
         for elem in iter {
             self.0.push(elem);
         }
         self
     }
-    pub fn replace(&mut self, index: usize, v: ScriptAttr) -> Option<ScriptAttr> {
+    pub fn replace(&mut self, index: usize, v: Extension) -> Option<Extension> {
         self.0
             .get_mut(index)
             .map(|item| ::core::mem::replace(item, v))
     }
 }
-impl molecule::prelude::Builder for ScriptAttrVecBuilder {
-    type Entity = ScriptAttrVec;
-    const NAME: &'static str = "ScriptAttrVecBuilder";
+impl molecule::prelude::Builder for ExtensionVecBuilder {
+    type Entity = ExtensionVec;
+    const NAME: &'static str = "ExtensionVecBuilder";
     fn expected_length(&self) -> usize {
         molecule::NUMBER_SIZE * (self.0.len() + 1)
             + self
@@ -1177,12 +1441,12 @@ impl molecule::prelude::Builder for ScriptAttrVecBuilder {
         let mut inner = Vec::with_capacity(self.expected_length());
         self.write(&mut inner)
             .unwrap_or_else(|_| panic!("{} build should be ok", Self::NAME));
-        ScriptAttrVec::new_unchecked(inner.into())
+        ExtensionVec::new_unchecked(inner.into())
     }
 }
-pub struct ScriptAttrVecIterator(ScriptAttrVec, usize, usize);
-impl ::core::iter::Iterator for ScriptAttrVecIterator {
-    type Item = ScriptAttr;
+pub struct ExtensionVecIterator(ExtensionVec, usize, usize);
+impl ::core::iter::Iterator for ExtensionVecIterator {
+    type Item = Extension;
     fn next(&mut self) -> Option<Self::Item> {
         if self.1 >= self.2 {
             None
@@ -1193,27 +1457,27 @@ impl ::core::iter::Iterator for ScriptAttrVecIterator {
         }
     }
 }
-impl ::core::iter::ExactSizeIterator for ScriptAttrVecIterator {
+impl ::core::iter::ExactSizeIterator for ExtensionVecIterator {
     fn len(&self) -> usize {
         self.2 - self.1
     }
 }
-impl ::core::iter::IntoIterator for ScriptAttrVec {
-    type Item = ScriptAttr;
-    type IntoIter = ScriptAttrVecIterator;
+impl ::core::iter::IntoIterator for ExtensionVec {
+    type Item = Extension;
+    type IntoIter = ExtensionVecIterator;
     fn into_iter(self) -> Self::IntoIter {
         let len = self.len();
-        ScriptAttrVecIterator(self, 0, len)
+        ExtensionVecIterator(self, 0, len)
     }
 }
-impl<'r> ScriptAttrVecReader<'r> {
-    pub fn iter<'t>(&'t self) -> ScriptAttrVecReaderIterator<'t, 'r> {
-        ScriptAttrVecReaderIterator(&self, 0, self.len())
+impl<'r> ExtensionVecReader<'r> {
+    pub fn iter<'t>(&'t self) -> ExtensionVecReaderIterator<'t, 'r> {
+        ExtensionVecReaderIterator(&self, 0, self.len())
     }
 }
-pub struct ScriptAttrVecReaderIterator<'t, 'r>(&'t ScriptAttrVecReader<'r>, usize, usize);
-impl<'t: 'r, 'r> ::core::iter::Iterator for ScriptAttrVecReaderIterator<'t, 'r> {
-    type Item = ScriptAttrReader<'t>;
+pub struct ExtensionVecReaderIterator<'t, 'r>(&'t ExtensionVecReader<'r>, usize, usize);
+impl<'t: 'r, 'r> ::core::iter::Iterator for ExtensionVecReaderIterator<'t, 'r> {
+    type Item = ExtensionReader<'t>;
     fn next(&mut self) -> Option<Self::Item> {
         if self.1 >= self.2 {
             None
@@ -1224,13 +1488,13 @@ impl<'t: 'r, 'r> ::core::iter::Iterator for ScriptAttrVecReaderIterator<'t, 'r> 
         }
     }
 }
-impl<'t: 'r, 'r> ::core::iter::ExactSizeIterator for ScriptAttrVecReaderIterator<'t, 'r> {
+impl<'t: 'r, 'r> ::core::iter::ExactSizeIterator for ExtensionVecReaderIterator<'t, 'r> {
     fn len(&self) -> usize {
         self.2 - self.1
     }
 }
-impl ::core::iter::FromIterator<ScriptAttr> for ScriptAttrVec {
-    fn from_iter<T: IntoIterator<Item = ScriptAttr>>(iter: T) -> Self {
+impl ::core::iter::FromIterator<Extension> for ExtensionVec {
+    fn from_iter<T: IntoIterator<Item = Extension>>(iter: T) -> Self {
         Self::new_builder().extend(iter).build()
     }
 }
@@ -1345,20 +1609,20 @@ impl SudtMeta {
         let end = molecule::unpack_number(&slice[32..]) as usize;
         Bytes::new_unchecked(self.0.slice(start..end))
     }
-    pub fn mint_authority(&self) -> ScriptAttrOpt {
+    pub fn mint_authority(&self) -> AuthorityOpt {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[32..]) as usize;
         let end = molecule::unpack_number(&slice[36..]) as usize;
-        ScriptAttrOpt::new_unchecked(self.0.slice(start..end))
+        AuthorityOpt::new_unchecked(self.0.slice(start..end))
     }
-    pub fn metadata_authority(&self) -> ScriptAttrOpt {
+    pub fn metadata_authority(&self) -> AuthorityOpt {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[36..]) as usize;
         if self.has_extra_fields() {
             let end = molecule::unpack_number(&slice[40..]) as usize;
-            ScriptAttrOpt::new_unchecked(self.0.slice(start..end))
+            AuthorityOpt::new_unchecked(self.0.slice(start..end))
         } else {
-            ScriptAttrOpt::new_unchecked(self.0.slice(start..))
+            AuthorityOpt::new_unchecked(self.0.slice(start..))
         }
     }
     pub fn as_reader<'r>(&'r self) -> SudtMetaReader<'r> {
@@ -1499,20 +1763,20 @@ impl<'r> SudtMetaReader<'r> {
         let end = molecule::unpack_number(&slice[32..]) as usize;
         BytesReader::new_unchecked(&self.as_slice()[start..end])
     }
-    pub fn mint_authority(&self) -> ScriptAttrOptReader<'r> {
+    pub fn mint_authority(&self) -> AuthorityOptReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[32..]) as usize;
         let end = molecule::unpack_number(&slice[36..]) as usize;
-        ScriptAttrOptReader::new_unchecked(&self.as_slice()[start..end])
+        AuthorityOptReader::new_unchecked(&self.as_slice()[start..end])
     }
-    pub fn metadata_authority(&self) -> ScriptAttrOptReader<'r> {
+    pub fn metadata_authority(&self) -> AuthorityOptReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[36..]) as usize;
         if self.has_extra_fields() {
             let end = molecule::unpack_number(&slice[40..]) as usize;
-            ScriptAttrOptReader::new_unchecked(&self.as_slice()[start..end])
+            AuthorityOptReader::new_unchecked(&self.as_slice()[start..end])
         } else {
-            ScriptAttrOptReader::new_unchecked(&self.as_slice()[start..])
+            AuthorityOptReader::new_unchecked(&self.as_slice()[start..])
         }
     }
 }
@@ -1569,8 +1833,8 @@ impl<'r> molecule::prelude::Reader<'r> for SudtMetaReader<'r> {
         BytesReader::verify(&slice[offsets[4]..offsets[5]], compatible)?;
         BytesReader::verify(&slice[offsets[5]..offsets[6]], compatible)?;
         BytesReader::verify(&slice[offsets[6]..offsets[7]], compatible)?;
-        ScriptAttrOptReader::verify(&slice[offsets[7]..offsets[8]], compatible)?;
-        ScriptAttrOptReader::verify(&slice[offsets[8]..offsets[9]], compatible)?;
+        AuthorityOptReader::verify(&slice[offsets[7]..offsets[8]], compatible)?;
+        AuthorityOptReader::verify(&slice[offsets[8]..offsets[9]], compatible)?;
         Ok(())
     }
 }
@@ -1583,8 +1847,8 @@ pub struct SudtMetaBuilder {
     pub(crate) symbol: Bytes,
     pub(crate) uri: Bytes,
     pub(crate) extra_data: Bytes,
-    pub(crate) mint_authority: ScriptAttrOpt,
-    pub(crate) metadata_authority: ScriptAttrOpt,
+    pub(crate) mint_authority: AuthorityOpt,
+    pub(crate) metadata_authority: AuthorityOpt,
 }
 impl SudtMetaBuilder {
     pub const FIELD_COUNT: usize = 9;
@@ -1616,11 +1880,11 @@ impl SudtMetaBuilder {
         self.extra_data = v;
         self
     }
-    pub fn mint_authority(mut self, v: ScriptAttrOpt) -> Self {
+    pub fn mint_authority(mut self, v: AuthorityOpt) -> Self {
         self.mint_authority = v;
         self
     }
-    pub fn metadata_authority(mut self, v: ScriptAttrOpt) -> Self {
+    pub fn metadata_authority(mut self, v: AuthorityOpt) -> Self {
         self.metadata_authority = v;
         self
     }
@@ -1796,32 +2060,32 @@ impl XudtMeta {
         let end = molecule::unpack_number(&slice[32..]) as usize;
         Bytes::new_unchecked(self.0.slice(start..end))
     }
-    pub fn mint_authority(&self) -> ScriptAttrOpt {
+    pub fn mint_authority(&self) -> AuthorityOpt {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[32..]) as usize;
         let end = molecule::unpack_number(&slice[36..]) as usize;
-        ScriptAttrOpt::new_unchecked(self.0.slice(start..end))
+        AuthorityOpt::new_unchecked(self.0.slice(start..end))
     }
-    pub fn metadata_authority(&self) -> ScriptAttrOpt {
+    pub fn metadata_authority(&self) -> AuthorityOpt {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[36..]) as usize;
         let end = molecule::unpack_number(&slice[40..]) as usize;
-        ScriptAttrOpt::new_unchecked(self.0.slice(start..end))
+        AuthorityOpt::new_unchecked(self.0.slice(start..end))
     }
-    pub fn access_authority(&self) -> ScriptAttrOpt {
+    pub fn access_authority(&self) -> AuthorityOpt {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[40..]) as usize;
         let end = molecule::unpack_number(&slice[44..]) as usize;
-        ScriptAttrOpt::new_unchecked(self.0.slice(start..end))
+        AuthorityOpt::new_unchecked(self.0.slice(start..end))
     }
-    pub fn extensions(&self) -> ScriptAttrVec {
+    pub fn extensions(&self) -> ExtensionVec {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[44..]) as usize;
         if self.has_extra_fields() {
             let end = molecule::unpack_number(&slice[48..]) as usize;
-            ScriptAttrVec::new_unchecked(self.0.slice(start..end))
+            ExtensionVec::new_unchecked(self.0.slice(start..end))
         } else {
-            ScriptAttrVec::new_unchecked(self.0.slice(start..))
+            ExtensionVec::new_unchecked(self.0.slice(start..))
         }
     }
     pub fn as_reader<'r>(&'r self) -> XudtMetaReader<'r> {
@@ -1966,32 +2230,32 @@ impl<'r> XudtMetaReader<'r> {
         let end = molecule::unpack_number(&slice[32..]) as usize;
         BytesReader::new_unchecked(&self.as_slice()[start..end])
     }
-    pub fn mint_authority(&self) -> ScriptAttrOptReader<'r> {
+    pub fn mint_authority(&self) -> AuthorityOptReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[32..]) as usize;
         let end = molecule::unpack_number(&slice[36..]) as usize;
-        ScriptAttrOptReader::new_unchecked(&self.as_slice()[start..end])
+        AuthorityOptReader::new_unchecked(&self.as_slice()[start..end])
     }
-    pub fn metadata_authority(&self) -> ScriptAttrOptReader<'r> {
+    pub fn metadata_authority(&self) -> AuthorityOptReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[36..]) as usize;
         let end = molecule::unpack_number(&slice[40..]) as usize;
-        ScriptAttrOptReader::new_unchecked(&self.as_slice()[start..end])
+        AuthorityOptReader::new_unchecked(&self.as_slice()[start..end])
     }
-    pub fn access_authority(&self) -> ScriptAttrOptReader<'r> {
+    pub fn access_authority(&self) -> AuthorityOptReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[40..]) as usize;
         let end = molecule::unpack_number(&slice[44..]) as usize;
-        ScriptAttrOptReader::new_unchecked(&self.as_slice()[start..end])
+        AuthorityOptReader::new_unchecked(&self.as_slice()[start..end])
     }
-    pub fn extensions(&self) -> ScriptAttrVecReader<'r> {
+    pub fn extensions(&self) -> ExtensionVecReader<'r> {
         let slice = self.as_slice();
         let start = molecule::unpack_number(&slice[44..]) as usize;
         if self.has_extra_fields() {
             let end = molecule::unpack_number(&slice[48..]) as usize;
-            ScriptAttrVecReader::new_unchecked(&self.as_slice()[start..end])
+            ExtensionVecReader::new_unchecked(&self.as_slice()[start..end])
         } else {
-            ScriptAttrVecReader::new_unchecked(&self.as_slice()[start..])
+            ExtensionVecReader::new_unchecked(&self.as_slice()[start..])
         }
     }
 }
@@ -2048,10 +2312,10 @@ impl<'r> molecule::prelude::Reader<'r> for XudtMetaReader<'r> {
         BytesReader::verify(&slice[offsets[4]..offsets[5]], compatible)?;
         BytesReader::verify(&slice[offsets[5]..offsets[6]], compatible)?;
         BytesReader::verify(&slice[offsets[6]..offsets[7]], compatible)?;
-        ScriptAttrOptReader::verify(&slice[offsets[7]..offsets[8]], compatible)?;
-        ScriptAttrOptReader::verify(&slice[offsets[8]..offsets[9]], compatible)?;
-        ScriptAttrOptReader::verify(&slice[offsets[9]..offsets[10]], compatible)?;
-        ScriptAttrVecReader::verify(&slice[offsets[10]..offsets[11]], compatible)?;
+        AuthorityOptReader::verify(&slice[offsets[7]..offsets[8]], compatible)?;
+        AuthorityOptReader::verify(&slice[offsets[8]..offsets[9]], compatible)?;
+        AuthorityOptReader::verify(&slice[offsets[9]..offsets[10]], compatible)?;
+        ExtensionVecReader::verify(&slice[offsets[10]..offsets[11]], compatible)?;
         Ok(())
     }
 }
@@ -2064,10 +2328,10 @@ pub struct XudtMetaBuilder {
     pub(crate) symbol: Bytes,
     pub(crate) uri: Bytes,
     pub(crate) extra_data: Bytes,
-    pub(crate) mint_authority: ScriptAttrOpt,
-    pub(crate) metadata_authority: ScriptAttrOpt,
-    pub(crate) access_authority: ScriptAttrOpt,
-    pub(crate) extensions: ScriptAttrVec,
+    pub(crate) mint_authority: AuthorityOpt,
+    pub(crate) metadata_authority: AuthorityOpt,
+    pub(crate) access_authority: AuthorityOpt,
+    pub(crate) extensions: ExtensionVec,
 }
 impl XudtMetaBuilder {
     pub const FIELD_COUNT: usize = 11;
@@ -2099,19 +2363,19 @@ impl XudtMetaBuilder {
         self.extra_data = v;
         self
     }
-    pub fn mint_authority(mut self, v: ScriptAttrOpt) -> Self {
+    pub fn mint_authority(mut self, v: AuthorityOpt) -> Self {
         self.mint_authority = v;
         self
     }
-    pub fn metadata_authority(mut self, v: ScriptAttrOpt) -> Self {
+    pub fn metadata_authority(mut self, v: AuthorityOpt) -> Self {
         self.metadata_authority = v;
         self
     }
-    pub fn access_authority(mut self, v: ScriptAttrOpt) -> Self {
+    pub fn access_authority(mut self, v: AuthorityOpt) -> Self {
         self.access_authority = v;
         self
     }
-    pub fn extensions(mut self, v: ScriptAttrVec) -> Self {
+    pub fn extensions(mut self, v: ExtensionVec) -> Self {
         self.extensions = v;
         self
     }

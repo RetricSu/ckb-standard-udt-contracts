@@ -20,7 +20,7 @@ use ckb_testtool::{
     context::Context,
 };
 use ckb_types_120::{packed::Script as MetadataScript, prelude::Entity};
-use standard_udt_types::metadata::{ScriptAttr, ScriptLocation, SudtMeta, CONFIG_SUPPLY_TRACKED};
+use standard_udt_types::metadata::{Authority, AuthorityType, SudtMeta, CONFIG_SUPPLY_TRACKED};
 
 fn deploy_data2_script(context: &mut Context, binary_name: &str, args: Bytes) -> DeployedScript {
     let out_point = context.deploy_cell(Loader::default().load_binary(binary_name));
@@ -80,8 +80,8 @@ fn tracked_meta_data(current_supply: u128) -> Bytes {
 fn sudt_meta_data(
     config_flags: u8,
     current_supply: u128,
-    mint_authority: Option<ScriptAttr>,
-    metadata_authority: Option<ScriptAttr>,
+    mint_authority: Option<Authority>,
+    metadata_authority: Option<Authority>,
     name: Vec<u8>,
     extra_data: Vec<u8>,
 ) -> Bytes {
@@ -102,11 +102,11 @@ fn sudt_meta_data(
     )
 }
 
-fn dynamic_linking_authority(script: Script) -> ScriptAttr {
+fn dynamic_linking_authority(script: Script) -> Authority {
     let metadata_script =
         MetadataScript::from_slice(script.as_slice()).expect("convert script bytes");
-    ScriptAttr {
-        location: ScriptLocation::DynamicLinking,
+    Authority {
+        authority_type: AuthorityType::DynamicLinking,
         script_hash: script_hash(&script),
         script: Some(metadata_script),
     }

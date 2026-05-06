@@ -20,7 +20,7 @@ use ckb_testtool::{
     context::Context,
 };
 use standard_udt_types::metadata::{
-    ScriptAttr, CONFIG_ACCESS_ENABLED, CONFIG_ACCESS_WHITELIST, CONFIG_PAUSED,
+    Authority, Extension, CONFIG_ACCESS_ENABLED, CONFIG_ACCESS_WHITELIST, CONFIG_PAUSED,
 };
 
 fn deploy_data2_script(context: &mut Context, binary_name: &str, args: Bytes) -> DeployedScript {
@@ -64,10 +64,10 @@ fn access_list_script(context: &mut Context, meta_type_hash: [u8; 32]) -> Deploy
 fn xudt_meta_data(
     config_flags: u8,
     current_supply: u128,
-    mint_authority: Option<ScriptAttr>,
-    metadata_authority: Option<ScriptAttr>,
-    access_authority: Option<ScriptAttr>,
-    extensions: Vec<ScriptAttr>,
+    mint_authority: Option<Authority>,
+    metadata_authority: Option<Authority>,
+    access_authority: Option<Authority>,
+    extensions: Vec<Extension>,
 ) -> Bytes {
     build_xudt_meta_bytes(
         config_flags,
