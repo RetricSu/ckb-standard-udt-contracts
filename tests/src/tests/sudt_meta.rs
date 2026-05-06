@@ -4,7 +4,8 @@ use crate::{
         expect_tx_fail_with_code, expect_tx_pass, typed_output,
     },
     metadata_builders::{
-        build_sudt_meta_bytes, input_lock_authority, script_hash, udt_amount_bytes, DeployedScript,
+        build_sudt_meta_bytes, dynamic_linking_authority as deployed_dynamic_linking_authority,
+        input_lock_authority, script_hash, spawn_authority, udt_amount_bytes, DeployedScript,
     },
     Loader,
 };
@@ -19,14 +20,26 @@ use ckb_testtool::{
     },
     context::Context,
 };
-use ckb_types_120::{packed::Script as MetadataScript, prelude::Entity};
-use standard_udt_types::metadata::{Authority, AuthorityType, SudtMeta, CONFIG_SUPPLY_TRACKED};
+use standard_udt_types::metadata::{Authority, SudtMeta, CONFIG_SUPPLY_TRACKED};
 
 fn deploy_data2_script(context: &mut Context, binary_name: &str, args: Bytes) -> DeployedScript {
     let out_point = context.deploy_cell(Loader::default().load_binary(binary_name));
     let script = context
         .build_script_with_hash_type(&out_point, ScriptHashType::Data2, args)
         .expect("build deployed Data2 script");
+    let script_hash = script_hash(&script);
+    DeployedScript {
+        out_point,
+        script,
+        script_hash,
+    }
+}
+
+fn deploy_data_script(context: &mut Context, binary_name: &str, args: Bytes) -> DeployedScript {
+    let out_point = context.deploy_cell(Loader::default().load_binary(binary_name));
+    let script = context
+        .build_script_with_hash_type(&out_point, ScriptHashType::Data, args)
+        .expect("build deployed Data script");
     let script_hash = script_hash(&script);
     DeployedScript {
         out_point,
@@ -100,16 +113,6 @@ fn sudt_meta_data(
         .to_bytes()
         .expect("build SudtMeta bytes"),
     )
-}
-
-fn dynamic_linking_authority(script: Script) -> Authority {
-    let metadata_script =
-        MetadataScript::from_slice(script.as_slice()).expect("convert script bytes");
-    Authority {
-        authority_type: AuthorityType::DynamicLinking,
-        script_hash: script_hash(&script),
-        script: Some(metadata_script),
-    }
 }
 
 fn untracked_nonzero_meta_data(current_supply: u128) -> Bytes {
@@ -225,6 +228,62 @@ where
         .output_data(output_meta_data.pack())
         .cell_dep(cell_dep_for_script(&lock))
         .cell_dep(cell_dep_for_script(&meta))
+        .build();
+    let tx = context.complete_tx(tx);
+    (context, tx)
+}
+
+fn update_meta_tx_with_plugin_authority(
+    plugin_name: &str,
+    spawn: bool,
+) -> (Context, TransactionView) {
+    let mut context = Context::default();
+    let lock = always_success_lock(&mut context);
+    let plugin = if spawn {
+        deploy_data2_script(&mut context, plugin_name, Bytes::from_static(b"allow"))
+    } else {
+        deploy_data_script(&mut context, plugin_name, Bytes::from_static(b"allow"))
+    };
+    let authority = if spawn {
+        spawn_authority(&plugin)
+    } else {
+        deployed_dynamic_linking_authority(&plugin)
+    };
+    let input_meta_data = sudt_meta_data(
+        CONFIG_SUPPLY_TRACKED,
+        0,
+        None,
+        Some(authority),
+        Vec::new(),
+        Vec::new(),
+    );
+    let output_meta_data = sudt_meta_data(
+        CONFIG_SUPPLY_TRACKED,
+        0,
+        None,
+        None,
+        b"new name".to_vec(),
+        Vec::new(),
+    );
+    let meta = meta_script(&mut context, Bytes::from(vec![2u8; 32]));
+    let input_out_point = create_typed_cell(
+        &mut context,
+        &lock.script,
+        &meta.script,
+        100_000_000_000,
+        input_meta_data,
+    );
+    let input = CellInput::new_builder()
+        .previous_output(input_out_point)
+        .build();
+
+    let tx = TransactionBuilder::default()
+        .input(input)
+        .output(typed_output(&lock.script, &meta.script, 100_000_000_000))
+        .output_data(output_meta_data.pack())
+        .cell_dep(cell_dep_for_script(&lock))
+        .cell_dep(cell_dep_for_script(&meta))
+        .cell_dep(cell_dep_for_script(&plugin))
         .build();
     let tx = context.complete_tx(tx);
     (context, tx)
@@ -412,29 +471,29 @@ fn sudt_meta_update_rejects_mint_authority_recreation() {
 }
 
 #[test]
-fn sudt_meta_update_rejects_dynamic_linking_authority_for_now() {
-    let (context, tx) = update_meta_tx_with_data(|_, lock_script| {
-        let authority = dynamic_linking_authority(lock_script);
-        let input_meta = sudt_meta_data(
-            CONFIG_SUPPLY_TRACKED,
-            0,
-            None,
-            Some(authority),
-            Vec::new(),
-            Vec::new(),
-        );
-        (
-            input_meta,
-            sudt_meta_data(
-                CONFIG_SUPPLY_TRACKED,
-                0,
-                None,
-                None,
-                b"new name".to_vec(),
-                Vec::new(),
-            ),
-        )
-    });
+fn sudt_meta_update_metadata_change_with_dynamic_linking_authority_passes() {
+    let (context, tx) = update_meta_tx_with_plugin_authority("authority-dl-allow", false);
+
+    expect_tx_pass(&context, &tx);
+}
+
+#[test]
+fn sudt_meta_update_metadata_change_with_dynamic_linking_authority_denies() {
+    let (context, tx) = update_meta_tx_with_plugin_authority("authority-dl-deny", false);
+
+    expect_tx_fail_with_code(&context, &tx, "error code 18");
+}
+
+#[test]
+fn sudt_meta_update_metadata_change_with_spawn_authority_passes() {
+    let (context, tx) = update_meta_tx_with_plugin_authority("authority-spawn-allow", true);
+
+    expect_tx_pass(&context, &tx);
+}
+
+#[test]
+fn sudt_meta_update_metadata_change_with_spawn_authority_denies() {
+    let (context, tx) = update_meta_tx_with_plugin_authority("authority-spawn-deny", true);
 
     expect_tx_fail_with_code(&context, &tx, "error code 18");
 }

@@ -4,8 +4,8 @@ use crate::{
         typed_output,
     },
     metadata_builders::{
-        build_access_list_shard_bytes, build_xudt_meta_bytes, input_lock_authority, script_hash,
-        udt_amount_bytes, DeployedScript,
+        build_access_list_shard_bytes, build_xudt_meta_bytes, dynamic_linking_authority,
+        input_lock_authority, script_hash, spawn_authority, udt_amount_bytes, DeployedScript,
     },
     Loader,
 };
@@ -28,6 +28,19 @@ fn deploy_data2_script(context: &mut Context, binary_name: &str, args: Bytes) ->
     let script = context
         .build_script_with_hash_type(&out_point, ScriptHashType::Data2, args)
         .expect("build deployed Data2 script");
+    let script_hash = script_hash(&script);
+    DeployedScript {
+        out_point,
+        script,
+        script_hash,
+    }
+}
+
+fn deploy_data_script(context: &mut Context, binary_name: &str, args: Bytes) -> DeployedScript {
+    let out_point = context.deploy_cell(Loader::default().load_binary(binary_name));
+    let script = context
+        .build_script_with_hash_type(&out_point, ScriptHashType::Data, args)
+        .expect("build deployed Data script");
     let script_hash = script_hash(&script);
     DeployedScript {
         out_point,
@@ -206,6 +219,9 @@ where
                     )
                     .cell_dep(cell_dep_for_script(&cell_dep));
             }
+            ExtraCell::Dep { cell_dep } => {
+                builder = builder.cell_dep(cell_dep_for_script(&cell_dep));
+            }
         }
     }
 
@@ -222,6 +238,9 @@ enum ExtraCell {
     },
     Input {
         previous_output: ckb_testtool::ckb_types::packed::OutPoint,
+        cell_dep: DeployedScript,
+    },
+    Dep {
         cell_dep: DeployedScript,
     },
 }
@@ -435,6 +454,70 @@ fn xudt_meta_access_authority_controls_pause_and_access_mode() {
         )
     });
     expect_tx_pass(&with_authority.context, &with_authority.tx);
+}
+
+fn xudt_meta_access_update_with_plugin_authority(plugin_name: &str, spawn: bool) -> UpdateCase {
+    update_meta_tx(|context, lock, meta| {
+        let plugin = if spawn {
+            deploy_data2_script(context, plugin_name, Bytes::from_static(b"allow"))
+        } else {
+            deploy_data_script(context, plugin_name, Bytes::from_static(b"allow"))
+        };
+        let authority = if spawn {
+            spawn_authority(&plugin)
+        } else {
+            dynamic_linking_authority(&plugin)
+        };
+        let access_list = access_list_script(context, meta.script_hash);
+        (
+            xudt_meta_data(0, 0, None, None, Some(authority.clone()), Vec::new()),
+            xudt_meta_data(
+                CONFIG_ACCESS_ENABLED | CONFIG_ACCESS_WHITELIST | CONFIG_PAUSED,
+                0,
+                None,
+                None,
+                Some(authority),
+                Vec::new(),
+            ),
+            vec![
+                ExtraCell::Output {
+                    lock: lock.script.clone(),
+                    type_script: access_list.script.clone(),
+                    data: full_domain_shard(),
+                    cell_dep: access_list,
+                },
+                ExtraCell::Dep { cell_dep: plugin },
+            ],
+        )
+    })
+}
+
+#[test]
+fn xudt_meta_access_update_with_dynamic_linking_authority_passes() {
+    let case = xudt_meta_access_update_with_plugin_authority("authority-dl-allow", false);
+
+    expect_tx_pass(&case.context, &case.tx);
+}
+
+#[test]
+fn xudt_meta_access_update_with_dynamic_linking_authority_denies() {
+    let case = xudt_meta_access_update_with_plugin_authority("authority-dl-deny", false);
+
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 18");
+}
+
+#[test]
+fn xudt_meta_access_update_with_spawn_authority_passes() {
+    let case = xudt_meta_access_update_with_plugin_authority("authority-spawn-allow", true);
+
+    expect_tx_pass(&case.context, &case.tx);
+}
+
+#[test]
+fn xudt_meta_access_update_with_spawn_authority_denies() {
+    let case = xudt_meta_access_update_with_plugin_authority("authority-spawn-deny", true);
+
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 18");
 }
 
 #[test]

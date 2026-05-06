@@ -3,8 +3,8 @@ use crate::{
         cell_dep_for_script, create_typed_cell, expect_tx_fail, expect_tx_pass, typed_output,
     },
     metadata_builders::{
-        build_access_list_shard_bytes, build_xudt_meta_bytes, input_lock_authority, script_hash,
-        DeployedScript,
+        build_access_list_shard_bytes, build_xudt_meta_bytes, dynamic_linking_authority,
+        input_lock_authority, script_hash, spawn_authority, DeployedScript,
     },
     verify_and_dump_failed_tx, Loader,
 };
@@ -18,13 +18,26 @@ use ckb_testtool::{
     },
     context::Context,
 };
-use standard_udt_types::metadata::{CONFIG_ACCESS_ENABLED, CONFIG_ACCESS_WHITELIST};
+use standard_udt_types::metadata::{Authority, CONFIG_ACCESS_ENABLED, CONFIG_ACCESS_WHITELIST};
 
 fn deploy_data2_script(context: &mut Context, binary_name: &str, args: Bytes) -> DeployedScript {
     let out_point = context.deploy_cell(Loader::default().load_binary(binary_name));
     let script = context
         .build_script_with_hash_type(&out_point, ScriptHashType::Data2, args)
         .expect("build deployed Data2 script");
+    let script_hash = script_hash(&script);
+    DeployedScript {
+        out_point,
+        script,
+        script_hash,
+    }
+}
+
+fn deploy_data_script(context: &mut Context, binary_name: &str, args: Bytes) -> DeployedScript {
+    let out_point = context.deploy_cell(Loader::default().load_binary(binary_name));
+    let script = context
+        .build_script_with_hash_type(&out_point, ScriptHashType::Data, args)
+        .expect("build deployed Data script");
     let script_hash = script_hash(&script);
     DeployedScript {
         out_point,
@@ -55,14 +68,14 @@ fn access_list_script(context: &mut Context, meta_type_hash: [u8; 32]) -> Deploy
 }
 
 fn xudt_meta_data(config_flags: u8, authority: &DeployedScript) -> Bytes {
-    build_xudt_meta_bytes(
+    xudt_meta_data_with_authority(
         config_flags,
-        0,
-        None,
-        None,
         Some(input_lock_authority(authority.script_hash)),
-        Vec::new(),
     )
+}
+
+fn xudt_meta_data_with_authority(config_flags: u8, authority: Option<Authority>) -> Bytes {
+    build_xudt_meta_bytes(config_flags, 0, None, None, authority, Vec::new())
 }
 
 fn shard(start_last: u8, end_last: u8, entries: Vec<[u8; 32]>) -> Bytes {
@@ -193,6 +206,78 @@ fn access_list_update_tx(
     AccessListCase { context, tx }
 }
 
+fn access_list_update_tx_with_plugin_authority(
+    plugin_name: &str,
+    spawn: bool,
+    output_shards: Vec<Bytes>,
+) -> AccessListCase {
+    let mut context = Context::default();
+    let plugin = if spawn {
+        deploy_data2_script(&mut context, plugin_name, Bytes::from_static(b"allow"))
+    } else {
+        deploy_data_script(&mut context, plugin_name, Bytes::from_static(b"allow"))
+    };
+    let authority = if spawn {
+        spawn_authority(&plugin)
+    } else {
+        dynamic_linking_authority(&plugin)
+    };
+    let cell_lock = always_success_lock(&mut context, Bytes::from(vec![2u8]));
+    let meta = meta_script(&mut context);
+    let access_list = access_list_script(&mut context, meta.script_hash);
+    let meta_data = xudt_meta_data_with_authority(CONFIG_ACCESS_ENABLED, Some(authority.clone()));
+
+    let meta_out_point = create_typed_cell(
+        &mut context,
+        &cell_lock.script,
+        &meta.script,
+        100_000_000_000,
+        meta_data,
+    );
+    let mut builder = TransactionBuilder::default()
+        .input(
+            CellInput::new_builder()
+                .previous_output(meta_out_point)
+                .build(),
+        )
+        .output(typed_output(
+            &cell_lock.script,
+            &meta.script,
+            100_000_000_000,
+        ))
+        .output_data(xudt_meta_data_with_authority(CONFIG_ACCESS_ENABLED, Some(authority)).pack())
+        .cell_dep(cell_dep_for_script(&cell_lock))
+        .cell_dep(cell_dep_for_script(&plugin))
+        .cell_dep(cell_dep_for_script(&meta))
+        .cell_dep(cell_dep_for_script(&access_list));
+
+    let input_out_point = create_typed_cell(
+        &mut context,
+        &cell_lock.script,
+        &access_list.script,
+        100_000_000_000,
+        full_domain_shard(Vec::new()),
+    );
+    builder = builder.input(
+        CellInput::new_builder()
+            .previous_output(input_out_point)
+            .build(),
+    );
+
+    for data in output_shards {
+        builder = builder
+            .output(typed_output(
+                &cell_lock.script,
+                &access_list.script,
+                100_000_000_000,
+            ))
+            .output_data(data.pack());
+    }
+
+    let tx = context.complete_tx(builder.build());
+    AccessListCase { context, tx }
+}
+
 #[test]
 fn access_list_blacklist_requires_full_domain_coverage() {
     let case = access_list_update_tx(
@@ -226,6 +311,50 @@ fn access_list_rejects_unauthorized_update() {
         false,
         vec![full_domain_shard(Vec::new())],
         vec![full_domain_shard(vec![listed])],
+    );
+
+    expect_tx_fail(&case.context, &case.tx);
+}
+
+#[test]
+fn access_list_update_with_dynamic_linking_authority_passes() {
+    let case = access_list_update_tx_with_plugin_authority(
+        "authority-dl-allow",
+        false,
+        vec![full_domain_shard(vec![entry(0x10)])],
+    );
+
+    expect_tx_pass(&case.context, &case.tx);
+}
+
+#[test]
+fn access_list_update_with_dynamic_linking_authority_denies() {
+    let case = access_list_update_tx_with_plugin_authority(
+        "authority-dl-deny",
+        false,
+        vec![full_domain_shard(vec![entry(0x10)])],
+    );
+
+    expect_tx_fail(&case.context, &case.tx);
+}
+
+#[test]
+fn access_list_update_with_spawn_authority_passes() {
+    let case = access_list_update_tx_with_plugin_authority(
+        "authority-spawn-allow",
+        true,
+        vec![full_domain_shard(vec![entry(0x10)])],
+    );
+
+    expect_tx_pass(&case.context, &case.tx);
+}
+
+#[test]
+fn access_list_update_with_spawn_authority_denies() {
+    let case = access_list_update_tx_with_plugin_authority(
+        "authority-spawn-deny",
+        true,
+        vec![full_domain_shard(vec![entry(0x10)])],
     );
 
     expect_tx_fail(&case.context, &case.tx);
