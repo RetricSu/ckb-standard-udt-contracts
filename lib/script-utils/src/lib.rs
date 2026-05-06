@@ -7,3 +7,4 @@ pub mod authority;
 pub mod error;
 pub mod meta;
 pub mod supply;
+pub mod token;

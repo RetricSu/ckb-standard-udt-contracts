@@ -318,7 +318,7 @@ Expected: the test fails because the current code accepts the meta-only supply i
 - Create: `lib/script-utils/src/token.rs`
 - Modify: `lib/script-utils/src/lib.rs`
 
-- [ ] **Step 1: Add the token scanner module**
+- [x] **Step 1: Add the token scanner module**
 
 Create `lib/script-utils/src/token.rs`:
 
@@ -393,7 +393,7 @@ pub fn transaction_token_delta(
 }
 ```
 
-- [ ] **Step 2: Export the module**
+- [x] **Step 2: Export the module**
 
 Modify `lib/script-utils/src/lib.rs`:
 
@@ -406,7 +406,7 @@ pub mod supply;
 pub mod token;
 ```
 
-- [ ] **Step 3: Add focused unit tests**
+- [x] **Step 3: Add focused unit tests**
 
 In `lib/script-utils/src/token.rs`, append:
 
@@ -453,7 +453,7 @@ mod tests {
 }
 ```
 
-- [ ] **Step 4: Run script-utils tests**
+- [x] **Step 4: Run script-utils tests**
 
 Run:
 
