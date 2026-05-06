@@ -5,11 +5,11 @@ use ckb_std::{
     high_level::{load_cell_data, load_cell_type},
 };
 
-use crate::{constants::XUDT_CODE_HASH, error::Error, meta_cell::config};
-use standard_udt_types::metadata::XudtMeta;
+use crate::{constants::XUDT_CODE_HASH, error::Error};
+use standard_udt_types::metadata::{XudtMeta, is_supply_tracked};
 
 pub fn validate_create(output_meta: &XudtMeta, meta_type_hash: &[u8; 32]) -> Result<(), Error> {
-    if config::is_supply_tracked(output_meta.config_flags) {
+    if is_supply_tracked(output_meta.config_flags) {
         let initial_supply = sum_initial_udt_outputs(meta_type_hash, &XUDT_CODE_HASH)?;
         if output_meta.current_supply != initial_supply {
             return Err(Error::InvalidSupply);

@@ -4,17 +4,10 @@ use ckb_std::{
     error::SysError,
     high_level::{load_cell_data, load_cell_type},
 };
+use standard_udt_types::metadata::AccessListShard;
 
-use crate::{
-    constants::ACCESS_LIST_CODE_HASH,
-    error::Error,
-    meta_cell::{
-        parser::{byte32_field, table_offsets},
-        token::is_token_script,
-    },
-};
+use crate::{constants::ACCESS_LIST_CODE_HASH, error::Error, meta_cell::token::is_token_script};
 
-const ACCESS_LIST_SHARD_FIELDS: usize = 2;
 const FULL_START: [u8; 32] = [0u8; 32];
 const FULL_END: [u8; 32] = [0xffu8; 32];
 
@@ -55,21 +48,8 @@ fn is_access_list_script(type_script: &Script, meta_type_hash: &[u8; 32]) -> boo
 }
 
 fn parse_access_list_range(data: &[u8]) -> Result<([u8; 32], [u8; 32]), Error> {
-    let offsets = table_offsets(data, ACCESS_LIST_SHARD_FIELDS, false)
-        .map_err(|_| Error::AccessListRequired)?;
-    if offsets[1] != offsets[0] + 64 {
-        return Err(Error::AccessListRequired);
-    }
-
-    let start =
-        byte32_field(data, offsets[0], offsets[0] + 32).map_err(|_| Error::AccessListRequired)?;
-    let end =
-        byte32_field(data, offsets[0] + 32, offsets[1]).map_err(|_| Error::AccessListRequired)?;
-    if start > end {
-        return Err(Error::AccessListRequired);
-    }
-
-    Ok((start, end))
+    let shard = AccessListShard::from_slice(data).map_err(|_| Error::AccessListRequired)?;
+    Ok((shard.range.start, shard.range.end))
 }
 
 fn covers_full_domain(ranges: &[([u8; 32], [u8; 32])]) -> bool {

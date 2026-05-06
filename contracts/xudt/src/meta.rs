@@ -1,5 +1,3 @@
-use alloc::vec::Vec;
-
 use ckb_std::{
     ckb_constants::Source,
     ckb_types::packed::Script,
@@ -9,30 +7,29 @@ use ckb_std::{
 use standard_udt_script_utils::{
     authority::check_authority as check_runtime_authority, error::ScriptError,
 };
-use standard_udt_types::metadata::{Authority, Extension, ExtensionType, XudtMeta};
+use standard_udt_types::metadata::{
+    Authority, Extension, ExtensionType, XudtMeta, access_enabled as types_access_enabled,
+    is_supply_tracked as types_is_supply_tracked, paused as types_paused,
+    whitelist_mode as types_whitelist_mode,
+};
 
 use crate::error::Error;
 
 const UDT_AMOUNT_LEN: usize = 16;
-const CONFIG_SUPPLY_TRACKED: u8 = 0b0000_0001;
-const CONFIG_ACCESS_ENABLED: u8 = 0b0000_0010;
-const CONFIG_ACCESS_WHITELIST: u8 = 0b0000_0100;
-const CONFIG_PAUSED: u8 = 0b0000_1000;
-
 pub fn is_supply_tracked(meta: &XudtMeta) -> bool {
-    meta.config_flags & CONFIG_SUPPLY_TRACKED != 0
+    types_is_supply_tracked(meta.config_flags)
 }
 
 pub fn is_access_enabled(meta: &XudtMeta) -> bool {
-    meta.config_flags & CONFIG_ACCESS_ENABLED != 0
+    types_access_enabled(meta.config_flags)
 }
 
 pub fn is_whitelist(meta: &XudtMeta) -> bool {
-    meta.config_flags & CONFIG_ACCESS_WHITELIST != 0
+    types_whitelist_mode(meta.config_flags)
 }
 
 pub fn is_paused(meta: &XudtMeta) -> bool {
-    meta.config_flags & CONFIG_PAUSED != 0
+    types_paused(meta.config_flags)
 }
 
 pub fn load_meta_type_hash_arg() -> Result<[u8; 32], Error> {
@@ -107,56 +104,6 @@ pub fn require_authority(authority: Option<&Authority>) -> Result<(), Error> {
         true => Ok(()),
         false => Err(Error::AuthorityFailed),
     }
-}
-
-pub fn table_offsets(data: &[u8], fields: usize) -> Result<Vec<usize>, Error> {
-    if data.len() < 4 + fields * 4 {
-        return Err(Error::InvalidMetaData);
-    }
-
-    let total_size = read_u32(data, 0)? as usize;
-    if total_size != data.len() {
-        return Err(Error::InvalidMetaData);
-    }
-
-    let first_offset = read_u32(data, 4)? as usize;
-    if first_offset != 4 + fields * 4 {
-        return Err(Error::InvalidMetaData);
-    }
-
-    let mut offsets = Vec::with_capacity(fields + 1);
-    for index in 0..fields {
-        offsets.push(read_u32(data, 4 + index * 4)? as usize);
-    }
-    offsets.push(total_size);
-
-    for index in 1..offsets.len() {
-        if offsets[index] < offsets[index - 1] || offsets[index] > total_size {
-            return Err(Error::InvalidMetaData);
-        }
-    }
-
-    Ok(offsets)
-}
-
-pub fn byte32_field(data: &[u8], start: usize, end: usize) -> Result<[u8; 32], Error> {
-    if end != start + 32 || end > data.len() {
-        return Err(Error::InvalidMetaData);
-    }
-
-    let mut raw = [0u8; 32];
-    raw.copy_from_slice(&data[start..end]);
-    Ok(raw)
-}
-
-pub fn read_u32(data: &[u8], start: usize) -> Result<u32, Error> {
-    if start + 4 > data.len() {
-        return Err(Error::InvalidMetaData);
-    }
-
-    let mut raw = [0u8; 4];
-    raw.copy_from_slice(&data[start..start + 4]);
-    Ok(u32::from_le_bytes(raw))
 }
 
 fn decode_amount(data: &[u8]) -> Result<u128, Error> {

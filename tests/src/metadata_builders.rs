@@ -1,9 +1,11 @@
+use ckb_testtool::ckb_types::prelude::Entity as TesttoolEntity;
 use ckb_testtool::ckb_types::{bytes::Bytes, packed::Script, prelude::*};
 use ckb_types::{packed::Script as MetadataScript, prelude::Entity as CkbEntity};
+use standard_udt_types::generated::{blockchain, metadata};
 use standard_udt_types::metadata::{
-    AccessListRange, AccessListShard, Authority, AuthorityType, Extension, ExtensionType, SudtMeta,
-    XudtMeta,
+    Authority, AuthorityType, Extension, ExtensionType, SudtMeta, XudtMeta,
 };
+use standard_udt_types::molecule::prelude::Builder;
 
 pub struct DeployedScript {
     pub out_point: ckb_testtool::ckb_types::packed::OutPoint,
@@ -102,11 +104,20 @@ pub fn build_access_list_shard_bytes(
     end: [u8; 32],
     entries: Vec<[u8; 32]>,
 ) -> Bytes {
-    let shard = AccessListShard {
-        range: AccessListRange { start, end },
-        entries,
-    };
-    Bytes::from(shard.to_bytes().expect("build AccessListShard bytes"))
+    let entries = entries
+        .iter()
+        .map(|entry| blockchain::Byte32::from_slice(entry).expect("build Byte32"))
+        .collect::<Vec<_>>();
+    let shard = metadata::AccessListShard::new_builder()
+        .range(
+            metadata::AccessListRange::new_builder()
+                .start(blockchain::Byte32::from_slice(&start).expect("build start Byte32"))
+                .end(blockchain::Byte32::from_slice(&end).expect("build end Byte32"))
+                .build(),
+        )
+        .entries(blockchain::Byte32Vec::new_builder().set(entries).build())
+        .build();
+    Bytes::from(shard.as_slice().to_vec())
 }
 
 pub fn udt_amount_bytes(amount: u128) -> Bytes {

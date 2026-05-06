@@ -266,3 +266,74 @@ fn access_list_rejects_too_many_entries() {
 
     assert!(matches!(shard.to_bytes(), Err(Error::AccessListTooLarge)));
 }
+
+#[test]
+fn access_list_rejects_invalid_ranges_and_entries() {
+    let invalid_range = AccessListShard {
+        range: AccessListRange {
+            start: [0x20; 32],
+            end: [0x10; 32],
+        },
+        entries: Vec::new(),
+    };
+    assert!(matches!(
+        invalid_range.to_bytes(),
+        Err(Error::AccessListInvalidRange)
+    ));
+
+    let misaligned_range = AccessListShard {
+        range: AccessListRange {
+            start: [1u8; 32],
+            end: [0xffu8; 32],
+        },
+        entries: Vec::new(),
+    };
+    assert!(matches!(
+        misaligned_range.to_bytes(),
+        Err(Error::AccessListInvalidRange)
+    ));
+
+    let out_of_range = AccessListShard {
+        range: AccessListRange {
+            start: [0u8; 32],
+            end: {
+                let mut end = [0xffu8; 32];
+                end[0] = 0x0f;
+                end
+            },
+        },
+        entries: vec![{
+            let mut entry = [0u8; 32];
+            entry[0] = 0x10;
+            entry
+        }],
+    };
+    assert!(matches!(
+        out_of_range.to_bytes(),
+        Err(Error::AccessListEntryOutOfRange)
+    ));
+
+    let unsorted = AccessListShard {
+        range: AccessListRange {
+            start: [0u8; 32],
+            end: [0xffu8; 32],
+        },
+        entries: vec![[2u8; 32], [1u8; 32]],
+    };
+    assert!(matches!(
+        unsorted.to_bytes(),
+        Err(Error::AccessListEntriesNotSorted)
+    ));
+
+    let duplicated = AccessListShard {
+        range: AccessListRange {
+            start: [0u8; 32],
+            end: [0xffu8; 32],
+        },
+        entries: vec![[1u8; 32], [1u8; 32]],
+    };
+    assert!(matches!(
+        duplicated.to_bytes(),
+        Err(Error::AccessListEntriesDuplicated)
+    ));
+}

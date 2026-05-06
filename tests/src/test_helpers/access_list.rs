@@ -14,7 +14,11 @@ pub fn custom_shard(start: [u8; 32], end: [u8; 32], entries: Vec<[u8; 32]>) -> B
 }
 
 pub fn exact_shard(lock_hash: [u8; 32], entries: Vec<[u8; 32]>) -> Bytes {
-    custom_shard(lock_hash, lock_hash, entries)
+    let mut start = [0u8; 32];
+    start[0] = lock_hash[0] & 0xf0;
+    let mut end = [0xffu8; 32];
+    end[0] = start[0] | 0x0f;
+    custom_shard(start, end, entries)
 }
 
 pub fn suffix_shard(start_last: u8, end_last: u8, entries: Vec<[u8; 32]>) -> Bytes {

@@ -8,17 +8,7 @@ use ckb_std::{
 };
 
 use crate::{config::ACCESS_LIST_CODE_HASH, error::Error, meta};
-use standard_udt_types::metadata::XudtMeta;
-
-const ACCESS_LIST_SHARD_FIELDS: usize = 2;
-const MAX_ACCESSLIST_ENTRIES: usize = 4096;
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-struct AccessListShard {
-    start: [u8; 32],
-    end: [u8; 32],
-    entries: Vec<[u8; 32]>,
-}
+use standard_udt_types::metadata::{AccessListShard, XudtMeta};
 
 pub fn validate_if_enabled(meta_type_hash: &[u8; 32], meta_data: &XudtMeta) -> Result<(), Error> {
     if !meta::is_access_enabled(meta_data) {
@@ -85,7 +75,7 @@ fn validate_membership_proof(
 }
 
 fn shard_covers(shard: &AccessListShard, lock_hash: &[u8; 32]) -> bool {
-    shard.start <= *lock_hash && *lock_hash <= shard.end
+    shard.range.start <= *lock_hash && *lock_hash <= shard.range.end
 }
 
 fn collect_visible_shards(meta_type_hash: &[u8; 32]) -> Result<Vec<AccessListShard>, Error> {
@@ -93,7 +83,12 @@ fn collect_visible_shards(meta_type_hash: &[u8; 32]) -> Result<Vec<AccessListSha
     for source in [Source::CellDep, Source::Input] {
         collect_shards_from_source(meta_type_hash, source, &mut shards)?;
     }
-    shards.sort_by(|left, right| left.start.cmp(&right.start).then(left.end.cmp(&right.end)));
+    shards.sort_by(|left, right| {
+        left.range
+            .start
+            .cmp(&right.range.start)
+            .then(left.range.end.cmp(&right.range.end))
+    });
     Ok(shards)
 }
 
@@ -129,54 +124,5 @@ fn is_access_list_script(
 }
 
 fn parse_access_list_shard(data: &[u8]) -> Result<AccessListShard, Error> {
-    let offsets = meta::table_offsets(data, ACCESS_LIST_SHARD_FIELDS)?;
-    if offsets[1] != offsets[0] + 64 {
-        return Err(Error::InvalidShardData);
-    }
-
-    let start = meta::byte32_field(data, offsets[0], offsets[0] + 32)?;
-    let end = meta::byte32_field(data, offsets[0] + 32, offsets[1])?;
-    if start > end {
-        return Err(Error::InvalidShardData);
-    }
-
-    let entries = parse_byte32_vec(&data[offsets[1]..offsets[2]])?;
-    for entry in &entries {
-        if entry < &start || entry > &end {
-            return Err(Error::InvalidShardData);
-        }
-    }
-
-    Ok(AccessListShard {
-        start,
-        end,
-        entries,
-    })
-}
-
-fn parse_byte32_vec(data: &[u8]) -> Result<Vec<[u8; 32]>, Error> {
-    if data.len() < 4 {
-        return Err(Error::InvalidShardData);
-    }
-
-    let count = meta::read_u32(data, 0)? as usize;
-    if count > MAX_ACCESSLIST_ENTRIES || data.len() != 4 + count * 32 {
-        return Err(Error::InvalidShardData);
-    }
-
-    let mut entries = Vec::with_capacity(count);
-    let mut previous = None;
-    for index in 0..count {
-        let start = 4 + index * 32;
-        let entry = meta::byte32_field(data, start, start + 32)?;
-        if let Some(previous_entry) = previous {
-            if entry <= previous_entry {
-                return Err(Error::InvalidShardData);
-            }
-        }
-        previous = Some(entry);
-        entries.push(entry);
-    }
-
-    Ok(entries)
+    AccessListShard::from_slice(data).map_err(|_| Error::InvalidShardData)
 }

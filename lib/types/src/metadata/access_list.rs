@@ -27,6 +27,7 @@ impl AccessListShard {
         if self.entries.len() > MAX_ACCESSLIST_ENTRIES {
             return Err(Error::AccessListTooLarge);
         }
+        validate_shard(self)?;
 
         let mut entries = generated::blockchain::Byte32Vec::new_builder();
         for entry in &self.entries {
@@ -60,12 +61,52 @@ impl TryFrom<&[u8]> for AccessListShard {
             return Err(Error::AccessListTooLarge);
         }
 
-        Ok(Self {
+        let shard = Self {
             range: AccessListRange {
                 start: raw.range().start().into(),
                 end: raw.range().end().into(),
             },
             entries: raw.entries().into_iter().map(Into::into).collect(),
-        })
+        };
+        validate_shard(&shard)?;
+        Ok(shard)
     }
+}
+
+fn validate_shard(shard: &AccessListShard) -> Result<(), Error> {
+    if shard.range.start > shard.range.end
+        || !is_nibble_aligned_range(&shard.range.start, &shard.range.end)
+    {
+        return Err(Error::AccessListInvalidRange);
+    }
+
+    let mut previous = None;
+    for entry in &shard.entries {
+        if entry < &shard.range.start || entry > &shard.range.end {
+            return Err(Error::AccessListEntryOutOfRange);
+        }
+        if let Some(previous_entry) = previous {
+            if entry == previous_entry {
+                return Err(Error::AccessListEntriesDuplicated);
+            }
+            if entry < previous_entry {
+                return Err(Error::AccessListEntriesNotSorted);
+            }
+        }
+        previous = Some(entry);
+    }
+
+    Ok(())
+}
+
+fn is_nibble_aligned_range(start: &[u8; 32], end: &[u8; 32]) -> bool {
+    is_nibble_aligned_start(start) && is_nibble_aligned_end(end)
+}
+
+fn is_nibble_aligned_start(start: &[u8; 32]) -> bool {
+    start[0] & 0x0f == 0x00 && start[1..].iter().all(|byte| *byte == 0x00)
+}
+
+fn is_nibble_aligned_end(end: &[u8; 32]) -> bool {
+    end[0] & 0x0f == 0x0f && end[1..].iter().all(|byte| *byte == 0xff)
 }

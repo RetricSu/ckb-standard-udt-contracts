@@ -19,6 +19,18 @@ pub fn is_supply_tracked(config_flags: u8) -> bool {
     config_flags & CONFIG_SUPPLY_TRACKED != 0
 }
 
+pub fn access_enabled(config_flags: u8) -> bool {
+    config_flags & CONFIG_ACCESS_ENABLED != 0
+}
+
+pub fn whitelist_mode(config_flags: u8) -> bool {
+    config_flags & CONFIG_ACCESS_WHITELIST != 0
+}
+
+pub fn paused(config_flags: u8) -> bool {
+    config_flags & CONFIG_PAUSED != 0
+}
+
 pub fn validate_sudt_config(config_flags: u8, current_supply: u128) -> Result<(), Error> {
     validate_config_flags(config_flags, SUDT_ALLOWED_CONFIG_MASK)?;
     validate_supply(config_flags, current_supply)
@@ -26,7 +38,7 @@ pub fn validate_sudt_config(config_flags: u8, current_supply: u128) -> Result<()
 
 pub fn validate_xudt_config(config_flags: u8, current_supply: u128) -> Result<(), Error> {
     validate_config_flags(config_flags, XUDT_ALLOWED_CONFIG_MASK)?;
-    if config_flags & CONFIG_ACCESS_WHITELIST != 0 && config_flags & CONFIG_ACCESS_ENABLED == 0 {
+    if whitelist_mode(config_flags) && !access_enabled(config_flags) {
         return Err(Error::InvalidConfigFlags);
     }
     validate_supply(config_flags, current_supply)

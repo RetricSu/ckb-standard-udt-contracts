@@ -11,6 +11,10 @@ pub enum Error {
     ExtensionsDuplicated,
     MetadataTooLarge,
     AccessListTooLarge,
+    AccessListInvalidRange,
+    AccessListEntryOutOfRange,
+    AccessListEntriesNotSorted,
+    AccessListEntriesDuplicated,
 }
 
 impl From<crate::molecule::error::VerificationError> for Error {

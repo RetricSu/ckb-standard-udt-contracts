@@ -1,7 +1,5 @@
 use crate::error::Error;
-
-pub const CONFIG_ACCESS_ENABLED: u8 = 0b0000_0010;
-pub const CONFIG_ACCESS_WHITELIST: u8 = 0b0000_0100;
+use standard_udt_types::metadata::{access_enabled, whitelist_mode};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AccessMode {
@@ -12,8 +10,8 @@ pub enum AccessMode {
 
 impl AccessMode {
     pub fn from_flags(config_flags: u8) -> Result<Self, Error> {
-        let enabled = config_flags & CONFIG_ACCESS_ENABLED != 0;
-        let whitelist = config_flags & CONFIG_ACCESS_WHITELIST != 0;
+        let enabled = access_enabled(config_flags);
+        let whitelist = whitelist_mode(config_flags);
         match (enabled, whitelist) {
             (false, false) => Ok(Self::Disabled),
             (true, false) => Ok(Self::Blacklist),

@@ -5,11 +5,11 @@ use ckb_std::{
     high_level::{load_cell_data, load_cell_lock, load_cell_type, load_script, load_script_hash},
     type_id::check_type_id,
 };
-use standard_udt_types::metadata::SudtMeta;
+pub use standard_udt_types::metadata::CONFIG_SUPPLY_TRACKED;
+use standard_udt_types::metadata::{SudtMeta, is_supply_tracked as types_is_supply_tracked};
 
 use crate::{constants::SUDT_CODE_HASH, error::Error};
 
-pub const CONFIG_SUPPLY_TRACKED: u8 = 0b0000_0001;
 const ALWAYS_SUCCESS_LOCK_CODE_HASH_WHITELIST: [[u8; 32]; 1] = [[
     0x3b, 0x52, 0x1c, 0xc4, 0xb5, 0x52, 0xf1, 0x09, 0xd0, 0x92, 0xd8, 0xcc, 0x46, 0x8a, 0x80, 0x48,
     0xac, 0xb5, 0x3c, 0x59, 0x52, 0xdb, 0xe7, 0x69, 0xd2, 0xb2, 0xf9, 0xcf, 0x6e, 0x47, 0xf7, 0xf1,
@@ -167,5 +167,5 @@ fn is_initial_udt_script(
 }
 
 pub fn is_supply_tracked(config_flags: u8) -> bool {
-    config_flags & CONFIG_SUPPLY_TRACKED != 0
+    types_is_supply_tracked(config_flags)
 }

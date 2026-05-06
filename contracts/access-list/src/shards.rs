@@ -1,20 +1,12 @@
 use alloc::vec::Vec;
 
 use ckb_std::{ckb_constants::Source, error::SysError, high_level::load_cell_data};
+use standard_udt_types::metadata::AccessListShard;
 
 use crate::{error::Error, mode::AccessMode};
 
-const ACCESS_LIST_SHARD_FIELDS: usize = 2;
-const MAX_ACCESSLIST_ENTRIES: usize = 4096;
 const FULL_START: [u8; 32] = [0u8; 32];
 const FULL_END: [u8; 32] = [0xffu8; 32];
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct AccessListShard {
-    pub start: [u8; 32],
-    pub end: [u8; 32],
-    pub entries: Vec<[u8; 32]>,
-}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum AccessListLifecycle {
@@ -114,10 +106,10 @@ fn validate_local_replacement_range(
     validate_contiguous_local_range(input_shards)?;
     validate_contiguous_local_range(output_shards)?;
 
-    let input_start = input_shards.first().ok_or(Error::InvalidShardSet)?.start;
-    let input_end = input_shards.last().ok_or(Error::InvalidShardSet)?.end;
-    let output_start = output_shards.first().ok_or(Error::InvalidShardSet)?.start;
-    let output_end = output_shards.last().ok_or(Error::InvalidShardSet)?.end;
+    let input_start = shard_start(input_shards.first().ok_or(Error::InvalidShardSet)?);
+    let input_end = shard_end(input_shards.last().ok_or(Error::InvalidShardSet)?);
+    let output_start = shard_start(output_shards.first().ok_or(Error::InvalidShardSet)?);
+    let output_end = shard_end(output_shards.last().ok_or(Error::InvalidShardSet)?);
 
     if input_start == output_start && input_end == output_end {
         Ok(())
@@ -131,13 +123,13 @@ fn validate_contiguous_local_range(shards: &[AccessListShard]) -> Result<(), Err
         return Err(Error::InvalidShardSet);
     }
 
-    let mut expected_start = shards[0].start;
+    let mut expected_start = shard_start(&shards[0]);
     for shard in shards {
-        if shard.start != expected_start {
+        if shard_start(shard) != expected_start {
             return Err(Error::InvalidShardSet);
         }
 
-        let Some(next_start) = increment_byte32(&shard.end) else {
+        let Some(next_start) = increment_byte32(&shard_end(shard)) else {
             return Ok(());
         };
         expected_start = next_start;
@@ -154,7 +146,9 @@ fn have_identical_ranges(
         && input_shards
             .iter()
             .zip(output_shards)
-            .all(|(input, output)| input.start == output.start && input.end == output.end)
+            .all(|(input, output)| {
+                shard_start(input) == shard_start(output) && shard_end(input) == shard_end(output)
+            })
 }
 
 fn entries_equal(input_shards: &[AccessListShard], output_shards: &[AccessListShard]) -> bool {
@@ -207,11 +201,11 @@ fn validate_split_merge_boundaries(
     let mut output_index = 0;
 
     while input_index < input_shards.len() && output_index < output_shards.len() {
-        if input_shards[input_index].start != output_shards[output_index].start {
+        if shard_start(&input_shards[input_index]) != shard_start(&output_shards[output_index]) {
             return Err(Error::InvalidShardSet);
         }
 
-        if input_shards[input_index].end == output_shards[output_index].end {
+        if shard_end(&input_shards[input_index]) == shard_end(&output_shards[output_index]) {
             input_index += 1;
             output_index += 1;
             continue;
@@ -219,8 +213,8 @@ fn validate_split_merge_boundaries(
 
         let input_start = input_index;
         let output_start = output_index;
-        let mut input_end = input_shards[input_index].end;
-        let mut output_end = output_shards[output_index].end;
+        let mut input_end = shard_end(&input_shards[input_index]);
+        let mut output_end = shard_end(&output_shards[output_index]);
 
         loop {
             match input_end.cmp(&output_end) {
@@ -229,14 +223,14 @@ fn validate_split_merge_boundaries(
                     if input_index >= input_shards.len() {
                         return Err(Error::InvalidShardSet);
                     }
-                    input_end = input_shards[input_index].end;
+                    input_end = shard_end(&input_shards[input_index]);
                 }
                 core::cmp::Ordering::Greater => {
                     output_index += 1;
                     if output_index >= output_shards.len() {
                         return Err(Error::InvalidShardSet);
                     }
-                    output_end = output_shards[output_index].end;
+                    output_end = shard_end(&output_shards[output_index]);
                 }
                 core::cmp::Ordering::Equal => break,
             }
@@ -262,34 +256,12 @@ fn validate_split_merge_boundaries(
 }
 
 fn parse_access_list_shard(data: &[u8]) -> Result<AccessListShard, Error> {
-    let offsets = table_offsets(data, ACCESS_LIST_SHARD_FIELDS)?;
-    if offsets[1] != offsets[0] + 64 {
-        return Err(Error::InvalidShardData);
-    }
-
-    let start = byte32_field(data, offsets[0], offsets[0] + 32)?;
-    let end = byte32_field(data, offsets[0] + 32, offsets[1])?;
-    if start > end || !is_nibble_aligned_range(&start, &end) {
-        return Err(Error::InvalidShardData);
-    }
-
-    let entries = parse_byte32_vec(&data[offsets[1]..offsets[2]])?;
-    for entry in &entries {
-        if entry < &start || entry > &end {
-            return Err(Error::InvalidShardData);
-        }
-    }
-
-    Ok(AccessListShard {
-        start,
-        end,
-        entries,
-    })
+    AccessListShard::from_slice(data).map_err(|_| Error::InvalidShardData)
 }
 
 fn validate_ordered_non_overlapping(shards: &[AccessListShard]) -> Result<(), Error> {
     for pair in shards.windows(2) {
-        if pair[1].start <= pair[0].end {
+        if shard_start(&pair[1]) <= shard_end(&pair[0]) {
             return Err(Error::InvalidShardSet);
         }
     }
@@ -297,18 +269,18 @@ fn validate_ordered_non_overlapping(shards: &[AccessListShard]) -> Result<(), Er
 }
 
 fn validate_full_domain(shards: &[AccessListShard]) -> Result<(), Error> {
-    if shards.is_empty() || shards[0].start != FULL_START {
+    if shards.is_empty() || shard_start(&shards[0]) != FULL_START {
         return Err(Error::InvalidShardSet);
     }
 
     let mut expected_start = FULL_START;
     for shard in shards {
-        if shard.start != expected_start {
+        if shard_start(shard) != expected_start {
             return Err(Error::InvalidShardSet);
         }
 
-        let Some(next_start) = increment_byte32(&shard.end) else {
-            return if shard.end == FULL_END {
+        let Some(next_start) = increment_byte32(&shard_end(shard)) else {
+            return if shard_end(shard) == FULL_END {
                 Ok(())
             } else {
                 Err(Error::InvalidShardSet)
@@ -318,45 +290,6 @@ fn validate_full_domain(shards: &[AccessListShard]) -> Result<(), Error> {
     }
 
     Err(Error::InvalidShardSet)
-}
-
-fn parse_byte32_vec(data: &[u8]) -> Result<Vec<[u8; 32]>, Error> {
-    if data.len() < 4 {
-        return Err(Error::InvalidShardData);
-    }
-
-    let count = read_u32(data, 0)? as usize;
-    if count > MAX_ACCESSLIST_ENTRIES || data.len() != 4 + count * 32 {
-        return Err(Error::InvalidShardData);
-    }
-
-    let mut entries = Vec::with_capacity(count);
-    let mut previous = None;
-    for index in 0..count {
-        let start = 4 + index * 32;
-        let entry = byte32_field(data, start, start + 32)?;
-        if let Some(previous_entry) = previous
-            && entry <= previous_entry
-        {
-            return Err(Error::InvalidShardData);
-        }
-        previous = Some(entry);
-        entries.push(entry);
-    }
-
-    Ok(entries)
-}
-
-fn is_nibble_aligned_range(start: &[u8; 32], end: &[u8; 32]) -> bool {
-    is_nibble_aligned_start(start) && is_nibble_aligned_end(end)
-}
-
-fn is_nibble_aligned_start(start: &[u8; 32]) -> bool {
-    start[0] & 0x0f == 0x00 && start[1..].iter().all(|byte| *byte == 0x00)
-}
-
-fn is_nibble_aligned_end(end: &[u8; 32]) -> bool {
-    end[0] & 0x0f == 0x0f && end[1..].iter().all(|byte| *byte == 0xff)
 }
 
 fn increment_byte32(value: &[u8; 32]) -> Option<[u8; 32]> {
@@ -372,52 +305,10 @@ fn increment_byte32(value: &[u8; 32]) -> Option<[u8; 32]> {
     None
 }
 
-fn table_offsets(data: &[u8], fields: usize) -> Result<Vec<usize>, Error> {
-    if data.len() < 4 + fields * 4 {
-        return Err(Error::InvalidShardData);
-    }
-
-    let total_size = read_u32(data, 0)? as usize;
-    if total_size != data.len() {
-        return Err(Error::InvalidShardData);
-    }
-
-    let first_offset = read_u32(data, 4)? as usize;
-    if first_offset != 4 + fields * 4 {
-        return Err(Error::InvalidShardData);
-    }
-
-    let mut offsets = Vec::with_capacity(fields + 1);
-    for index in 0..fields {
-        offsets.push(read_u32(data, 4 + index * 4)? as usize);
-    }
-    offsets.push(total_size);
-
-    for index in 1..offsets.len() {
-        if offsets[index] < offsets[index - 1] || offsets[index] > total_size {
-            return Err(Error::InvalidShardData);
-        }
-    }
-
-    Ok(offsets)
+fn shard_start(shard: &AccessListShard) -> [u8; 32] {
+    shard.range.start
 }
 
-fn byte32_field(data: &[u8], start: usize, end: usize) -> Result<[u8; 32], Error> {
-    if end != start + 32 || end > data.len() {
-        return Err(Error::InvalidShardData);
-    }
-
-    let mut raw = [0u8; 32];
-    raw.copy_from_slice(&data[start..end]);
-    Ok(raw)
-}
-
-fn read_u32(data: &[u8], start: usize) -> Result<u32, Error> {
-    if start + 4 > data.len() {
-        return Err(Error::InvalidShardData);
-    }
-
-    let mut raw = [0u8; 4];
-    raw.copy_from_slice(&data[start..start + 4]);
-    Ok(u32::from_le_bytes(raw))
+fn shard_end(shard: &AccessListShard) -> [u8; 32] {
+    shard.range.end
 }
