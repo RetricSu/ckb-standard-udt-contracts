@@ -4,14 +4,17 @@ use crate::{
         expect_tx_fail_with_code, expect_tx_pass, typed_output,
     },
     metadata_builders::{
-        build_access_list_shard_bytes, build_xudt_meta_bytes, dynamic_linking_authority,
-        input_lock_authority, script_hash, spawn_authority, udt_amount_bytes, DeployedScript,
+        dynamic_linking_authority, input_lock_authority, script_hash, spawn_authority,
+        udt_amount_bytes, DeployedScript,
+    },
+    test_helpers::{
+        access_list_script, always_success_lock, calculate_type_id, custom_shard,
+        deploy_data2_script, deploy_data_script, exact_shard, full_domain_shard,
+        non_whitelisted_lock, xudt_meta_data, xudt_meta_script as meta_script, xudt_script,
     },
     Loader,
 };
 use ckb_testtool::{
-    builtin::ALWAYS_SUCCESS,
-    ckb_hash::new_blake2b,
     ckb_types::{
         bytes::Bytes,
         core::{ScriptHashType, TransactionBuilder, TransactionView},
@@ -21,110 +24,8 @@ use ckb_testtool::{
     context::Context,
 };
 use standard_udt_types::metadata::{
-    Authority, Extension, CONFIG_ACCESS_ENABLED, CONFIG_ACCESS_WHITELIST, CONFIG_PAUSED,
-    CONFIG_SUPPLY_TRACKED,
+    Authority, CONFIG_ACCESS_ENABLED, CONFIG_ACCESS_WHITELIST, CONFIG_PAUSED, CONFIG_SUPPLY_TRACKED,
 };
-
-fn deploy_data2_script(context: &mut Context, binary_name: &str, args: Bytes) -> DeployedScript {
-    let out_point = context.deploy_cell(Loader::default().load_binary(binary_name));
-    let script = context
-        .build_script_with_hash_type(&out_point, ScriptHashType::Data2, args)
-        .expect("build deployed Data2 script");
-    let script_hash = script_hash(&script);
-    DeployedScript {
-        out_point,
-        script,
-        script_hash,
-    }
-}
-
-fn deploy_data_script(context: &mut Context, binary_name: &str, args: Bytes) -> DeployedScript {
-    let out_point = context.deploy_cell(Loader::default().load_binary(binary_name));
-    let script = context
-        .build_script_with_hash_type(&out_point, ScriptHashType::Data, args)
-        .expect("build deployed Data script");
-    let script_hash = script_hash(&script);
-    DeployedScript {
-        out_point,
-        script,
-        script_hash,
-    }
-}
-
-fn always_success_lock(context: &mut Context, args: Bytes) -> DeployedScript {
-    let out_point = context.deploy_cell(ALWAYS_SUCCESS.clone());
-    let script = context
-        .build_script_with_hash_type(&out_point, ScriptHashType::Data2, args)
-        .expect("build always-success lock");
-    let script_hash = script_hash(&script);
-    DeployedScript {
-        out_point,
-        script,
-        script_hash,
-    }
-}
-
-fn non_whitelisted_lock(context: &mut Context) -> DeployedScript {
-    let out_point = context.deploy_cell(Bytes::from(vec![1u8]));
-    let script = context
-        .build_script_with_hash_type(&out_point, ScriptHashType::Data2, Bytes::new())
-        .expect("build non-whitelisted lock");
-    let script_hash = script_hash(&script);
-    DeployedScript {
-        out_point,
-        script,
-        script_hash,
-    }
-}
-
-fn meta_script(context: &mut Context) -> DeployedScript {
-    deploy_data2_script(context, "xudt-meta", Bytes::from(vec![2u8; 32]))
-}
-
-fn xudt_script(context: &mut Context, meta_type_hash: [u8; 32]) -> DeployedScript {
-    deploy_data2_script(context, "xudt", Bytes::from(meta_type_hash.to_vec()))
-}
-
-fn access_list_script(context: &mut Context, meta_type_hash: [u8; 32]) -> DeployedScript {
-    deploy_data2_script(context, "access-list", Bytes::from(meta_type_hash.to_vec()))
-}
-
-fn xudt_meta_data(
-    config_flags: u8,
-    current_supply: u128,
-    mint_authority: Option<Authority>,
-    extensions: Vec<Extension>,
-) -> Bytes {
-    build_xudt_meta_bytes(
-        config_flags,
-        current_supply,
-        mint_authority,
-        None,
-        None,
-        extensions,
-    )
-}
-
-fn full_domain_shard(entries: Vec<[u8; 32]>) -> Bytes {
-    build_access_list_shard_bytes([0u8; 32], [0xffu8; 32], entries)
-}
-
-fn custom_shard(start: [u8; 32], end: [u8; 32], entries: Vec<[u8; 32]>) -> Bytes {
-    build_access_list_shard_bytes(start, end, entries)
-}
-
-fn exact_shard(lock_hash: [u8; 32], entries: Vec<[u8; 32]>) -> Bytes {
-    custom_shard(lock_hash, lock_hash, entries)
-}
-
-fn calculate_type_id(input: &CellInput, output_index: u64) -> [u8; 32] {
-    let mut type_id = [0u8; 32];
-    let mut hasher = new_blake2b();
-    hasher.update(input.as_slice());
-    hasher.update(&output_index.to_le_bytes());
-    hasher.finalize(&mut type_id);
-    type_id
-}
 
 struct XudtFixture {
     context: Context,

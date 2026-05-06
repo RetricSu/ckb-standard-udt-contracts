@@ -7,11 +7,14 @@ use crate::{
         build_sudt_meta_bytes, dynamic_linking_authority as deployed_dynamic_linking_authority,
         input_lock_authority, script_hash, spawn_authority, udt_amount_bytes, DeployedScript,
     },
+    test_helpers::{
+        always_success_lock_empty as always_success_lock, calculate_type_id, deploy_data2_script,
+        deploy_data_script, fake_data2_script, non_whitelisted_lock,
+        sudt_meta_script as meta_script, sudt_script as udt_script,
+    },
     Loader,
 };
 use ckb_testtool::{
-    builtin::ALWAYS_SUCCESS,
-    ckb_hash::new_blake2b,
     ckb_types::{
         bytes::Bytes,
         core::{ScriptHashType, TransactionBuilder, TransactionView},
@@ -21,83 +24,6 @@ use ckb_testtool::{
     context::Context,
 };
 use standard_udt_types::metadata::{Authority, SudtMeta, CONFIG_SUPPLY_TRACKED};
-
-fn deploy_data2_script(context: &mut Context, binary_name: &str, args: Bytes) -> DeployedScript {
-    let out_point = context.deploy_cell(Loader::default().load_binary(binary_name));
-    let script = context
-        .build_script_with_hash_type(&out_point, ScriptHashType::Data2, args)
-        .expect("build deployed Data2 script");
-    let script_hash = script_hash(&script);
-    DeployedScript {
-        out_point,
-        script,
-        script_hash,
-    }
-}
-
-fn deploy_data_script(context: &mut Context, binary_name: &str, args: Bytes) -> DeployedScript {
-    let out_point = context.deploy_cell(Loader::default().load_binary(binary_name));
-    let script = context
-        .build_script_with_hash_type(&out_point, ScriptHashType::Data, args)
-        .expect("build deployed Data script");
-    let script_hash = script_hash(&script);
-    DeployedScript {
-        out_point,
-        script,
-        script_hash,
-    }
-}
-
-fn meta_script(context: &mut Context, args: Bytes) -> DeployedScript {
-    deploy_data2_script(context, "sudt-meta", args)
-}
-
-fn udt_script(context: &mut Context, meta_type_hash: [u8; 32]) -> DeployedScript {
-    deploy_data2_script(context, "sudt", Bytes::from(meta_type_hash.to_vec()))
-}
-
-fn always_success_lock(context: &mut Context) -> DeployedScript {
-    let out_point = context.deploy_cell(ALWAYS_SUCCESS.clone());
-    let script = context
-        .build_script_with_hash_type(&out_point, ScriptHashType::Data2, Bytes::new())
-        .expect("build always-success lock");
-    let script_hash = script_hash(&script);
-    DeployedScript {
-        out_point,
-        script,
-        script_hash,
-    }
-}
-
-fn non_whitelisted_lock(context: &mut Context) -> DeployedScript {
-    let out_point = context.deploy_cell(Bytes::from(vec![1u8]));
-    let script = context
-        .build_script_with_hash_type(&out_point, ScriptHashType::Data2, Bytes::new())
-        .expect("build non-whitelisted lock");
-    let script_hash = script_hash(&script);
-    DeployedScript {
-        out_point,
-        script,
-        script_hash,
-    }
-}
-
-fn fake_data2_script(context: &mut Context, meta_type_hash: [u8; 32]) -> DeployedScript {
-    let out_point = context.deploy_cell(ALWAYS_SUCCESS.clone());
-    let script = context
-        .build_script_with_hash_type(
-            &out_point,
-            ScriptHashType::Data2,
-            Bytes::from(meta_type_hash.to_vec()),
-        )
-        .expect("build fake Data2 script");
-    let script_hash = script_hash(&script);
-    DeployedScript {
-        out_point,
-        script,
-        script_hash,
-    }
-}
 
 fn tracked_meta_data(current_supply: u128) -> Bytes {
     build_sudt_meta_bytes(CONFIG_SUPPLY_TRACKED, current_supply, None, None)
@@ -133,15 +59,6 @@ fn untracked_nonzero_meta_data(current_supply: u128) -> Bytes {
     let config_offset = u32::from_le_bytes(data[4..8].try_into().expect("config offset")) as usize;
     data[config_offset] = 0;
     Bytes::from(data)
-}
-
-fn calculate_type_id(input: &CellInput, output_index: u64) -> [u8; 32] {
-    let mut type_id = [0u8; 32];
-    let mut hasher = new_blake2b();
-    hasher.update(input.as_slice());
-    hasher.update(&output_index.to_le_bytes());
-    hasher.finalize(&mut type_id);
-    type_id
 }
 
 fn create_meta_tx(

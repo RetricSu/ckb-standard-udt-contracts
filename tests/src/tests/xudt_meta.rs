@@ -4,106 +4,26 @@ use crate::{
         expect_tx_pass, typed_output,
     },
     metadata_builders::{
-        build_access_list_shard_bytes, build_xudt_meta_bytes, dynamic_linking_authority,
-        input_lock_authority, script_hash, spawn_authority, udt_amount_bytes, DeployedScript,
+        build_access_list_shard_bytes, dynamic_linking_authority, input_lock_authority,
+        spawn_authority, udt_amount_bytes, DeployedScript,
     },
-    Loader,
+    test_helpers::{
+        access_list_script, always_success_lock_empty as always_success_lock, custom_shard,
+        deploy_data2_script, deploy_data_script, empty_full_domain_shard as full_domain_shard,
+        non_whitelisted_lock, xudt_meta_data_with_authorities as xudt_meta_data,
+        xudt_meta_script as meta_script, xudt_script,
+    },
 };
 use ckb_testtool::{
-    builtin::ALWAYS_SUCCESS,
     ckb_types::{
         bytes::Bytes,
-        core::{ScriptHashType, TransactionBuilder, TransactionView},
+        core::{TransactionBuilder, TransactionView},
         packed::{CellInput, Script},
         prelude::*,
     },
     context::Context,
 };
-use standard_udt_types::metadata::{
-    Authority, Extension, CONFIG_ACCESS_ENABLED, CONFIG_ACCESS_WHITELIST, CONFIG_PAUSED,
-};
-
-fn deploy_data2_script(context: &mut Context, binary_name: &str, args: Bytes) -> DeployedScript {
-    let out_point = context.deploy_cell(Loader::default().load_binary(binary_name));
-    let script = context
-        .build_script_with_hash_type(&out_point, ScriptHashType::Data2, args)
-        .expect("build deployed Data2 script");
-    let script_hash = script_hash(&script);
-    DeployedScript {
-        out_point,
-        script,
-        script_hash,
-    }
-}
-
-fn deploy_data_script(context: &mut Context, binary_name: &str, args: Bytes) -> DeployedScript {
-    let out_point = context.deploy_cell(Loader::default().load_binary(binary_name));
-    let script = context
-        .build_script_with_hash_type(&out_point, ScriptHashType::Data, args)
-        .expect("build deployed Data script");
-    let script_hash = script_hash(&script);
-    DeployedScript {
-        out_point,
-        script,
-        script_hash,
-    }
-}
-
-fn always_success_lock(context: &mut Context) -> DeployedScript {
-    let out_point = context.deploy_cell(ALWAYS_SUCCESS.clone());
-    let script = context
-        .build_script_with_hash_type(&out_point, ScriptHashType::Data2, Bytes::new())
-        .expect("build always-success lock");
-    let script_hash = script_hash(&script);
-    DeployedScript {
-        out_point,
-        script,
-        script_hash,
-    }
-}
-
-fn non_whitelisted_lock(context: &mut Context) -> DeployedScript {
-    let out_point = context.deploy_cell(Bytes::from(vec![1u8]));
-    let script = context
-        .build_script_with_hash_type(&out_point, ScriptHashType::Data2, Bytes::new())
-        .expect("build non-whitelisted lock");
-    let script_hash = script_hash(&script);
-    DeployedScript {
-        out_point,
-        script,
-        script_hash,
-    }
-}
-
-fn meta_script(context: &mut Context) -> DeployedScript {
-    deploy_data2_script(context, "xudt-meta", Bytes::from(vec![2u8; 32]))
-}
-
-fn xudt_script(context: &mut Context, meta_type_hash: [u8; 32]) -> DeployedScript {
-    deploy_data2_script(context, "xudt", Bytes::from(meta_type_hash.to_vec()))
-}
-
-fn access_list_script(context: &mut Context, meta_type_hash: [u8; 32]) -> DeployedScript {
-    deploy_data2_script(context, "access-list", Bytes::from(meta_type_hash.to_vec()))
-}
-
-fn xudt_meta_data(
-    config_flags: u8,
-    current_supply: u128,
-    mint_authority: Option<Authority>,
-    metadata_authority: Option<Authority>,
-    access_authority: Option<Authority>,
-    extensions: Vec<Extension>,
-) -> Bytes {
-    build_xudt_meta_bytes(
-        config_flags,
-        current_supply,
-        mint_authority,
-        metadata_authority,
-        access_authority,
-        extensions,
-    )
-}
+use standard_udt_types::metadata::{CONFIG_ACCESS_ENABLED, CONFIG_ACCESS_WHITELIST, CONFIG_PAUSED};
 
 fn with_config_flags(data: Bytes, config_flags: u8) -> Bytes {
     let mut data = data.to_vec();
@@ -159,12 +79,8 @@ fn read_u32(data: &[u8], start: usize) -> u32 {
     u32::from_le_bytes(data[start..start + 4].try_into().expect("u32 field"))
 }
 
-fn full_domain_shard() -> Bytes {
-    build_access_list_shard_bytes([0u8; 32], [0xffu8; 32], Vec::new())
-}
-
 fn half_domain_shard() -> Bytes {
-    build_access_list_shard_bytes([0u8; 32], [0x7fu8; 32], Vec::new())
+    custom_shard([0u8; 32], [0x7fu8; 32], Vec::new())
 }
 
 fn access_list_shard_with_extra_field() -> Bytes {

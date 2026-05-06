@@ -3,74 +3,24 @@ use crate::{
         cell_dep_for_script, create_funding_input, create_typed_cell, deploy_script_with_args,
         expect_tx_fail, expect_tx_pass, typed_output,
     },
-    metadata_builders::{
-        build_xudt_meta_bytes, input_lock_authority, script_hash, udt_amount_bytes, DeployedScript,
+    metadata_builders::{input_lock_authority, udt_amount_bytes, DeployedScript},
+    test_helpers::{
+        always_success_lock_empty as always_success_lock,
+        deploy_data_script as dynamic_library_script, xudt_meta_data,
+        xudt_meta_script as meta_script, xudt_script,
     },
-    Loader,
 };
 use ckb_testtool::{
-    builtin::ALWAYS_SUCCESS,
     ckb_types::{
         bytes::Bytes,
-        core::{ScriptHashType, TransactionBuilder, TransactionView},
+        core::{TransactionBuilder, TransactionView},
         packed::CellInput,
         prelude::*,
     },
     context::Context,
 };
 use ckb_types_120::{packed::Script as MetadataScript, prelude::Entity};
-use standard_udt_types::metadata::{Authority, Extension, ExtensionType, CONFIG_SUPPLY_TRACKED};
-
-fn deploy_data2_script(context: &mut Context, binary_name: &str, args: Bytes) -> DeployedScript {
-    let out_point = context.deploy_cell(Loader::default().load_binary(binary_name));
-    let script = context
-        .build_script_with_hash_type(&out_point, ScriptHashType::Data2, args)
-        .expect("build deployed Data2 script");
-    let script_hash = script_hash(&script);
-    DeployedScript {
-        out_point,
-        script,
-        script_hash,
-    }
-}
-
-fn always_success_lock(context: &mut Context) -> DeployedScript {
-    let out_point = context.deploy_cell(ALWAYS_SUCCESS.clone());
-    let script = context
-        .build_script_with_hash_type(&out_point, ScriptHashType::Data2, Bytes::new())
-        .expect("build always-success lock");
-    let script_hash = script_hash(&script);
-    DeployedScript {
-        out_point,
-        script,
-        script_hash,
-    }
-}
-
-fn meta_script(context: &mut Context) -> DeployedScript {
-    deploy_data2_script(context, "xudt-meta", Bytes::from(vec![2u8; 32]))
-}
-
-fn xudt_script(context: &mut Context, meta_type_hash: [u8; 32]) -> DeployedScript {
-    deploy_data2_script(context, "xudt", Bytes::from(meta_type_hash.to_vec()))
-}
-
-fn dynamic_library_script(context: &mut Context, binary_name: &str, args: Bytes) -> DeployedScript {
-    deploy_data_script(context, binary_name, args)
-}
-
-fn deploy_data_script(context: &mut Context, binary_name: &str, args: Bytes) -> DeployedScript {
-    let out_point = context.deploy_cell(Loader::default().load_binary(binary_name));
-    let script = context
-        .build_script_with_hash_type(&out_point, ScriptHashType::Data, args)
-        .expect("build deployed Data script");
-    let script_hash = script_hash(&script);
-    DeployedScript {
-        out_point,
-        script,
-        script_hash,
-    }
-}
+use standard_udt_types::metadata::{Extension, ExtensionType, CONFIG_SUPPLY_TRACKED};
 
 fn extension_attr(extension_type: ExtensionType, deployed: &DeployedScript) -> Extension {
     let script = MetadataScript::from_slice(deployed.script.as_slice()).expect("convert script");
@@ -78,22 +28,6 @@ fn extension_attr(extension_type: ExtensionType, deployed: &DeployedScript) -> E
         extension_type,
         script,
     }
-}
-
-fn xudt_meta_data(
-    config_flags: u8,
-    current_supply: u128,
-    mint_authority: Option<Authority>,
-    extensions: Vec<Extension>,
-) -> Bytes {
-    build_xudt_meta_bytes(
-        config_flags,
-        current_supply,
-        mint_authority,
-        None,
-        None,
-        extensions,
-    )
 }
 
 struct PluginFixture {

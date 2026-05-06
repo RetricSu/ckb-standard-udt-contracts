@@ -13,6 +13,7 @@ use std::str::FromStr;
 
 pub mod fixtures;
 pub mod metadata_builders;
+pub mod test_helpers;
 
 #[cfg(test)]
 mod tests {

@@ -4,82 +4,24 @@ use crate::{
         expect_tx_pass, typed_output,
     },
     metadata_builders::{
-        build_sudt_meta_bytes, dynamic_linking_authority, input_lock_authority, script_hash,
-        spawn_authority, udt_amount_bytes, DeployedScript,
+        build_sudt_meta_bytes, dynamic_linking_authority, input_lock_authority, spawn_authority,
+        udt_amount_bytes, DeployedScript,
     },
-    Loader,
+    test_helpers::{
+        always_success_lock_empty as always_success_lock, deploy_data2_script, deploy_data_script,
+        non_whitelisted_lock, sudt_meta_script as meta_script, sudt_script as udt_script,
+    },
 };
 use ckb_testtool::{
-    builtin::ALWAYS_SUCCESS,
     ckb_types::{
         bytes::Bytes,
-        core::{ScriptHashType, TransactionBuilder, TransactionView},
+        core::{TransactionBuilder, TransactionView},
         packed::CellInput,
         prelude::*,
     },
     context::Context,
 };
 use standard_udt_types::metadata::{Authority, CONFIG_SUPPLY_TRACKED};
-
-fn deploy_data2_script(context: &mut Context, binary_name: &str, args: Bytes) -> DeployedScript {
-    let out_point = context.deploy_cell(Loader::default().load_binary(binary_name));
-    let script = context
-        .build_script_with_hash_type(&out_point, ScriptHashType::Data2, args)
-        .expect("build deployed Data2 script");
-    let script_hash = script_hash(&script);
-    DeployedScript {
-        out_point,
-        script,
-        script_hash,
-    }
-}
-
-fn deploy_data_script(context: &mut Context, binary_name: &str, args: Bytes) -> DeployedScript {
-    let out_point = context.deploy_cell(Loader::default().load_binary(binary_name));
-    let script = context
-        .build_script_with_hash_type(&out_point, ScriptHashType::Data, args)
-        .expect("build deployed Data script");
-    let script_hash = script_hash(&script);
-    DeployedScript {
-        out_point,
-        script,
-        script_hash,
-    }
-}
-
-fn meta_script(context: &mut Context, args: Bytes) -> DeployedScript {
-    deploy_data2_script(context, "sudt-meta", args)
-}
-
-fn udt_script(context: &mut Context, meta_type_hash: [u8; 32]) -> DeployedScript {
-    deploy_data2_script(context, "sudt", Bytes::from(meta_type_hash.to_vec()))
-}
-
-fn always_success_lock(context: &mut Context) -> DeployedScript {
-    let out_point = context.deploy_cell(ALWAYS_SUCCESS.clone());
-    let script = context
-        .build_script_with_hash_type(&out_point, ScriptHashType::Data2, Bytes::new())
-        .expect("build always-success lock");
-    let script_hash = script_hash(&script);
-    DeployedScript {
-        out_point,
-        script,
-        script_hash,
-    }
-}
-
-fn non_whitelisted_lock(context: &mut Context) -> DeployedScript {
-    let out_point = context.deploy_cell(Bytes::from(vec![1u8]));
-    let script = context
-        .build_script_with_hash_type(&out_point, ScriptHashType::Data2, Bytes::new())
-        .expect("build non-whitelisted lock");
-    let script_hash = script_hash(&script);
-    DeployedScript {
-        out_point,
-        script,
-        script_hash,
-    }
-}
 
 fn tracked_meta_data(current_supply: u128, lock_hash: Option<[u8; 32]>) -> Bytes {
     tracked_meta_data_with_authority(current_supply, lock_hash.map(input_lock_authority))
