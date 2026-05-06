@@ -9,14 +9,14 @@ const CONFIG_SUPPLY_TRACKED: u8 = 0b0000_0001;
 const SUDT_ALLOWED_CONFIG_MASK: u8 = CONFIG_SUPPLY_TRACKED;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct SudtMeta {
+pub struct SudtMeta {
     pub config_flags: u8,
     pub current_supply: u128,
     pub mint_authority: Option<ScriptAttr>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct ScriptAttr {
+pub struct ScriptAttr {
     pub location: u8,
     pub script_hash: [u8; 32],
 }
