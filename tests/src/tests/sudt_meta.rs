@@ -129,6 +129,51 @@ fn create_meta_tx(
     (context, tx)
 }
 
+fn create_meta_tx_with_udt_output_data(
+    current_supply: u128,
+    udt_outputs_data: Vec<Bytes>,
+) -> (Context, TransactionView) {
+    let mut context = Context::default();
+    let lock = always_success_lock(&mut context);
+    let meta_out_point = context.deploy_cell(Loader::default().load_binary("sudt-meta"));
+    let input = create_funding_input(&mut context, &lock.script, 1_000_000_000_000);
+    let type_id = calculate_type_id(&input, 0);
+    let meta = {
+        let script = context
+            .build_script_with_hash_type(
+                &meta_out_point,
+                ScriptHashType::Data2,
+                Bytes::from(type_id.to_vec()),
+            )
+            .expect("build deployed Data2 meta script");
+        let script_hash = script_hash(&script);
+        DeployedScript {
+            out_point: meta_out_point,
+            script,
+            script_hash,
+        }
+    };
+    let udt = udt_script(&mut context, meta.script_hash);
+
+    let mut outputs = vec![typed_output(&lock.script, &meta.script, 100_000_000_000)];
+    let mut outputs_data = vec![tracked_meta_data(current_supply)];
+    for data in udt_outputs_data {
+        outputs.push(typed_output(&lock.script, &udt.script, 100_000_000_000));
+        outputs_data.push(data);
+    }
+
+    let tx = TransactionBuilder::default()
+        .input(input)
+        .outputs(outputs)
+        .outputs_data(outputs_data.pack())
+        .cell_dep(cell_dep_for_script(&lock))
+        .cell_dep(cell_dep_for_script(&meta))
+        .cell_dep(cell_dep_for_script(&udt))
+        .build();
+    let tx = context.complete_tx(tx);
+    (context, tx)
+}
+
 fn update_meta_tx(input_meta_data: Bytes, output_meta_data: Bytes) -> (Context, TransactionView) {
     update_meta_tx_with_data(|_, _| (input_meta_data, output_meta_data))
 }
@@ -343,6 +388,23 @@ fn sudt_meta_create_tracked_supply_mismatch_rejects() {
 #[test]
 fn sudt_meta_create_ignores_fake_data2_udt_outputs() {
     let (context, tx) = create_meta_tx(100, None, Some(100), true);
+
+    expect_tx_fail_with_code(&context, &tx, "error code 31");
+}
+
+#[test]
+fn sudt_meta_create_rejects_short_same_token_udt_data() {
+    let (context, tx) = create_meta_tx_with_udt_output_data(0, vec![Bytes::from(vec![0u8; 15])]);
+
+    expect_tx_fail(&context, &tx);
+}
+
+#[test]
+fn sudt_meta_create_rejects_same_token_udt_sum_overflow() {
+    let (context, tx) = create_meta_tx_with_udt_output_data(
+        0,
+        vec![udt_amount_bytes(u128::MAX), udt_amount_bytes(1)],
+    );
 
     expect_tx_fail_with_code(&context, &tx, "error code 31");
 }

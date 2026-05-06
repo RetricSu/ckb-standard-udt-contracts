@@ -1,23 +1,25 @@
 use crate::{
     fixtures::{
-        cell_dep, cell_dep_for_script, create_typed_cell, expect_tx_fail, expect_tx_fail_with_code,
-        expect_tx_pass, typed_output,
+        cell_dep, cell_dep_for_script, create_funding_input, create_typed_cell, expect_tx_fail,
+        expect_tx_fail_with_code, expect_tx_pass, typed_output,
     },
     metadata_builders::{
         build_access_list_shard_bytes, dynamic_linking_authority, input_lock_authority,
-        spawn_authority, udt_amount_bytes, DeployedScript,
+        script_hash, spawn_authority, udt_amount_bytes, DeployedScript,
     },
     test_helpers::{
-        access_list_script, always_success_lock_empty as always_success_lock, custom_shard,
-        deploy_data2_script, deploy_data_script, empty_full_domain_shard as full_domain_shard,
-        fake_data2_script, non_whitelisted_lock, xudt_meta_data_with_authorities as xudt_meta_data,
-        xudt_meta_script as meta_script, xudt_script,
+        access_list_script, always_success_lock_empty as always_success_lock, calculate_type_id,
+        custom_shard, deploy_data2_script, deploy_data_script,
+        empty_full_domain_shard as full_domain_shard, fake_data2_script, non_whitelisted_lock,
+        xudt_meta_data_with_authorities as xudt_meta_data, xudt_meta_script as meta_script,
+        xudt_script,
     },
+    Loader,
 };
 use ckb_testtool::{
     ckb_types::{
         bytes::Bytes,
-        core::{TransactionBuilder, TransactionView},
+        core::{ScriptHashType, TransactionBuilder, TransactionView},
         packed::{CellInput, Script},
         prelude::*,
     },
@@ -106,6 +108,58 @@ fn access_list_shard_with_extra_field() -> Bytes {
 struct UpdateCase {
     context: Context,
     tx: TransactionView,
+}
+
+fn create_meta_tx_with_udt_output_data(
+    current_supply: u128,
+    udt_outputs_data: Vec<Bytes>,
+) -> UpdateCase {
+    let mut context = Context::default();
+    let lock = always_success_lock(&mut context);
+    let meta_out_point = context.deploy_cell(Loader::default().load_binary("xudt-meta"));
+    let input = create_funding_input(&mut context, &lock.script, 1_000_000_000_000);
+    let type_id = calculate_type_id(&input, 0);
+    let meta = {
+        let script = context
+            .build_script_with_hash_type(
+                &meta_out_point,
+                ScriptHashType::Data2,
+                Bytes::from(type_id.to_vec()),
+            )
+            .expect("build deployed Data2 meta script");
+        let script_hash = script_hash(&script);
+        DeployedScript {
+            out_point: meta_out_point,
+            script,
+            script_hash,
+        }
+    };
+    let xudt = xudt_script(&mut context, meta.script_hash);
+
+    let mut outputs = vec![typed_output(&lock.script, &meta.script, 100_000_000_000)];
+    let mut outputs_data = vec![xudt_meta_data(
+        CONFIG_SUPPLY_TRACKED,
+        current_supply,
+        Some(input_lock_authority(lock.script_hash)),
+        None,
+        None,
+        Vec::new(),
+    )];
+    for data in udt_outputs_data {
+        outputs.push(typed_output(&lock.script, &xudt.script, 100_000_000_000));
+        outputs_data.push(data);
+    }
+
+    let tx = TransactionBuilder::default()
+        .input(input)
+        .outputs(outputs)
+        .outputs_data(outputs_data.pack())
+        .cell_dep(cell_dep_for_script(&lock))
+        .cell_dep(cell_dep_for_script(&meta))
+        .cell_dep(cell_dep_for_script(&xudt))
+        .build();
+    let tx = context.complete_tx(tx);
+    UpdateCase { context, tx }
 }
 
 fn update_meta_tx<F>(build: F) -> UpdateCase
@@ -790,6 +844,23 @@ fn xudt_meta_mint_authority_can_update_access_state() {
     });
 
     expect_tx_pass(&case.context, &case.tx);
+}
+
+#[test]
+fn xudt_meta_create_rejects_short_same_token_udt_data() {
+    let case = create_meta_tx_with_udt_output_data(0, vec![Bytes::from(vec![0u8; 15])]);
+
+    expect_tx_fail(&case.context, &case.tx);
+}
+
+#[test]
+fn xudt_meta_create_rejects_same_token_udt_sum_overflow() {
+    let case = create_meta_tx_with_udt_output_data(
+        0,
+        vec![udt_amount_bytes(u128::MAX), udt_amount_bytes(1)],
+    );
+
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 31");
 }
 
 #[test]
