@@ -2,7 +2,6 @@ use ckb_std::error::SysError;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Error {
-    SyscallUnknown,
     SysIndexOutOfBound,
     SysItemMissing,
     SysLengthNotEnough,
@@ -13,6 +12,7 @@ pub enum Error {
     SysMaxVmsSpawned,
     SysMaxFdsCreated,
     SysTypeIdError,
+    SyscallUnknown,
     InvalidArgs,
     InvalidTypeId,
     InvalidMetaData,
@@ -27,16 +27,6 @@ pub enum Error {
 impl Error {
     pub const fn code(self) -> i8 {
         match self {
-            Self::InvalidArgs => 1,
-            Self::InvalidTypeId => 2,
-            Self::InvalidMetaData => 3,
-            Self::InvalidSupply => 4,
-            Self::ImmutableSupplyMode => 5,
-            Self::AuthorityMissing => 6,
-            Self::AuthorityFailed => 7,
-            Self::SyscallUnknown => 8,
-            Self::AccessListRequired => 9,
-            Self::AccessModeTokenCells => 10,
             Self::SysIndexOutOfBound => 11,
             Self::SysItemMissing => 12,
             Self::SysLengthNotEnough => 13,
@@ -47,6 +37,16 @@ impl Error {
             Self::SysMaxVmsSpawned => 18,
             Self::SysMaxFdsCreated => 19,
             Self::SysTypeIdError => 20,
+            Self::SyscallUnknown => 8,
+            Self::InvalidArgs => 1,
+            Self::InvalidTypeId => 2,
+            Self::InvalidMetaData => 3,
+            Self::InvalidSupply => 4,
+            Self::ImmutableSupplyMode => 5,
+            Self::AuthorityMissing => 6,
+            Self::AuthorityFailed => 7,
+            Self::AccessListRequired => 9,
+            Self::AccessModeTokenCells => 10,
         }
     }
 }

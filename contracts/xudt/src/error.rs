@@ -2,7 +2,6 @@ use ckb_std::error::SysError;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Error {
-    SyscallUnknown,
     SysIndexOutOfBound,
     SysItemMissing,
     SysLengthNotEnough,
@@ -12,6 +11,7 @@ pub enum Error {
     SysOtherEndClosed,
     SysMaxVmsSpawned,
     SysMaxFdsCreated,
+    SyscallUnknown,
     InvalidArgs,
     AmountEncoding,
     AmountOverflow,
@@ -35,6 +35,15 @@ pub enum Error {
 impl Error {
     pub const fn code(self) -> i8 {
         match self {
+            Self::SysIndexOutOfBound => 20,
+            Self::SysItemMissing => 21,
+            Self::SysLengthNotEnough => 22,
+            Self::SysEncoding => 23,
+            Self::SysWaitFailure => 24,
+            Self::SysInvalidFd => 25,
+            Self::SysOtherEndClosed => 26,
+            Self::SysMaxVmsSpawned => 27,
+            Self::SysMaxFdsCreated => 28,
             Self::SyscallUnknown => 1,
             Self::InvalidArgs => 2,
             Self::AmountEncoding => 3,
@@ -54,15 +63,6 @@ impl Error {
             Self::InvalidShardData => 17,
             Self::AccessDenied => 18,
             Self::ExtensionFailed => 19,
-            Self::SysIndexOutOfBound => 20,
-            Self::SysItemMissing => 21,
-            Self::SysLengthNotEnough => 22,
-            Self::SysEncoding => 23,
-            Self::SysWaitFailure => 24,
-            Self::SysInvalidFd => 25,
-            Self::SysOtherEndClosed => 26,
-            Self::SysMaxVmsSpawned => 27,
-            Self::SysMaxFdsCreated => 28,
         }
     }
 }

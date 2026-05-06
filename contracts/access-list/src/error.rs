@@ -2,7 +2,6 @@ use ckb_std::error::SysError;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Error {
-    SyscallUnknown,
     SysIndexOutOfBound,
     SysItemMissing,
     SysLengthNotEnough,
@@ -12,6 +11,7 @@ pub enum Error {
     SysOtherEndClosed,
     SysMaxVmsSpawned,
     SysMaxFdsCreated,
+    SyscallUnknown,
     InvalidArgs,
     InvalidMetaData,
     MetaMissing,
@@ -27,6 +27,15 @@ pub enum Error {
 impl Error {
     pub const fn code(self) -> i8 {
         match self {
+            Self::SysIndexOutOfBound => 10,
+            Self::SysItemMissing => 11,
+            Self::SysLengthNotEnough => 12,
+            Self::SysEncoding => 13,
+            Self::SysWaitFailure => 14,
+            Self::SysInvalidFd => 15,
+            Self::SysOtherEndClosed => 16,
+            Self::SysMaxVmsSpawned => 17,
+            Self::SysMaxFdsCreated => 18,
             Self::SyscallUnknown => 1,
             Self::InvalidArgs => 2,
             Self::InvalidMetaData => 3,
@@ -37,15 +46,6 @@ impl Error {
             Self::AuthorityFailed => 8,
             Self::UnsupportedAuthorityLocation => 9,
             Self::InvalidShardData | Self::InvalidShardSet => 3,
-            Self::SysIndexOutOfBound => 10,
-            Self::SysItemMissing => 11,
-            Self::SysLengthNotEnough => 12,
-            Self::SysEncoding => 13,
-            Self::SysWaitFailure => 14,
-            Self::SysInvalidFd => 15,
-            Self::SysOtherEndClosed => 16,
-            Self::SysMaxVmsSpawned => 17,
-            Self::SysMaxFdsCreated => 18,
         }
     }
 }
