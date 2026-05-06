@@ -162,6 +162,63 @@ fn create_meta_tx_with_udt_output_data(
     UpdateCase { context, tx }
 }
 
+fn create_meta_tx_with_access_outputs(
+    config_flags: u8,
+    include_full_access_list: bool,
+) -> UpdateCase {
+    let mut context = Context::default();
+    let lock = always_success_lock(&mut context);
+    let meta_out_point = context.deploy_cell(Loader::default().load_binary("xudt-meta"));
+    let input = create_funding_input(&mut context, &lock.script, 1_000_000_000_000);
+    let type_id = calculate_type_id(&input, 0);
+    let meta = {
+        let script = context
+            .build_script_with_hash_type(
+                &meta_out_point,
+                ScriptHashType::Data2,
+                Bytes::from(type_id.to_vec()),
+            )
+            .expect("build deployed Data2 meta script");
+        let script_hash = script_hash(&script);
+        DeployedScript {
+            out_point: meta_out_point,
+            script,
+            script_hash,
+        }
+    };
+    let authority = input_lock_authority(lock.script_hash);
+    let output_meta_data = xudt_meta_data(
+        config_flags,
+        0,
+        Some(authority.clone()),
+        None,
+        Some(authority),
+        Vec::new(),
+    );
+
+    let mut builder = TransactionBuilder::default()
+        .input(input)
+        .output(typed_output(&lock.script, &meta.script, 100_000_000_000))
+        .output_data(output_meta_data.pack())
+        .cell_dep(cell_dep_for_script(&lock))
+        .cell_dep(cell_dep_for_script(&meta));
+
+    if include_full_access_list {
+        let access_list = access_list_script(&mut context, meta.script_hash);
+        builder = builder
+            .output(typed_output(
+                &lock.script,
+                &access_list.script,
+                100_000_000_000,
+            ))
+            .output_data(full_domain_shard().pack())
+            .cell_dep(cell_dep_for_script(&access_list));
+    }
+
+    let tx = context.complete_tx(builder.build());
+    UpdateCase { context, tx }
+}
+
 fn update_meta_tx<F>(build: F) -> UpdateCase
 where
     F: FnOnce(&mut Context, &DeployedScript, &DeployedScript) -> (Bytes, Bytes, Vec<ExtraCell>),
@@ -224,6 +281,36 @@ where
     }
 
     let tx = context.complete_tx(builder.build());
+    UpdateCase { context, tx }
+}
+
+fn update_meta_tx_with_duplicate_outputs() -> UpdateCase {
+    let mut context = Context::default();
+    let lock = always_success_lock(&mut context);
+    let meta = meta_script(&mut context);
+    let meta_data = xudt_meta_data(0, 0, None, None, None, Vec::new());
+    let input_out_point = create_typed_cell(
+        &mut context,
+        &lock.script,
+        &meta.script,
+        100_000_000_000,
+        meta_data.clone(),
+    );
+
+    let tx = TransactionBuilder::default()
+        .input(
+            CellInput::new_builder()
+                .previous_output(input_out_point)
+                .build(),
+        )
+        .output(typed_output(&lock.script, &meta.script, 100_000_000_000))
+        .output_data(meta_data.clone().pack())
+        .output(typed_output(&lock.script, &meta.script, 100_000_000_000))
+        .output_data(meta_data.pack())
+        .cell_dep(cell_dep_for_script(&lock))
+        .cell_dep(cell_dep_for_script(&meta))
+        .build();
+    let tx = context.complete_tx(tx);
     UpdateCase { context, tx }
 }
 
@@ -507,6 +594,13 @@ fn xudt_meta_rejects_non_whitelisted_output_lock() {
     let case = update_meta_tx_with_output_lock(non_whitelisted_lock);
 
     expect_tx_fail_with_code(&case.context, &case.tx, "error code 20");
+}
+
+#[test]
+fn xudt_meta_update_rejects_duplicate_output_meta_cells() {
+    let case = update_meta_tx_with_duplicate_outputs();
+
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 21");
 }
 
 #[test]
@@ -861,6 +955,36 @@ fn xudt_meta_create_rejects_same_token_udt_sum_overflow() {
     );
 
     expect_tx_fail_with_code(&case.context, &case.tx, "error code 31");
+}
+
+#[test]
+fn xudt_meta_create_blacklist_requires_full_domain_access_list_outputs() {
+    let case = create_meta_tx_with_access_outputs(CONFIG_ACCESS_ENABLED, false);
+
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 60");
+}
+
+#[test]
+fn xudt_meta_create_whitelist_requires_full_domain_access_list_outputs() {
+    let case =
+        create_meta_tx_with_access_outputs(CONFIG_ACCESS_ENABLED | CONFIG_ACCESS_WHITELIST, false);
+
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 60");
+}
+
+#[test]
+fn xudt_meta_create_blacklist_accepts_full_domain_access_list_outputs() {
+    let case = create_meta_tx_with_access_outputs(CONFIG_ACCESS_ENABLED, true);
+
+    expect_tx_pass(&case.context, &case.tx);
+}
+
+#[test]
+fn xudt_meta_create_whitelist_accepts_full_domain_access_list_outputs() {
+    let case =
+        create_meta_tx_with_access_outputs(CONFIG_ACCESS_ENABLED | CONFIG_ACCESS_WHITELIST, true);
+
+    expect_tx_pass(&case.context, &case.tx);
 }
 
 #[test]

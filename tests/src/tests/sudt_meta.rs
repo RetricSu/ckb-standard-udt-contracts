@@ -178,6 +178,35 @@ fn update_meta_tx(input_meta_data: Bytes, output_meta_data: Bytes) -> (Context, 
     update_meta_tx_with_data(|_, _| (input_meta_data, output_meta_data))
 }
 
+fn update_meta_tx_with_duplicate_outputs() -> (Context, TransactionView) {
+    let mut context = Context::default();
+    let lock = always_success_lock(&mut context);
+    let meta = meta_script(&mut context, Bytes::from(vec![2u8; 32]));
+    let meta_data = tracked_meta_data(0);
+    let input_out_point = create_typed_cell(
+        &mut context,
+        &lock.script,
+        &meta.script,
+        100_000_000_000,
+        meta_data.clone(),
+    );
+    let input = CellInput::new_builder()
+        .previous_output(input_out_point)
+        .build();
+
+    let tx = TransactionBuilder::default()
+        .input(input)
+        .output(typed_output(&lock.script, &meta.script, 100_000_000_000))
+        .output_data(meta_data.clone().pack())
+        .output(typed_output(&lock.script, &meta.script, 100_000_000_000))
+        .output_data(meta_data.pack())
+        .cell_dep(cell_dep_for_script(&lock))
+        .cell_dep(cell_dep_for_script(&meta))
+        .build();
+    let tx = context.complete_tx(tx);
+    (context, tx)
+}
+
 fn update_meta_tx_with_data<F>(build_data: F) -> (Context, TransactionView)
 where
     F: FnOnce([u8; 32], Script) -> (Bytes, Bytes),
@@ -413,7 +442,7 @@ fn sudt_meta_create_rejects_same_token_udt_sum_overflow() {
 fn sudt_meta_create_rejects_type_id_mismatch() {
     let (context, tx) = create_meta_tx(100, Some(100), None, false);
 
-    expect_tx_fail_with_code(&context, &tx, "error code 21");
+    expect_tx_fail_with_code(&context, &tx, "error code 10");
 }
 
 #[test]
@@ -475,6 +504,13 @@ fn sudt_meta_update_metadata_change_requires_metadata_authority() {
     );
 
     expect_tx_fail_with_code(&context, &tx, "error code 50");
+}
+
+#[test]
+fn sudt_meta_update_rejects_duplicate_output_meta_cells() {
+    let (context, tx) = update_meta_tx_with_duplicate_outputs();
+
+    expect_tx_fail_with_code(&context, &tx, "error code 21");
 }
 
 #[test]
@@ -616,7 +652,7 @@ fn sudt_meta_accepts_supply_decrease_matching_udt_delta() {
 
 #[test]
 fn sudt_meta_rejects_supply_delta_mismatch() {
-    let (context, tx) = update_meta_tx_with_udt_delta(100, 125, None, Some(24));
+    let (context, tx) = update_meta_tx_with_udt_delta(100, 125, Some(24), Some(24));
 
     expect_tx_fail_with_code(&context, &tx, "error code 31");
 }

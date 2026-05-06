@@ -3,7 +3,9 @@ pub(crate) use standard_udt_script_utils::token::is_token_script;
 use standard_udt_script_utils::{error::ScriptError, token::sum_token_amount};
 
 use crate::{constants::XUDT_CODE_HASH, error::Error};
-use standard_udt_types::metadata::{XudtMeta, is_supply_tracked};
+use standard_udt_types::metadata::{XudtMeta, access_enabled, is_supply_tracked};
+
+use super::access_list::has_full_domain_access_list_outputs;
 
 pub fn validate_create(output_meta: &XudtMeta, meta_type_hash: &[u8; 32]) -> Result<(), Error> {
     if is_supply_tracked(output_meta.config_flags) {
@@ -14,6 +16,12 @@ pub fn validate_create(output_meta: &XudtMeta, meta_type_hash: &[u8; 32]) -> Res
         }
     } else if output_meta.current_supply != 0 {
         return Err(Error::InvalidSupply);
+    }
+
+    if access_enabled(output_meta.config_flags)
+        && !has_full_domain_access_list_outputs(meta_type_hash)?
+    {
+        return Err(Error::AccessListRequired);
     }
 
     Ok(())

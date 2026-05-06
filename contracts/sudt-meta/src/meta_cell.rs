@@ -61,7 +61,7 @@ pub fn validate_type_args() -> Result<(), Error> {
 }
 
 pub fn validate_create_type_id() -> Result<(), Error> {
-    check_type_id(0, 32).map_err(|_| Error::InvalidTypeId)
+    check_type_id(0, 32).map_err(Error::from)
 }
 
 pub fn validate_create(output_meta: &SudtMeta, meta_type_hash: &[u8; 32]) -> Result<(), Error> {
@@ -86,7 +86,7 @@ fn load_group_meta(source: Source) -> Result<Option<SudtMeta>, Error> {
         match load_cell_data(index, source) {
             Ok(data) => {
                 if found.is_some() {
-                    return Err(Error::InvalidArgs);
+                    return Err(Error::DuplicateMetaCell);
                 }
                 if source == Source::GroupOutput {
                     validate_meta_lock(index)?;
