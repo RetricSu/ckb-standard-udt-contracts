@@ -7,7 +7,6 @@ extern crate alloc;
 
 #[path = "error.rs"]
 mod error;
-#[path = "meta.rs"]
 mod meta;
 #[path = "mode.rs"]
 mod mode;
