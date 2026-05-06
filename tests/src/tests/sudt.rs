@@ -213,7 +213,7 @@ fn sudt_mint_rejects_non_whitelisted_meta_lock() {
         .build();
     let tx = fixture.complete(tx);
 
-    expect_tx_fail_with_code(&fixture.context, &tx, "error code 16");
+    expect_tx_fail_with_code(&fixture.context, &tx, "error code 25");
 }
 
 #[test]

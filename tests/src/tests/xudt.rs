@@ -506,7 +506,7 @@ fn xudt_protocol_burn_rejects_duplicate_visible_meta_dep() {
         .build();
     let tx = fixture.complete(tx);
 
-    expect_tx_fail_with_code(&fixture.context, &tx, "error code 9");
+    expect_tx_fail_with_code(&fixture.context, &tx, "error code 18");
 }
 
 #[test]
@@ -596,7 +596,7 @@ fn xudt_whitelist_ignores_non_data2_access_list_shards() {
         .build();
     let tx = fixture.complete(tx);
 
-    expect_tx_fail_with_code(&fixture.context, &tx, "error code 18");
+    expect_tx_fail_with_code(&fixture.context, &tx, "error code 27");
 }
 
 #[test]
@@ -627,7 +627,7 @@ fn xudt_protocol_burn_access_mode_switch_still_requires_mint_authority() {
         .build();
     let tx = fixture.complete(tx);
 
-    expect_tx_fail_with_code(&fixture.context, &tx, "error code 13");
+    expect_tx_fail_with_code(&fixture.context, &tx, "error code 22");
 }
 
 #[test]
@@ -666,5 +666,5 @@ fn xudt_protocol_burn_access_mode_switch_does_not_skip_access_checks() {
         .build();
     let tx = fixture.complete(tx);
 
-    expect_tx_fail_with_code(&fixture.context, &tx, "error code 18");
+    expect_tx_fail_with_code(&fixture.context, &tx, "error code 27");
 }

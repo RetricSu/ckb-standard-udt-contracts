@@ -38,18 +38,19 @@ const TESTTOOL_ALWAYS_SUCCESS_LOCK_CODE_HASH: [u8; 32] = [
 ];
 
 fn is_allowed_always_success_lock_code_hash(code_hash: &[u8; 32]) -> bool {
-    ALWAYS_SUCCESS_LOCK_CODE_HASH_WHITELIST.contains(code_hash)
-        || is_testtool_always_success_lock_code_hash(code_hash)
-}
+    if ALWAYS_SUCCESS_LOCK_CODE_HASH_WHITELIST.contains(code_hash) {
+        return true;
+    }
 
-#[cfg(debug_assertions)]
-fn is_testtool_always_success_lock_code_hash(code_hash: &[u8; 32]) -> bool {
-    code_hash == &TESTTOOL_ALWAYS_SUCCESS_LOCK_CODE_HASH
-}
+    #[cfg(debug_assertions)]
+    {
+        code_hash == &TESTTOOL_ALWAYS_SUCCESS_LOCK_CODE_HASH
+    }
 
-#[cfg(not(debug_assertions))]
-fn is_testtool_always_success_lock_code_hash(_: &[u8; 32]) -> bool {
-    false
+    #[cfg(not(debug_assertions))]
+    {
+        false
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

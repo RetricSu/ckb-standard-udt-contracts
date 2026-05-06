@@ -234,7 +234,7 @@ fn xudt_meta_rejects_invalid_config_flags() {
         (input, output, Vec::new())
     });
 
-    expect_tx_fail_with_code(&case.context, &case.tx, "error code 3");
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 14");
 }
 
 #[test]
@@ -244,7 +244,7 @@ fn xudt_meta_rejects_malformed_name_bytes_field() {
         (data.clone(), data, Vec::new())
     });
 
-    expect_tx_fail_with_code(&case.context, &case.tx, "error code 3");
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 14");
 }
 
 #[test]
@@ -254,7 +254,7 @@ fn xudt_meta_rejects_oversized_name_field() {
         (data.clone(), data, Vec::new())
     });
 
-    expect_tx_fail_with_code(&case.context, &case.tx, "error code 3");
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 14");
 }
 
 #[test]
@@ -274,7 +274,7 @@ fn xudt_meta_disabled_to_blacklist_requires_full_domain_shards() {
             Vec::new(),
         )
     });
-    expect_tx_fail_with_code(&missing_shard.context, &missing_shard.tx, "error code 9");
+    expect_tx_fail_with_code(&missing_shard.context, &missing_shard.tx, "error code 19");
 
     let with_shard = update_meta_tx(|context, lock, meta| {
         let authority = input_lock_authority(lock.script_hash);
@@ -317,7 +317,7 @@ fn xudt_meta_disabled_to_whitelist_requires_one_shard() {
             Vec::new(),
         )
     });
-    expect_tx_fail_with_code(&missing_shard.context, &missing_shard.tx, "error code 9");
+    expect_tx_fail_with_code(&missing_shard.context, &missing_shard.tx, "error code 19");
 
     let with_shard = update_meta_tx(|context, lock, meta| {
         let authority = input_lock_authority(lock.script_hash);
@@ -395,7 +395,7 @@ fn xudt_meta_access_mode_switch_rejects_same_token_xudt_cells() {
         )
     });
 
-    expect_tx_fail_with_code(&case.context, &case.tx, "error code 10");
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 20");
 }
 
 #[test]
@@ -410,7 +410,7 @@ fn xudt_meta_access_authority_controls_pause_and_access_mode() {
     expect_tx_fail_with_code(
         &without_authority.context,
         &without_authority.tx,
-        "error code 6",
+        "error code 17",
     );
 
     let with_authority = update_meta_tx(|context, lock, meta| {
@@ -470,7 +470,7 @@ fn xudt_meta_disabled_to_blacklist_rejects_overlapping_access_list_outputs() {
         )
     });
 
-    expect_tx_fail_with_code(&case.context, &case.tx, "error code 3");
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 14");
 }
 
 #[test]
@@ -499,7 +499,7 @@ fn xudt_meta_disabled_to_whitelist_rejects_access_list_start_after_end() {
         )
     });
 
-    expect_tx_fail_with_code(&case.context, &case.tx, "error code 3");
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 14");
 }
 
 #[test]
@@ -526,7 +526,7 @@ fn xudt_meta_disabled_to_whitelist_rejects_access_list_extra_table_field() {
         )
     });
 
-    expect_tx_fail_with_code(&case.context, &case.tx, "error code 3");
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 14");
 }
 
 #[test]
@@ -554,7 +554,7 @@ fn xudt_meta_disabled_to_whitelist_rejects_duplicate_access_list_entries() {
         )
     });
 
-    expect_tx_fail_with_code(&case.context, &case.tx, "error code 3");
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 14");
 }
 
 #[test]
@@ -581,7 +581,7 @@ fn xudt_meta_blacklist_to_whitelist_requires_legal_output_shard() {
             Vec::new(),
         )
     });
-    expect_tx_fail_with_code(&missing_shard.context, &missing_shard.tx, "error code 9");
+    expect_tx_fail_with_code(&missing_shard.context, &missing_shard.tx, "error code 19");
 
     let with_shard = update_meta_tx(|context, lock, meta| {
         let authority = input_lock_authority(lock.script_hash);
@@ -645,5 +645,5 @@ fn xudt_meta_blacklist_to_whitelist_rejects_malformed_access_list_output() {
         )
     });
 
-    expect_tx_fail_with_code(&case.context, &case.tx, "error code 3");
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 14");
 }
