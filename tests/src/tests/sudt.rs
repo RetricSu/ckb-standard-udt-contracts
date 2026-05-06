@@ -34,15 +34,11 @@ fn deploy_data2_script(context: &mut Context, binary_name: &str, args: Bytes) ->
 }
 
 fn meta_script(context: &mut Context, args: Bytes) -> DeployedScript {
-    deploy_data2_script(context, "enhanced-sudt-meta", args)
+    deploy_data2_script(context, "sudt-meta", args)
 }
 
 fn udt_script(context: &mut Context, meta_type_hash: [u8; 32]) -> DeployedScript {
-    deploy_data2_script(
-        context,
-        "enhanced-sudt",
-        Bytes::from(meta_type_hash.to_vec()),
-    )
+    deploy_data2_script(context, "sudt", Bytes::from(meta_type_hash.to_vec()))
 }
 
 fn always_success_lock(context: &mut Context) -> DeployedScript {

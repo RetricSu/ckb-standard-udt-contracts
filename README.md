@@ -1,13 +1,13 @@
 # standard-udt-contracts
 
-Enhanced sUDT, Enhanced xUDT, and AccessList contracts for CKB.
+sUDT, xUDT, and AccessList contracts for CKB.
 
 ## Contracts
 
-- `enhanced-sudt-meta`: validates sUDT Meta creation and updates.
-- `enhanced-sudt`: validates sUDT transfer, mint, protocol burn, and user destruction.
-- `enhanced-xudt-meta`: validates xUDT Meta creation, updates, access mode governance, and extension configuration.
-- `enhanced-xudt`: validates xUDT transfer, mint, protocol burn, user destruction, paused mode, AccessList, and extensions.
+- `sudt-meta`: validates sUDT Meta creation and updates.
+- `sudt`: validates sUDT transfer, mint, protocol burn, and user destruction.
+- `xudt-meta`: validates xUDT Meta creation, updates, access mode governance, and extension configuration.
+- `xudt`: validates xUDT transfer, mint, protocol burn, user destruction, paused mode, AccessList, and extensions.
 - `access-list`: validates xUDT AccessList shard updates.
 
 ## Build

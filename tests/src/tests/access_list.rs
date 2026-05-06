@@ -47,7 +47,7 @@ fn always_success_lock(context: &mut Context, args: Bytes) -> DeployedScript {
 }
 
 fn meta_script(context: &mut Context) -> DeployedScript {
-    deploy_data2_script(context, "enhanced-xudt-meta", Bytes::from(vec![2u8; 32]))
+    deploy_data2_script(context, "xudt-meta", Bytes::from(vec![2u8; 32]))
 }
 
 fn access_list_script(context: &mut Context, meta_type_hash: [u8; 32]) -> DeployedScript {

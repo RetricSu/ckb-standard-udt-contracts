@@ -50,15 +50,11 @@ fn always_success_lock(context: &mut Context) -> DeployedScript {
 }
 
 fn meta_script(context: &mut Context) -> DeployedScript {
-    deploy_data2_script(context, "enhanced-xudt-meta", Bytes::from(vec![2u8; 32]))
+    deploy_data2_script(context, "xudt-meta", Bytes::from(vec![2u8; 32]))
 }
 
 fn xudt_script(context: &mut Context, meta_type_hash: [u8; 32]) -> DeployedScript {
-    deploy_data2_script(
-        context,
-        "enhanced-xudt",
-        Bytes::from(meta_type_hash.to_vec()),
-    )
+    deploy_data2_script(context, "xudt", Bytes::from(meta_type_hash.to_vec()))
 }
 
 fn access_list_script(context: &mut Context, meta_type_hash: [u8; 32]) -> DeployedScript {

@@ -1,4 +1,4 @@
-# enhanced-sudt
+# sudt
 
 TODO: Write this readme
 

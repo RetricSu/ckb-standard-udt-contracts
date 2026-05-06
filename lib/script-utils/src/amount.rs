@@ -28,7 +28,7 @@ pub fn collect_group_amount(source: Source) -> Result<u128, ScriptError> {
                 index += 1;
             }
             Err(SysError::IndexOutOfBound) => return Ok(total),
-            Err(_) => return Err(ScriptError::Syscall),
+            Err(_) => return Err(ScriptError::SyscallUnknown),
         }
     }
 }

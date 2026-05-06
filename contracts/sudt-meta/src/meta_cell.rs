@@ -8,7 +8,7 @@ use ckb_std::{
     type_id::check_type_id,
 };
 
-use crate::{constants::ENHANCED_SUDT_CODE_HASH, error::Error};
+use crate::{constants::SUDT_CODE_HASH, error::Error};
 
 pub const CONFIG_SUPPLY_TRACKED: u8 = 0b0000_0001;
 const SUDT_META_FIELDS: usize = 9;
@@ -58,7 +58,7 @@ pub fn validate_create_type_id() -> Result<(), Error> {
 
 pub fn validate_create(output_meta: &SudtMeta, meta_type_hash: &[u8; 32]) -> Result<(), Error> {
     if is_supply_tracked(output_meta.config_flags) {
-        let initial_supply = sum_initial_udt_outputs(meta_type_hash, &ENHANCED_SUDT_CODE_HASH)?;
+        let initial_supply = sum_initial_udt_outputs(meta_type_hash, &SUDT_CODE_HASH)?;
         if output_meta.current_supply != initial_supply {
             return Err(Error::InvalidSupply);
         }

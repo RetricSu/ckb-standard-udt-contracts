@@ -2,7 +2,7 @@ use ckb_std::error::SysError;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Error {
-    Syscall,
+    SyscallUnknown,
     SysIndexOutOfBound,
     SysItemMissing,
     SysLengthNotEnough,
@@ -32,7 +32,7 @@ impl Error {
             Self::ImmutableSupplyMode => 5,
             Self::AuthorityMissing => 6,
             Self::AuthorityFailed => 7,
-            Self::Syscall => 8,
+            Self::SyscallUnknown => 8,
             Self::SysIndexOutOfBound => 9,
             Self::SysItemMissing => 10,
             Self::SysLengthNotEnough => 11,
@@ -66,7 +66,7 @@ impl From<SysError> for Error {
             SysError::MaxVmsSpawned => Self::SysMaxVmsSpawned,
             SysError::MaxFdsCreated => Self::SysMaxFdsCreated,
             SysError::TypeIDError => Self::SysTypeIdError,
-            SysError::Unknown(_) => Self::Syscall,
+            SysError::Unknown(_) => Self::SyscallUnknown,
         }
     }
 }

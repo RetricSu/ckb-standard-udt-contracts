@@ -12,10 +12,10 @@ members = [
   "tests/plugins/dl-deny",
   "tests/plugins/dl-allow",
   "contracts/access-list",
-  "contracts/enhanced-xudt",
-  "contracts/enhanced-xudt-meta",
-  "contracts/enhanced-sudt",
-  "contracts/enhanced-sudt-meta",
+  "contracts/xudt",
+  "contracts/xudt-meta",
+  "contracts/sudt",
+  "contracts/sudt-meta",
   "tests",
 ]
 

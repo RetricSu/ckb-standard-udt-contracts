@@ -1,10 +1,10 @@
 [package]
-name = "enhanced-xudt-meta"
+name = "xudt"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-ckb-std = { version = "1.1", features = ["type-id"] }
+ckb-std = "1.1"
 standard-udt-types = { path = "../../lib/types", default-features = false, features = ["no-std"] }
 standard-udt-script-utils = { path = "../../lib/script-utils", default-features = false }
 

@@ -1,16 +1,20 @@
 use std::{env, fs, path::PathBuf};
 
 fn main() {
+    println!("cargo:rerun-if-env-changed=XUDT_CODE_HASH");
     println!("cargo:rerun-if-env-changed=ACCESS_LIST_CODE_HASH");
 
+    let xudt = load_hash("XUDT_CODE_HASH", "xudt");
     let access_list = load_hash("ACCESS_LIST_CODE_HASH", "access-list");
+
     let out_dir = PathBuf::from(env::var("OUT_DIR").expect("OUT_DIR is set by Cargo"));
     let constants = format!(
-        "pub const ACCESS_LIST_CODE_HASH: [u8; 32] = {:?};\n",
-        access_list
+        "pub const XUDT_CODE_HASH: [u8; 32] = {:?};\n\
+         pub const ACCESS_LIST_CODE_HASH: [u8; 32] = {:?};\n",
+        xudt, access_list
     );
     fs::write(out_dir.join("generated_constants.rs"), constants)
-        .expect("write generated enhanced-xudt constants");
+        .expect("write generated xudt-meta constants");
 }
 
 fn load_hash(env_name: &str, contract_name: &str) -> [u8; 32] {

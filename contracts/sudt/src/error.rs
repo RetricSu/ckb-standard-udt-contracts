@@ -2,7 +2,7 @@ use ckb_std::error::SysError;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Error {
-    Syscall,
+    SyscallUnknown,
     SysIndexOutOfBound,
     SysItemMissing,
     SysLengthNotEnough,
@@ -27,15 +27,12 @@ pub enum Error {
     AuthorityFailed,
     UnsupportedAuthorityLocation,
     MetaLockNotAllowed,
-    InvalidShardData,
-    AccessDenied,
-    ExtensionFailed,
 }
 
 impl Error {
     pub const fn code(self) -> i8 {
         match self {
-            Self::Syscall => 1,
+            Self::SyscallUnknown => 1,
             Self::InvalidArgs => 2,
             Self::AmountEncoding => 3,
             Self::AmountOverflow => 4,
@@ -51,18 +48,15 @@ impl Error {
             Self::AuthorityFailed => 14,
             Self::UnsupportedAuthorityLocation => 15,
             Self::MetaLockNotAllowed => 16,
-            Self::InvalidShardData => 17,
-            Self::AccessDenied => 18,
-            Self::ExtensionFailed => 19,
-            Self::SysIndexOutOfBound => 20,
-            Self::SysItemMissing => 21,
-            Self::SysLengthNotEnough => 22,
-            Self::SysEncoding => 23,
-            Self::SysWaitFailure => 24,
-            Self::SysInvalidFd => 25,
-            Self::SysOtherEndClosed => 26,
-            Self::SysMaxVmsSpawned => 27,
-            Self::SysMaxFdsCreated => 28,
+            Self::SysIndexOutOfBound => 17,
+            Self::SysItemMissing => 18,
+            Self::SysLengthNotEnough => 19,
+            Self::SysEncoding => 20,
+            Self::SysWaitFailure => 21,
+            Self::SysInvalidFd => 22,
+            Self::SysOtherEndClosed => 23,
+            Self::SysMaxVmsSpawned => 24,
+            Self::SysMaxFdsCreated => 25,
         }
     }
 }
@@ -86,8 +80,42 @@ impl From<SysError> for Error {
             SysError::OtherEndClosed => Self::SysOtherEndClosed,
             SysError::MaxVmsSpawned => Self::SysMaxVmsSpawned,
             SysError::MaxFdsCreated => Self::SysMaxFdsCreated,
-            SysError::Unknown(_) => Self::Syscall,
-            _ => Self::Syscall,
+            SysError::Unknown(_) => Self::SyscallUnknown,
+            _ => Self::SyscallUnknown,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Error;
+    use ckb_std::error::SysError;
+
+    #[test]
+    fn sys_errors_map_to_specific_variants() {
+        assert_eq!(
+            Error::from(SysError::IndexOutOfBound),
+            Error::SysIndexOutOfBound
+        );
+        assert_eq!(Error::from(SysError::ItemMissing), Error::SysItemMissing);
+        assert_eq!(
+            Error::from(SysError::LengthNotEnough(32)),
+            Error::SysLengthNotEnough
+        );
+        assert_eq!(Error::from(SysError::Encoding), Error::SysEncoding);
+        assert_eq!(Error::from(SysError::WaitFailure), Error::SysWaitFailure);
+        assert_eq!(Error::from(SysError::InvalidFd), Error::SysInvalidFd);
+        assert_eq!(
+            Error::from(SysError::OtherEndClosed),
+            Error::SysOtherEndClosed
+        );
+        assert_eq!(
+            Error::from(SysError::MaxVmsSpawned),
+            Error::SysMaxVmsSpawned
+        );
+        assert_eq!(
+            Error::from(SysError::MaxFdsCreated),
+            Error::SysMaxFdsCreated
+        );
     }
 }

@@ -9,7 +9,7 @@ use ckb_std::{
 };
 
 use crate::{
-    constants::{ACCESS_LIST_CODE_HASH, ENHANCED_XUDT_CODE_HASH},
+    constants::{ACCESS_LIST_CODE_HASH, XUDT_CODE_HASH},
     error::Error,
 };
 
@@ -30,7 +30,7 @@ const MAX_METADATA_SYMBOL_BYTES: usize = 128;
 const MAX_METADATA_URI_BYTES: usize = 2048;
 const MAX_METADATA_EXTRA_DATA_BYTES: usize = 16 * 1024;
 
-// Current compatibility whitelist is by lock code_hash, matching enhanced-sudt.
+// Current compatibility whitelist is by lock code_hash, matching sudt.
 const META_LOCK_CODE_HASH_WHITELIST: [[u8; 32]; 2] = [
     [
         0x3b, 0x52, 0x1c, 0xc4, 0xb5, 0x52, 0xf1, 0x09, 0xd0, 0x92, 0xd8, 0xcc, 0x46, 0x8a, 0x80,
@@ -92,7 +92,7 @@ pub fn validate_create_type_id() -> Result<(), Error> {
 
 pub fn validate_create(output_meta: &XudtMeta, meta_type_hash: &[u8; 32]) -> Result<(), Error> {
     if is_supply_tracked(output_meta.config_flags) {
-        let initial_supply = sum_initial_udt_outputs(meta_type_hash, &ENHANCED_XUDT_CODE_HASH)?;
+        let initial_supply = sum_initial_udt_outputs(meta_type_hash, &XUDT_CODE_HASH)?;
         if output_meta.current_supply != initial_supply {
             return Err(Error::InvalidSupply);
         }
@@ -136,9 +136,7 @@ pub fn has_same_token_cells(meta_type_hash: &[u8; 32]) -> Result<bool, Error> {
         let mut index = 0;
         loop {
             match load_cell_type(index, source) {
-                Ok(Some(script))
-                    if is_token_script(&script, meta_type_hash, &ENHANCED_XUDT_CODE_HASH) =>
-                {
+                Ok(Some(script)) if is_token_script(&script, meta_type_hash, &XUDT_CODE_HASH) => {
                     return Ok(true);
                 }
                 Ok(_) => index += 1,
@@ -241,7 +239,7 @@ fn validate_meta_lock(index: usize, source: Source) -> Result<(), Error> {
 
 fn parse_meta(data: &[u8]) -> Result<XudtMeta, Error> {
     // `standard_udt_types::metadata::XudtMeta::from_slice` is intentionally not
-    // used in this RISC-V binary for parity with enhanced-sudt: linking it here
+    // used in this RISC-V binary for parity with sudt: linking it here
     // currently pulls duplicate ckb-std atomic dummy symbols.
     let offsets = table_offsets(data, XUDT_META_FIELDS, false)?;
     let config_flags = single_byte_field(data, offsets[0], offsets[1])?;

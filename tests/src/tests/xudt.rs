@@ -52,15 +52,11 @@ fn always_success_lock(context: &mut Context, args: Bytes) -> DeployedScript {
 }
 
 fn meta_script(context: &mut Context) -> DeployedScript {
-    deploy_data2_script(context, "enhanced-xudt-meta", Bytes::from(vec![2u8; 32]))
+    deploy_data2_script(context, "xudt-meta", Bytes::from(vec![2u8; 32]))
 }
 
 fn xudt_script(context: &mut Context, meta_type_hash: [u8; 32]) -> DeployedScript {
-    deploy_data2_script(
-        context,
-        "enhanced-xudt",
-        Bytes::from(meta_type_hash.to_vec()),
-    )
+    deploy_data2_script(context, "xudt", Bytes::from(meta_type_hash.to_vec()))
 }
 
 fn access_list_script(context: &mut Context, meta_type_hash: [u8; 32]) -> DeployedScript {
@@ -378,7 +374,7 @@ fn xudt_untracked_mint_with_meta_dep_does_not_require_meta_update() {
 fn xudt_initial_create_mint_uses_output_meta() {
     let mut context = Context::default();
     let lock = always_success_lock(&mut context, Bytes::from(vec![1u8]));
-    let meta_out_point = context.deploy_cell(Loader::default().load_binary("enhanced-xudt-meta"));
+    let meta_out_point = context.deploy_cell(Loader::default().load_binary("xudt-meta"));
     let funding = create_funding_input(&mut context, &lock.script, 1_000_000_000_000);
     let type_id = calculate_type_id(&funding, 0);
     let meta = {

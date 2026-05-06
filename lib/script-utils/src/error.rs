@@ -1,6 +1,6 @@
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ScriptError {
-    Syscall,
+    SyscallUnknown,
     AmountEncoding,
     AmountOverflow,
     SupplyOverflow,
@@ -19,7 +19,7 @@ pub enum ScriptError {
 impl ScriptError {
     pub const fn code(self) -> i8 {
         match self {
-            Self::Syscall => 1,
+            Self::SyscallUnknown => 1,
             Self::AmountEncoding => 2,
             Self::AmountOverflow => 3,
             Self::SupplyOverflow => 4,
@@ -49,7 +49,7 @@ mod tests {
 
     #[test]
     fn error_codes_are_nonzero_and_stable() {
-        assert_eq!(ScriptError::Syscall.code(), 1);
+        assert_eq!(ScriptError::SyscallUnknown.code(), 1);
         assert_eq!(ScriptError::AmountEncoding.code(), 2);
         assert_eq!(ScriptError::AmountOverflow.code(), 3);
         assert_eq!(ScriptError::SupplyOverflow.code(), 4);

@@ -78,7 +78,8 @@ fn find_meta_in_source(
                 if found.is_some() {
                     return Err(ScriptError::MetaNotUnique);
                 }
-                let data = load_cell_data(index, source).map_err(|_| ScriptError::Syscall)?;
+                let data =
+                    load_cell_data(index, source).map_err(|_| ScriptError::SyscallUnknown)?;
                 found = Some(VisibleMeta {
                     source,
                     index,
@@ -88,7 +89,7 @@ fn find_meta_in_source(
             }
             Ok(_) => index += 1,
             Err(SysError::IndexOutOfBound) => return Ok(found),
-            Err(_) => return Err(ScriptError::Syscall),
+            Err(_) => return Err(ScriptError::SyscallUnknown),
         }
     }
 }

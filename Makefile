@@ -27,7 +27,7 @@ SIM_BUILD ?= auto
 # revert this behavior, you can change this to anything other than true
 CLEAN_BUILD_DIR_FIRST := true
 BUILD_DIR := build/$(MODE)
-CONTRACTS := enhanced-sudt enhanced-sudt-meta access-list enhanced-xudt enhanced-xudt-meta
+CONTRACTS := sudt sudt-meta access-list xudt xudt-meta
 TEST_PLUGINS := dl-allow dl-deny spawn-allow spawn-deny
 TEST_SHARED_PLUGINS := dl-shared-allow dl-shared-deny
 TEST_REQUIRED_BINARIES := $(addprefix $(BUILD_DIR)/,$(CONTRACTS) $(TEST_PLUGINS) $(TEST_SHARED_PLUGINS))
@@ -55,16 +55,16 @@ build:
 	@set -eu; \
 	if [ "x$(CONTRACT)" = "x" ]; then \
 		for contract in $(CONTRACTS); do \
-			if [ "$$contract" = "enhanced-sudt-meta" ]; then \
-				enhanced_sudt_hash=$$(python3 $(TOP)/scripts/ckb-data-hash $(BUILD_DIR)/enhanced-sudt); \
-				ENHANCED_SUDT_CODE_HASH=$$enhanced_sudt_hash $(MAKE) -e -C contracts/$$contract build; \
-			elif [ "$$contract" = "enhanced-xudt" ]; then \
+			if [ "$$contract" = "sudt-meta" ]; then \
+				sudt_hash=$$(python3 $(TOP)/scripts/ckb-data-hash $(BUILD_DIR)/sudt); \
+				SUDT_CODE_HASH=$$sudt_hash $(MAKE) -e -C contracts/$$contract build; \
+			elif [ "$$contract" = "xudt" ]; then \
 				access_list_hash=$$(python3 $(TOP)/scripts/ckb-data-hash $(BUILD_DIR)/access-list); \
 				ACCESS_LIST_CODE_HASH=$$access_list_hash $(MAKE) -e -C contracts/$$contract build; \
-			elif [ "$$contract" = "enhanced-xudt-meta" ]; then \
-				enhanced_xudt_hash=$$(python3 $(TOP)/scripts/ckb-data-hash $(BUILD_DIR)/enhanced-xudt); \
+			elif [ "$$contract" = "xudt-meta" ]; then \
+				xudt_hash=$$(python3 $(TOP)/scripts/ckb-data-hash $(BUILD_DIR)/xudt); \
 				access_list_hash=$$(python3 $(TOP)/scripts/ckb-data-hash $(BUILD_DIR)/access-list); \
-				ENHANCED_XUDT_CODE_HASH=$$enhanced_xudt_hash ACCESS_LIST_CODE_HASH=$$access_list_hash $(MAKE) -e -C contracts/$$contract build; \
+				XUDT_CODE_HASH=$$xudt_hash ACCESS_LIST_CODE_HASH=$$access_list_hash $(MAKE) -e -C contracts/$$contract build; \
 			else \
 				$(MAKE) -e -C contracts/$$contract build; \
 			fi; \
@@ -93,24 +93,24 @@ build:
 				;; \
 		esac; \
 	else \
-		if [ "$(CONTRACT)" = "enhanced-sudt-meta" ]; then \
-			$(MAKE) -e -C contracts/enhanced-sudt build; \
-			enhanced_sudt_hash=$$(python3 $(TOP)/scripts/ckb-data-hash $(BUILD_DIR)/enhanced-sudt); \
-			ENHANCED_SUDT_CODE_HASH=$$enhanced_sudt_hash $(MAKE) -e -C contracts/enhanced-sudt-meta build; \
-		elif [ "$(CONTRACT)" = "enhanced-xudt-meta" ]; then \
+		if [ "$(CONTRACT)" = "sudt-meta" ]; then \
+			$(MAKE) -e -C contracts/sudt build; \
+			sudt_hash=$$(python3 $(TOP)/scripts/ckb-data-hash $(BUILD_DIR)/sudt); \
+			SUDT_CODE_HASH=$$sudt_hash $(MAKE) -e -C contracts/sudt-meta build; \
+		elif [ "$(CONTRACT)" = "xudt-meta" ]; then \
 			$(MAKE) -e -C contracts/access-list build; \
 			access_list_hash=$$(python3 $(TOP)/scripts/ckb-data-hash $(BUILD_DIR)/access-list); \
-			ACCESS_LIST_CODE_HASH=$$access_list_hash $(MAKE) -e -C contracts/enhanced-xudt build; \
-			enhanced_xudt_hash=$$(python3 $(TOP)/scripts/ckb-data-hash $(BUILD_DIR)/enhanced-xudt); \
-			ENHANCED_XUDT_CODE_HASH=$$enhanced_xudt_hash ACCESS_LIST_CODE_HASH=$$access_list_hash $(MAKE) -e -C contracts/enhanced-xudt-meta build; \
-		elif [ "$(CONTRACT)" = "enhanced-sudt" ]; then \
-			$(MAKE) -e -C contracts/enhanced-sudt build; \
-			enhanced_sudt_hash=$$(python3 $(TOP)/scripts/ckb-data-hash $(BUILD_DIR)/enhanced-sudt); \
-			ENHANCED_SUDT_CODE_HASH=$$enhanced_sudt_hash $(MAKE) -e -C contracts/enhanced-sudt-meta build; \
-		elif [ "$(CONTRACT)" = "enhanced-xudt" ]; then \
+			ACCESS_LIST_CODE_HASH=$$access_list_hash $(MAKE) -e -C contracts/xudt build; \
+			xudt_hash=$$(python3 $(TOP)/scripts/ckb-data-hash $(BUILD_DIR)/xudt); \
+			XUDT_CODE_HASH=$$xudt_hash ACCESS_LIST_CODE_HASH=$$access_list_hash $(MAKE) -e -C contracts/xudt-meta build; \
+		elif [ "$(CONTRACT)" = "sudt" ]; then \
+			$(MAKE) -e -C contracts/sudt build; \
+			sudt_hash=$$(python3 $(TOP)/scripts/ckb-data-hash $(BUILD_DIR)/sudt); \
+			SUDT_CODE_HASH=$$sudt_hash $(MAKE) -e -C contracts/sudt-meta build; \
+		elif [ "$(CONTRACT)" = "xudt" ]; then \
 			$(MAKE) -e -C contracts/access-list build; \
 			access_list_hash=$$(python3 $(TOP)/scripts/ckb-data-hash $(BUILD_DIR)/access-list); \
-			ACCESS_LIST_CODE_HASH=$$access_list_hash $(MAKE) -e -C contracts/enhanced-xudt build; \
+			ACCESS_LIST_CODE_HASH=$$access_list_hash $(MAKE) -e -C contracts/xudt build; \
 		else \
 			$(MAKE) -e -C contracts/$(CONTRACT) build; \
 		fi; \

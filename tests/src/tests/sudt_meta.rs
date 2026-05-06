@@ -36,15 +36,11 @@ fn deploy_data2_script(context: &mut Context, binary_name: &str, args: Bytes) ->
 }
 
 fn meta_script(context: &mut Context, args: Bytes) -> DeployedScript {
-    deploy_data2_script(context, "enhanced-sudt-meta", args)
+    deploy_data2_script(context, "sudt-meta", args)
 }
 
 fn udt_script(context: &mut Context, meta_type_hash: [u8; 32]) -> DeployedScript {
-    deploy_data2_script(
-        context,
-        "enhanced-sudt",
-        Bytes::from(meta_type_hash.to_vec()),
-    )
+    deploy_data2_script(context, "sudt", Bytes::from(meta_type_hash.to_vec()))
 }
 
 fn always_success_lock(context: &mut Context) -> DeployedScript {
@@ -140,7 +136,7 @@ fn create_meta_tx(
 ) -> (Context, TransactionView) {
     let mut context = Context::default();
     let lock = always_success_lock(&mut context);
-    let meta_out_point = context.deploy_cell(Loader::default().load_binary("enhanced-sudt-meta"));
+    let meta_out_point = context.deploy_cell(Loader::default().load_binary("sudt-meta"));
     let input = create_funding_input(&mut context, &lock.script, 1_000_000_000_000);
     let type_id = if valid_type_id {
         calculate_type_id(&input, 0)
@@ -276,7 +272,7 @@ fn sudt_meta_rejects_supply_tracking_bit_change() {
 fn sudt_meta_rejects_untracked_nonzero_supply() {
     let mut context = Context::default();
     let lock = always_success_lock(&mut context);
-    let meta_out_point = context.deploy_cell(Loader::default().load_binary("enhanced-sudt-meta"));
+    let meta_out_point = context.deploy_cell(Loader::default().load_binary("sudt-meta"));
     let input = create_funding_input(&mut context, &lock.script, 1_000_000_000_000);
     let type_id = calculate_type_id(&input, 0);
     let meta_script = context

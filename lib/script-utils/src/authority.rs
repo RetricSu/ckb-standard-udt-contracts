@@ -47,7 +47,7 @@ where
             Ok(candidate) if candidate == target => return Ok(true),
             Ok(_) => index += 1,
             Err(SysError::IndexOutOfBound) => return Ok(false),
-            Err(_) => return Err(ScriptError::Syscall),
+            Err(_) => return Err(ScriptError::SyscallUnknown),
         }
     }
 }
@@ -63,7 +63,7 @@ where
             Ok(Some(candidate)) if candidate == target => return Ok(true),
             Ok(_) => index += 1,
             Err(SysError::IndexOutOfBound) => return Ok(false),
-            Err(_) => return Err(ScriptError::Syscall),
+            Err(_) => return Err(ScriptError::SyscallUnknown),
         }
     }
 }
@@ -104,7 +104,7 @@ mod tests {
     fn lock_hash_scanner_maps_unexpected_syscall_error() {
         assert_eq!(
             scan_lock_hash([2u8; 32], |_| Err(SysError::LengthNotEnough(32))),
-            Err(ScriptError::Syscall)
+            Err(ScriptError::SyscallUnknown)
         );
     }
 
@@ -132,7 +132,7 @@ mod tests {
     fn type_hash_scanner_maps_unexpected_syscall_error() {
         assert_eq!(
             scan_type_hash([2u8; 32], |_| Err(SysError::LengthNotEnough(32))),
-            Err(ScriptError::Syscall)
+            Err(ScriptError::SyscallUnknown)
         );
     }
 
