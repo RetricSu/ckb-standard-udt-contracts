@@ -4,9 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-ckb-std = "0.16.3"
-molecule = { version = "0.8.0", default-features = false }
-standard-udt-types = { path = "../types", default-features = false, features = ["no-std"] }
+ckb-std = "1.1"
 
 [features]
 default = []

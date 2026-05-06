@@ -14,6 +14,7 @@ pub enum ScriptError {
     AuthorityMissing,
     AuthorityFailed,
     UnsupportedAuthorityLocation,
+    InvalidAuthority,
 }
 
 impl ScriptError {
@@ -33,6 +34,7 @@ impl ScriptError {
             Self::AuthorityMissing => 12,
             Self::AuthorityFailed => 13,
             Self::UnsupportedAuthorityLocation => 14,
+            Self::InvalidAuthority => 15,
         }
     }
 }
@@ -63,6 +65,7 @@ mod tests {
         assert_eq!(ScriptError::AuthorityMissing.code(), 12);
         assert_eq!(ScriptError::AuthorityFailed.code(), 13);
         assert_eq!(ScriptError::UnsupportedAuthorityLocation.code(), 14);
+        assert_eq!(ScriptError::InvalidAuthority.code(), 15);
     }
 
     #[test]

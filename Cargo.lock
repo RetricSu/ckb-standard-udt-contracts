@@ -2138,9 +2138,7 @@ dependencies = [
 name = "standard-udt-script-utils"
 version = "0.1.0"
 dependencies = [
- "ckb-std 0.16.4",
- "molecule 0.8.0",
- "standard-udt-types",
+ "ckb-std 1.1.0",
 ]
 
 [[package]]
