@@ -4,9 +4,11 @@ use ckb_std::{
     ckb_constants::Source,
     ckb_types::{packed::Script, prelude::*},
     error::SysError,
-    high_level::{
-        load_cell_data, load_cell_lock, load_cell_lock_hash, load_cell_type_hash, load_script,
-    },
+    high_level::{load_cell_data, load_cell_lock, load_cell_type_hash, load_script},
+};
+use standard_udt_script_utils::{
+    authority::{ParsedAuthority as RuntimeAuthority, check_authority as check_runtime_authority},
+    error::ScriptError,
 };
 
 use crate::error::Error;
@@ -279,36 +281,21 @@ fn validate_config(config_flags: u8) -> Result<(), Error> {
 }
 
 fn check_authority(authority: &ParsedAuthority) -> Result<bool, Error> {
-    match authority.authority_type {
-        0 => has_input_lock_hash(&authority.script_hash),
-        1 => has_type_hash(&authority.script_hash, Source::Input),
-        2 => has_type_hash(&authority.script_hash, Source::Output),
-        3 | 4 => Err(Error::UnsupportedAuthorityLocation),
-        _ => Err(Error::InvalidMetaData),
-    }
+    check_runtime_authority(&RuntimeAuthority {
+        authority_type: authority.authority_type,
+        script_hash: authority.script_hash,
+        script: authority.script.clone(),
+    })
+    .map_err(map_script_error)
 }
 
-fn has_input_lock_hash(target: &[u8; 32]) -> Result<bool, Error> {
-    let mut index = 0;
-    loop {
-        match load_cell_lock_hash(index, Source::Input) {
-            Ok(candidate) if &candidate == target => return Ok(true),
-            Ok(_) => index += 1,
-            Err(SysError::IndexOutOfBound) => return Ok(false),
-            Err(error) => return Err(error.into()),
-        }
-    }
-}
-
-fn has_type_hash(target: &[u8; 32], source: Source) -> Result<bool, Error> {
-    let mut index = 0;
-    loop {
-        match load_cell_type_hash(index, source) {
-            Ok(Some(candidate)) if &candidate == target => return Ok(true),
-            Ok(_) => index += 1,
-            Err(SysError::IndexOutOfBound) => return Ok(false),
-            Err(error) => return Err(error.into()),
-        }
+fn map_script_error(error: ScriptError) -> Error {
+    match error {
+        ScriptError::AuthorityFailed => Error::AuthorityFailed,
+        ScriptError::UnsupportedAuthorityLocation => Error::UnsupportedAuthorityLocation,
+        ScriptError::InvalidAuthority => Error::InvalidMetaData,
+        ScriptError::SyscallUnknown => Error::SyscallUnknown,
+        _ => Error::SyscallUnknown,
     }
 }
 
