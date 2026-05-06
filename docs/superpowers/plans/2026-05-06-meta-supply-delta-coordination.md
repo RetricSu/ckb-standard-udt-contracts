@@ -175,7 +175,7 @@ Expected: the test fails because the current code accepts the meta-only supply i
 **Files:**
 - Modify: `tests/src/tests/xudt_meta.rs`
 
-- [ ] **Step 1: Add a helper for xUDT meta updates with UDT deltas**
+- [x] **Step 1: Add a helper for xUDT meta updates with UDT deltas**
 
 Add this helper near `access_mode_transition_tx`:
 
@@ -249,7 +249,7 @@ fn update_meta_tx_with_udt_delta(
 }
 ```
 
-- [ ] **Step 2: Add failing tests for meta-only xUDT supply changes**
+- [x] **Step 2: Add failing tests for meta-only xUDT supply changes**
 
 Add these tests near the existing supply and mint-authority tests:
 
@@ -270,6 +270,8 @@ fn xudt_meta_rejects_supply_decrease_without_udt_delta() {
 ```
 
 - [ ] **Step 3: Add matching-delta and mismatch tests**
+
+Deferred from Task 2 red stage: same-token xUDT input/output cells can activate the xUDT type script before the planned `xudt-meta` fix, so these tests are not clean meta-side assertions yet.
 
 Add these tests after the tests from Step 2:
 
@@ -296,12 +298,14 @@ fn xudt_meta_rejects_supply_delta_mismatch() {
 }
 ```
 
-- [ ] **Step 4: Run one new xUDT meta test and verify failure**
+- [x] **Step 4: Run one new xUDT meta test and verify failure**
+
+Task 2 red run note: set `MODE=debug` so the test uses debug artifacts with the testtool always-success lock allowance. With `MODE=debug`, the transaction is accepted, so `expect_tx_fail_with_code(... "error code 31")` panics.
 
 Run:
 
 ```bash
-RUSTUP_TOOLCHAIN=1.92.0 cargo test -p tests xudt_meta_rejects_supply_increase_without_udt_delta -- --nocapture
+RUSTUP_TOOLCHAIN=1.92.0 MODE=debug cargo test -p tests xudt_meta_rejects_supply_increase_without_udt_delta -- --nocapture
 ```
 
 Expected: the test fails because the current code accepts the meta-only supply increase.

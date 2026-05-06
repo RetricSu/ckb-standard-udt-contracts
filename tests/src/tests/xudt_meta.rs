@@ -23,7 +23,9 @@ use ckb_testtool::{
     },
     context::Context,
 };
-use standard_udt_types::metadata::{CONFIG_ACCESS_ENABLED, CONFIG_ACCESS_WHITELIST, CONFIG_PAUSED};
+use standard_udt_types::metadata::{
+    CONFIG_ACCESS_ENABLED, CONFIG_ACCESS_WHITELIST, CONFIG_PAUSED, CONFIG_SUPPLY_TRACKED,
+};
 
 fn with_config_flags(data: Bytes, config_flags: u8) -> Bytes {
     let mut data = data.to_vec();
@@ -218,6 +220,74 @@ fn access_mode_transition_tx(
             extra_cells,
         )
     })
+}
+
+fn update_meta_tx_with_udt_delta(
+    input_supply: u128,
+    output_supply: u128,
+    input_udt_amount: Option<u128>,
+    output_udt_amount: Option<u128>,
+) -> UpdateCase {
+    let mut context = Context::default();
+    let lock = always_success_lock(&mut context);
+    let meta = meta_script(&mut context);
+    let xudt = xudt_script(&mut context, meta.script_hash);
+    let authority = input_lock_authority(lock.script_hash);
+    let input_meta_data = xudt_meta_data(
+        CONFIG_SUPPLY_TRACKED,
+        input_supply,
+        Some(authority.clone()),
+        None,
+        None,
+        Vec::new(),
+    );
+    let output_meta_data = xudt_meta_data(
+        CONFIG_SUPPLY_TRACKED,
+        output_supply,
+        Some(authority),
+        None,
+        None,
+        Vec::new(),
+    );
+    let input_out_point = create_typed_cell(
+        &mut context,
+        &lock.script,
+        &meta.script,
+        100_000_000_000,
+        input_meta_data,
+    );
+
+    let mut builder = TransactionBuilder::default()
+        .input(
+            CellInput::new_builder()
+                .previous_output(input_out_point)
+                .build(),
+        )
+        .output(typed_output(&lock.script, &meta.script, 100_000_000_000))
+        .output_data(output_meta_data.pack())
+        .cell_dep(cell_dep_for_script(&lock))
+        .cell_dep(cell_dep_for_script(&meta))
+        .cell_dep(cell_dep_for_script(&xudt));
+
+    if let Some(amount) = input_udt_amount {
+        let out_point = create_typed_cell(
+            &mut context,
+            &lock.script,
+            &xudt.script,
+            100_000_000_000,
+            udt_amount_bytes(amount),
+        );
+        builder = builder.input(CellInput::new_builder().previous_output(out_point).build());
+    }
+
+    if let Some(amount) = output_udt_amount {
+        builder = builder
+            .output(typed_output(&lock.script, &xudt.script, 100_000_000_000))
+            .output_data(udt_amount_bytes(amount).pack());
+    }
+
+    let tx = context.complete_tx(builder.build());
+    UpdateCase { context, tx }
 }
 
 fn update_meta_tx_with_output_lock<F>(build_lock: F) -> UpdateCase
@@ -664,6 +734,20 @@ fn xudt_meta_mint_authority_can_update_access_state() {
     });
 
     expect_tx_pass(&case.context, &case.tx);
+}
+
+#[test]
+fn xudt_meta_rejects_supply_increase_without_udt_delta() {
+    let case = update_meta_tx_with_udt_delta(100, 101, None, None);
+
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 31");
+}
+
+#[test]
+fn xudt_meta_rejects_supply_decrease_without_udt_delta() {
+    let case = update_meta_tx_with_udt_delta(100, 99, None, None);
+
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 31");
 }
 
 #[test]
