@@ -6,7 +6,7 @@ use ckb_std::{
 };
 use standard_udt_types::metadata::AccessListShard;
 
-use crate::{constants::ACCESS_LIST_CODE_HASH, error::Error, meta_cell::token::is_token_script};
+use crate::{constants::ACCESS_LIST_CODE_HASH, error::Error, state::token::is_token_script};
 
 const FULL_START: [u8; 32] = [0u8; 32];
 const FULL_END: [u8; 32] = [0xffu8; 32];

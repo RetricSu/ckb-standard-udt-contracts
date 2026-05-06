@@ -10,7 +10,7 @@ mod entry;
 #[cfg(feature = "library")]
 mod error;
 #[cfg(feature = "library")]
-mod meta_cell;
+mod state;
 #[cfg(feature = "library")]
 mod update;
 

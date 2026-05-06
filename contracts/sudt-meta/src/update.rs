@@ -1,7 +1,7 @@
 use crate::{
     constants::SUDT_CODE_HASH,
     error::Error,
-    meta_cell::{CONFIG_SUPPLY_TRACKED, is_supply_tracked},
+    state::{CONFIG_SUPPLY_TRACKED, is_supply_tracked},
 };
 use standard_udt_script_utils::{
     authority::check_authority as check_runtime_authority, error::ScriptError,

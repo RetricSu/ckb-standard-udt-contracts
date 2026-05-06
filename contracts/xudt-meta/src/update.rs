@@ -1,7 +1,7 @@
 use crate::{
     constants::XUDT_CODE_HASH,
     error::Error,
-    meta_cell::{
+    state::{
         CONFIG_SUPPLY_TRACKED, access_enabled, has_full_domain_access_list_inputs,
         has_full_domain_access_list_outputs, has_same_token_cells, is_supply_tracked, paused,
         whitelist_mode,

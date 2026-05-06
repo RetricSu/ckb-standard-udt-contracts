@@ -7,7 +7,7 @@ extern crate alloc;
 mod constants;
 mod entry;
 mod error;
-mod meta_cell;
+mod state;
 mod update;
 
 #[cfg(not(any(feature = "library", test)))]

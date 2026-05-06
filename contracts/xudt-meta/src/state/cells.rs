@@ -6,7 +6,7 @@ use ckb_std::{
     type_id::check_type_id,
 };
 
-use crate::{error::Error, meta_cell::parser::parse_meta};
+use crate::{error::Error, state::parser::parse_meta};
 use standard_udt_types::metadata::XudtMeta;
 
 const ALWAYS_SUCCESS_LOCK_CODE_HASH_WHITELIST: [[u8; 32]; 1] = [[
