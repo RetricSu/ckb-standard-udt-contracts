@@ -36,7 +36,7 @@ pub fn validate_if_enabled(meta_type_hash: &[u8; 32], meta: &XudtMeta) -> Result
         match load_cell_lock_hash(index, Source::GroupInput) {
             Ok(lock_hash) => validate_lock_hash(meta.is_whitelist(), lock_hash, &shards)?,
             Err(SysError::IndexOutOfBound) => return Ok(()),
-            Err(_) => return Err(Error::Syscall),
+            Err(error) => return Err(error.into()),
         }
         index += 1;
     }
@@ -84,13 +84,13 @@ fn collect_shards_from_source(
     loop {
         match load_cell_type(index, source) {
             Ok(Some(type_script)) if is_access_list_script(&type_script, meta_type_hash) => {
-                let data = load_cell_data(index, source).map_err(|_| Error::Syscall)?;
+                let data = load_cell_data(index, source).map_err(Error::from)?;
                 shards.push(parse_access_list_shard(&data)?);
                 index += 1;
             }
             Ok(_) => index += 1,
             Err(SysError::IndexOutOfBound) => return Ok(()),
-            Err(_) => return Err(Error::Syscall),
+            Err(error) => return Err(error.into()),
         }
     }
 }

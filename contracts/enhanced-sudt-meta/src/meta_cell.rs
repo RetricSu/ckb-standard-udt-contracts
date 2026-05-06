@@ -40,12 +40,12 @@ pub fn load_meta_group() -> Result<MetaGroup, Error> {
     Ok(MetaGroup {
         input: load_group_meta(Source::GroupInput)?,
         output: load_group_meta(Source::GroupOutput)?,
-        meta_type_hash: load_script_hash().map_err(|_| Error::Syscall)?,
+        meta_type_hash: load_script_hash().map_err(Error::from)?,
     })
 }
 
 pub fn validate_type_args() -> Result<(), Error> {
-    let script = load_script().map_err(|_| Error::Syscall)?;
+    let script = load_script().map_err(Error::from)?;
     if script.args().raw_data().len() != 32 {
         return Err(Error::InvalidArgs);
     }
@@ -84,11 +84,11 @@ pub fn sum_initial_udt_outputs(
                 continue;
             }
             Err(SysError::IndexOutOfBound) => return Ok(total),
-            Err(_) => return Err(Error::Syscall),
+            Err(error) => return Err(error.into()),
         };
 
         if is_initial_udt_script(&type_script, meta_type_hash, udt_code_hash) {
-            let data = load_cell_data(index, Source::Output).map_err(|_| Error::Syscall)?;
+            let data = load_cell_data(index, Source::Output).map_err(Error::from)?;
             let amount = decode_amount(&data)?;
             total = total.checked_add(amount).ok_or(Error::InvalidSupply)?;
         }
@@ -121,7 +121,7 @@ fn load_group_meta(source: Source) -> Result<Option<SudtMeta>, Error> {
                 index += 1;
             }
             Err(SysError::IndexOutOfBound) => return Ok(found),
-            Err(_) => return Err(Error::Syscall),
+            Err(error) => return Err(error.into()),
         }
     }
 }

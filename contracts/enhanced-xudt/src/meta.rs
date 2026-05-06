@@ -73,7 +73,7 @@ pub struct ScriptAttr {
 }
 
 pub fn load_meta_type_hash_arg() -> Result<[u8; 32], Error> {
-    let script = load_script().map_err(|_| Error::Syscall)?;
+    let script = load_script().map_err(Error::from)?;
     let args = script.args().raw_data();
     if args.len() != 32 {
         return Err(Error::InvalidArgs);
@@ -96,7 +96,7 @@ pub fn collect_group_amount(source: Source) -> Result<u128, Error> {
                 index += 1;
             }
             Err(SysError::IndexOutOfBound) => return Ok(total),
-            Err(_) => return Err(Error::Syscall),
+            Err(error) => return Err(error.into()),
         }
     }
 }
@@ -128,13 +128,13 @@ pub fn find_meta_in_source(
                     return Err(Error::MetaNotUnique);
                 }
                 validate_meta_lock(index, source)?;
-                let data = load_cell_data(index, source).map_err(|_| Error::Syscall)?;
+                let data = load_cell_data(index, source).map_err(Error::from)?;
                 found = Some(parse_meta(&data)?);
                 index += 1;
             }
             Ok(_) => index += 1,
             Err(SysError::IndexOutOfBound) => return Ok(found),
-            Err(_) => return Err(Error::Syscall),
+            Err(error) => return Err(error.into()),
         }
     }
 }
@@ -208,7 +208,7 @@ fn decode_amount(data: &[u8]) -> Result<u128, Error> {
 }
 
 fn validate_meta_lock(index: usize, source: Source) -> Result<(), Error> {
-    let lock = load_cell_lock(index, source).map_err(|_| Error::Syscall)?;
+    let lock = load_cell_lock(index, source).map_err(Error::from)?;
     let code_hash: [u8; 32] = lock.code_hash().unpack();
     if META_LOCK_CODE_HASH_WHITELIST.contains(&code_hash) {
         Ok(())
@@ -272,7 +272,7 @@ fn has_input_lock_hash(target: &[u8; 32]) -> Result<bool, Error> {
             Ok(candidate) if &candidate == target => return Ok(true),
             Ok(_) => index += 1,
             Err(SysError::IndexOutOfBound) => return Ok(false),
-            Err(_) => return Err(Error::Syscall),
+            Err(error) => return Err(error.into()),
         }
     }
 }
@@ -284,7 +284,7 @@ fn has_type_hash(target: &[u8; 32], source: Source) -> Result<bool, Error> {
             Ok(Some(candidate)) if &candidate == target => return Ok(true),
             Ok(_) => index += 1,
             Err(SysError::IndexOutOfBound) => return Ok(false),
-            Err(_) => return Err(Error::Syscall),
+            Err(error) => return Err(error.into()),
         }
     }
 }

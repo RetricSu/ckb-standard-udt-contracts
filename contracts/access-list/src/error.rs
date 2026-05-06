@@ -13,6 +13,15 @@ pub enum Error {
     UnsupportedAuthorityLocation,
     InvalidShardData,
     InvalidShardSet,
+    SysIndexOutOfBound,
+    SysItemMissing,
+    SysLengthNotEnough,
+    SysEncoding,
+    SysWaitFailure,
+    SysInvalidFd,
+    SysOtherEndClosed,
+    SysMaxVmsSpawned,
+    SysMaxFdsCreated,
 }
 
 impl Error {
@@ -28,6 +37,15 @@ impl Error {
             Self::AuthorityFailed => 8,
             Self::UnsupportedAuthorityLocation => 9,
             Self::InvalidShardData | Self::InvalidShardSet => 3,
+            Self::SysIndexOutOfBound => 10,
+            Self::SysItemMissing => 11,
+            Self::SysLengthNotEnough => 12,
+            Self::SysEncoding => 13,
+            Self::SysWaitFailure => 14,
+            Self::SysInvalidFd => 15,
+            Self::SysOtherEndClosed => 16,
+            Self::SysMaxVmsSpawned => 17,
+            Self::SysMaxFdsCreated => 18,
         }
     }
 }
@@ -38,8 +56,21 @@ impl From<Error> for i8 {
     }
 }
 
+#[allow(unreachable_patterns)]
 impl From<SysError> for Error {
-    fn from(_: SysError) -> Self {
-        Self::Syscall
+    fn from(error: SysError) -> Self {
+        match error {
+            SysError::IndexOutOfBound => Self::SysIndexOutOfBound,
+            SysError::ItemMissing => Self::SysItemMissing,
+            SysError::LengthNotEnough(_) => Self::SysLengthNotEnough,
+            SysError::Encoding => Self::SysEncoding,
+            SysError::WaitFailure => Self::SysWaitFailure,
+            SysError::InvalidFd => Self::SysInvalidFd,
+            SysError::OtherEndClosed => Self::SysOtherEndClosed,
+            SysError::MaxVmsSpawned => Self::SysMaxVmsSpawned,
+            SysError::MaxFdsCreated => Self::SysMaxFdsCreated,
+            SysError::Unknown(_) => Self::Syscall,
+            _ => Self::Syscall,
+        }
     }
 }

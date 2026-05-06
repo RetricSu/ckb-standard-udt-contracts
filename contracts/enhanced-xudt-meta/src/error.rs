@@ -12,6 +12,16 @@ pub enum Error {
     Syscall,
     AccessListRequired,
     AccessModeTokenCells,
+    SysIndexOutOfBound,
+    SysItemMissing,
+    SysLengthNotEnough,
+    SysEncoding,
+    SysWaitFailure,
+    SysInvalidFd,
+    SysOtherEndClosed,
+    SysMaxVmsSpawned,
+    SysMaxFdsCreated,
+    SysTypeIdError,
 }
 
 impl Error {
@@ -27,6 +37,16 @@ impl Error {
             Self::Syscall => 8,
             Self::AccessListRequired => 9,
             Self::AccessModeTokenCells => 10,
+            Self::SysIndexOutOfBound => 11,
+            Self::SysItemMissing => 12,
+            Self::SysLengthNotEnough => 13,
+            Self::SysEncoding => 14,
+            Self::SysWaitFailure => 15,
+            Self::SysInvalidFd => 16,
+            Self::SysOtherEndClosed => 17,
+            Self::SysMaxVmsSpawned => 18,
+            Self::SysMaxFdsCreated => 19,
+            Self::SysTypeIdError => 20,
         }
     }
 }
@@ -38,7 +58,19 @@ impl From<Error> for i8 {
 }
 
 impl From<SysError> for Error {
-    fn from(_: SysError) -> Self {
-        Self::Syscall
+    fn from(error: SysError) -> Self {
+        match error {
+            SysError::IndexOutOfBound => Self::SysIndexOutOfBound,
+            SysError::ItemMissing => Self::SysItemMissing,
+            SysError::LengthNotEnough(_) => Self::SysLengthNotEnough,
+            SysError::Encoding => Self::SysEncoding,
+            SysError::WaitFailure => Self::SysWaitFailure,
+            SysError::InvalidFd => Self::SysInvalidFd,
+            SysError::OtherEndClosed => Self::SysOtherEndClosed,
+            SysError::MaxVmsSpawned => Self::SysMaxVmsSpawned,
+            SysError::MaxFdsCreated => Self::SysMaxFdsCreated,
+            SysError::TypeIDError => Self::SysTypeIdError,
+            SysError::Unknown(_) => Self::Syscall,
+        }
     }
 }
