@@ -17,7 +17,7 @@ use crate::{
 };
 
 const ACCESS_LIST_SHARD_FIELDS: usize = 2;
-const MAX_ACCESSLIST_ENTRIES: usize = 8192;
+const MAX_ACCESSLIST_ENTRIES: usize = 4096;
 
 pub fn has_legal_access_list_shard(meta_type_hash: &[u8; 32]) -> Result<bool, Error> {
     Ok(!collect_legal_access_list_shards(meta_type_hash)?.is_empty())

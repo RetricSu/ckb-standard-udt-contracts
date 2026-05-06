@@ -5,7 +5,7 @@ use ckb_std::{ckb_constants::Source, error::SysError, high_level::load_cell_data
 use crate::{error::Error, mode::AccessMode};
 
 const ACCESS_LIST_SHARD_FIELDS: usize = 2;
-const MAX_ACCESSLIST_ENTRIES: usize = 8192;
+const MAX_ACCESSLIST_ENTRIES: usize = 4096;
 const FULL_START: [u8; 32] = [0u8; 32];
 const FULL_END: [u8; 32] = [0xffu8; 32];
 

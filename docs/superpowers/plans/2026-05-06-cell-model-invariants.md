@@ -18,8 +18,9 @@
 - Modify `contracts/sudt-meta/src/meta_cell.rs`: add `GroupOutput` lock whitelist validation for meta outputs.
 - Modify `contracts/xudt-meta/src/meta_cell/cells.rs`: validate only `GroupOutput` meta locks, not `GroupInput` locks.
 - Modify `contracts/access-list/src/entry.rs`: validate `GroupOutput` shard locks before accepting shard outputs.
-- Modify `contracts/access-list/src/shards.rs`: switch nibble alignment to prefix-bucket semantics and keep blacklist chain validation explicit.
-- Modify `contracts/xudt/src/access.rs`: add blacklist complete-chain validation and prefix-bucket nibble alignment to the access reader.
+- Modify `contracts/access-list/src/shards.rs`: switch nibble alignment to prefix-bucket semantics, keep blacklist chain validation explicit, and set `MAX_ACCESSLIST_ENTRIES` to `4096`.
+- Modify `contracts/xudt/src/access.rs`: add blacklist complete-chain validation, prefix-bucket nibble alignment, and set `MAX_ACCESSLIST_ENTRIES` to `4096` in the access reader.
+- Modify `contracts/xudt-meta/src/meta_cell/access_list.rs`: set the access-list initialization parser limit to `4096`.
 - Modify tests in `tests/src/tests/sudt.rs`, `tests/src/tests/xudt.rs`, `tests/src/tests/access_list.rs`, `tests/src/tests/sudt_meta.rs`, and `tests/src/tests/xudt_meta.rs`.
 
 ---

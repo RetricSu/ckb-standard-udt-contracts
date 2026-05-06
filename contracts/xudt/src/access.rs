@@ -14,7 +14,7 @@ use crate::{
 };
 
 const ACCESS_LIST_SHARD_FIELDS: usize = 2;
-const MAX_ACCESSLIST_ENTRIES: usize = 8192;
+const MAX_ACCESSLIST_ENTRIES: usize = 4096;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 struct AccessListShard {

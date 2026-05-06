@@ -54,7 +54,7 @@ They must still validate the cross-cell facts they depend on:
 
 - Its own `GroupOutput` shard locks must use the always-success lock code hash whitelist.
 - Shard data must decode strictly.
-- Entries must be sorted, unique, within the shard range, and below the entry limit.
+- Entries must be sorted, unique, within the shard range, and below the `4096` entries-per-shard limit.
 - Ranges must be ordered and non-overlapping.
 - Blacklist mode must satisfy the shard chain invariant.
 - Blacklist updates may only insert/delete entries within equal ranges, or split/merge adjacent ranges without changing coverage or flattened entries.
