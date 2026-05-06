@@ -4,13 +4,13 @@ use alloc::{ffi::CString, string::String, vec::Vec};
 use core::ffi::CStr;
 
 use ckb_std::{
-    ckb_types::core::ScriptHashType,
+    ckb_types::{core::ScriptHashType, prelude::*},
     dynamic_loading::{CKBDLContext, Symbol},
     high_level::spawn_cell,
     syscalls::wait,
 };
 
-use crate::{entry::Operation, error::Error, meta::ScriptAttr};
+use crate::{entry::Operation, error::Error, meta::ParsedExtension};
 
 type ExtensionFn = unsafe extern "C" fn(*const u8, u8, u8, *const u8, usize, u8) -> i8;
 
@@ -26,15 +26,15 @@ const fn mint_authority_context_code(value: MintAuthorityContext) -> u8 {
 
 pub fn run_extensions(
     operation: Operation,
-    extensions: &[ScriptAttr],
+    extensions: &[ParsedExtension],
     mint_authority_context: MintAuthorityContext,
 ) -> Result<(), Error> {
     for (index, extension) in extensions.iter().enumerate() {
-        match extension.location {
-            3 => {
+        match extension.extension_type {
+            0 => {
                 run_dynamic_linking_extension(operation, index, extension, mint_authority_context)?
             }
-            4 => run_spawn_extension(operation, index, extension, mint_authority_context)?,
+            1 => run_spawn_extension(operation, index, extension, mint_authority_context)?,
             _ => return Err(Error::InvalidMetaData),
         }
     }
@@ -44,10 +44,10 @@ pub fn run_extensions(
 fn run_dynamic_linking_extension(
     operation: Operation,
     index: usize,
-    extension: &ScriptAttr,
+    extension: &ParsedExtension,
     mint_authority_context: MintAuthorityContext,
 ) -> Result<(), Error> {
-    let script = extension.script.as_ref().ok_or(Error::InvalidMetaData)?;
+    let script = &extension.script;
     let code_hash = script.code_hash().raw_data();
     let mut context = unsafe { CKBDLContext::<[u8; 128 * 1024]>::new() };
     let library = context
@@ -55,12 +55,13 @@ fn run_dynamic_linking_extension(
         .map_err(|_| Error::ExtensionFailed)?;
     let ext_data = script.args().raw_data();
 
+    let script_hash: [u8; 32] = script.calc_script_hash().unpack();
     let result = unsafe {
         let validate: Symbol<ExtensionFn> = library
             .get(b"eudt_validate")
             .ok_or(Error::ExtensionFailed)?;
         validate(
-            extension.script_hash.as_ptr(),
+            script_hash.as_ptr(),
             operation.code(),
             index as u8,
             ext_data.as_ptr(),
@@ -79,10 +80,10 @@ fn run_dynamic_linking_extension(
 fn run_spawn_extension(
     operation: Operation,
     index: usize,
-    extension: &ScriptAttr,
+    extension: &ParsedExtension,
     mint_authority_context: MintAuthorityContext,
 ) -> Result<(), Error> {
-    let script = extension.script.as_ref().ok_or(Error::InvalidMetaData)?;
+    let script = &extension.script;
     let code_hash = script.code_hash().raw_data();
     let op = CString::new(decimal_byte(operation.code())).map_err(|_| Error::InvalidMetaData)?;
     let ext_index = CString::new(decimal_byte(index as u8)).map_err(|_| Error::InvalidMetaData)?;

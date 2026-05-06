@@ -9,17 +9,17 @@ use crate::error::Error;
 pub use authority::check_authority;
 use cells::find_meta_in_source;
 use ckb_std::ckb_constants::Source;
-pub use parser::ScriptAttr;
+pub use parser::ParsedAuthority;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(super) struct ParsedXudtMeta {
     pub(super) config_flags: u8,
-    pub(super) access_authority: Option<ScriptAttr>,
+    pub(super) access_authority: Option<ParsedAuthority>,
 }
 
 pub struct MetaContext {
     pub output_config_flags: u8,
-    pub access_authority: Option<ScriptAttr>,
+    pub access_authority: Option<ParsedAuthority>,
 }
 
 pub fn load_meta_type_hash_arg() -> Result<[u8; 32], Error> {

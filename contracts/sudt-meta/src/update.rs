@@ -1,6 +1,6 @@
 use crate::{
     error::Error,
-    meta_cell::{CONFIG_SUPPLY_TRACKED, ParsedSudtMeta, ScriptAttr, is_supply_tracked},
+    meta_cell::{CONFIG_SUPPLY_TRACKED, ParsedAuthority, ParsedSudtMeta, is_supply_tracked},
 };
 use ckb_std::{
     ckb_constants::Source,
@@ -38,7 +38,7 @@ pub fn validate_update(input: &ParsedSudtMeta, output: &ParsedSudtMeta) -> Resul
     Ok(())
 }
 
-fn require_authority(authority: Option<&ScriptAttr>) -> Result<(), Error> {
+fn require_authority(authority: Option<&ParsedAuthority>) -> Result<(), Error> {
     let authority = authority.ok_or(Error::AuthorityMissing)?;
     match check_authority(authority) {
         Ok(true) => Ok(()),
@@ -47,8 +47,8 @@ fn require_authority(authority: Option<&ScriptAttr>) -> Result<(), Error> {
     }
 }
 
-fn check_authority(authority: &ScriptAttr) -> Result<bool, Error> {
-    match authority.location {
+fn check_authority(authority: &ParsedAuthority) -> Result<bool, Error> {
+    match authority.authority_type {
         0 => has_input_lock_hash(&authority.script_hash),
         1 => has_type_hash(&authority.script_hash, Source::Input),
         2 => has_type_hash(&authority.script_hash, Source::Output),

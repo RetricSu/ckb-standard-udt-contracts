@@ -4,9 +4,9 @@ use ckb_std::{
     high_level::{load_cell_lock_hash, load_cell_type_hash},
 };
 
-use crate::{error::Error, meta::parser::ScriptAttr};
+use crate::{error::Error, meta::parser::ParsedAuthority};
 
-pub(crate) fn require_authority(authority: Option<&ScriptAttr>) -> Result<(), Error> {
+pub(crate) fn require_authority(authority: Option<&ParsedAuthority>) -> Result<(), Error> {
     let authority = authority.ok_or(Error::AuthorityMissing)?;
     match check_authority(authority)? {
         true => Ok(()),
@@ -14,8 +14,8 @@ pub(crate) fn require_authority(authority: Option<&ScriptAttr>) -> Result<(), Er
     }
 }
 
-fn check_authority(authority: &ScriptAttr) -> Result<bool, Error> {
-    match authority.location {
+fn check_authority(authority: &ParsedAuthority) -> Result<bool, Error> {
+    match authority.authority_type {
         0 => has_input_lock_hash(&authority.script_hash),
         1 => has_type_hash(&authority.script_hash, Source::Input),
         2 => has_type_hash(&authority.script_hash, Source::Output),

@@ -4,10 +4,10 @@ use ckb_std::{
     high_level::{load_cell_lock_hash, load_cell_type_hash},
 };
 
-use crate::{error::Error, meta::ScriptAttr};
+use crate::{error::Error, meta::ParsedAuthority};
 
-pub fn check_authority(authority: &ScriptAttr) -> Result<bool, Error> {
-    match authority.location {
+pub fn check_authority(authority: &ParsedAuthority) -> Result<bool, Error> {
+    match authority.authority_type {
         0 => has_input_lock_hash(&authority.script_hash),
         1 => has_type_hash(&authority.script_hash, Source::Input),
         2 => has_type_hash(&authority.script_hash, Source::Output),

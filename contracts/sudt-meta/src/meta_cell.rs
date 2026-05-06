@@ -20,14 +20,15 @@ pub struct ParsedSudtMeta {
     pub metadata_fields: Vec<u8>,
     pub mint_authority_raw: Vec<u8>,
     pub metadata_authority_raw: Vec<u8>,
-    pub mint_authority: Option<ScriptAttr>,
-    pub metadata_authority: Option<ScriptAttr>,
+    pub mint_authority: Option<ParsedAuthority>,
+    pub metadata_authority: Option<ParsedAuthority>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ScriptAttr {
-    pub location: u8,
+pub struct ParsedAuthority {
+    pub authority_type: u8,
     pub script_hash: [u8; 32],
+    pub script: Option<Script>,
 }
 
 pub struct MetaGroup {
@@ -141,8 +142,8 @@ fn parse_meta(data: &[u8]) -> Result<ParsedSudtMeta, Error> {
     let metadata_fields = data[offsets[2]..offsets[7]].to_vec();
     let mint_authority_raw = data[offsets[7]..offsets[8]].to_vec();
     let metadata_authority_raw = data[offsets[8]..offsets[9]].to_vec();
-    let mint_authority = parse_script_attr_opt(&mint_authority_raw)?;
-    let metadata_authority = parse_script_attr_opt(&metadata_authority_raw)?;
+    let mint_authority = parse_authority_opt(&mint_authority_raw)?;
+    let metadata_authority = parse_authority_opt(&metadata_authority_raw)?;
 
     if !is_supply_tracked(config_flags) && current_supply != 0 {
         return Err(Error::InvalidSupply);
@@ -225,36 +226,38 @@ fn u128_field(data: &[u8], start: usize, end: usize) -> Result<u128, Error> {
     Ok(u128::from_le_bytes(raw))
 }
 
-fn parse_script_attr_opt(data: &[u8]) -> Result<Option<ScriptAttr>, Error> {
+fn parse_authority_opt(data: &[u8]) -> Result<Option<ParsedAuthority>, Error> {
     if data.is_empty() {
         return Ok(None);
     }
 
-    parse_script_attr(data).map(Some)
+    parse_authority(data).map(Some)
 }
 
-fn parse_script_attr(data: &[u8]) -> Result<ScriptAttr, Error> {
+fn parse_authority(data: &[u8]) -> Result<ParsedAuthority, Error> {
     let offsets = table_offsets(data, 3)?;
-    let location = single_byte_field(data, offsets[0], offsets[1])?;
+    let authority_type = single_byte_field(data, offsets[0], offsets[1])?;
     let script_hash = byte32_field(data, offsets[1], offsets[2])?;
     let script_opt = &data[offsets[2]..offsets[3]];
 
-    match location {
-        0..=2 if script_opt.is_empty() => {}
+    let script = match authority_type {
+        0..=2 if script_opt.is_empty() => None,
         3 | 4 if !script_opt.is_empty() => {
             let script = Script::from_slice(script_opt).map_err(|_| Error::InvalidMetaData)?;
             let parsed_hash: [u8; 32] = script.calc_script_hash().unpack();
             if parsed_hash != script_hash {
                 return Err(Error::InvalidMetaData);
             }
+            Some(script)
         }
         0..=4 => return Err(Error::InvalidMetaData),
         _ => return Err(Error::InvalidMetaData),
-    }
+    };
 
-    Ok(ScriptAttr {
-        location,
+    Ok(ParsedAuthority {
+        authority_type,
         script_hash,
+        script,
     })
 }
 

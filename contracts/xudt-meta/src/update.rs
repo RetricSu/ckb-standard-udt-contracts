@@ -1,7 +1,7 @@
 use crate::{
     error::Error,
     meta_cell::{
-        CONFIG_SUPPLY_TRACKED, ParsedXudtMeta, ScriptAttr, access_enabled,
+        CONFIG_SUPPLY_TRACKED, ParsedAuthority, ParsedXudtMeta, access_enabled,
         has_full_domain_access_list_shards, has_legal_access_list_shard, has_same_token_cells,
         is_supply_tracked, paused, whitelist_mode,
     },
@@ -101,7 +101,7 @@ fn validate_access_mode_transition(
     Ok(())
 }
 
-fn require_authority(authority: Option<&ScriptAttr>) -> Result<(), Error> {
+fn require_authority(authority: Option<&ParsedAuthority>) -> Result<(), Error> {
     let authority = authority.ok_or(Error::AuthorityMissing)?;
     match check_authority(authority) {
         Ok(true) => Ok(()),
@@ -110,8 +110,8 @@ fn require_authority(authority: Option<&ScriptAttr>) -> Result<(), Error> {
     }
 }
 
-fn check_authority(authority: &ScriptAttr) -> Result<bool, Error> {
-    match authority.location {
+fn check_authority(authority: &ParsedAuthority) -> Result<bool, Error> {
+    match authority.authority_type {
         0 => has_input_lock_hash(&authority.script_hash),
         1 => has_type_hash(&authority.script_hash, Source::Input),
         2 => has_type_hash(&authority.script_hash, Source::Output),

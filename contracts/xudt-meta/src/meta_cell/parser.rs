@@ -5,7 +5,8 @@ use ckb_std::ckb_types::{packed::Script, prelude::*};
 use crate::{error::Error, meta_cell::config};
 
 const XUDT_META_FIELDS: usize = 11;
-const SCRIPT_ATTR_FIELDS: usize = 3;
+const AUTHORITY_FIELDS: usize = 3;
+const EXTENSION_FIELDS: usize = 2;
 const MAX_EXTENSIONS: usize = 16;
 const MAX_METADATA_NAME_BYTES: usize = 1024;
 const MAX_METADATA_SYMBOL_BYTES: usize = 128;
@@ -21,15 +22,22 @@ pub struct ParsedXudtMeta {
     pub metadata_authority_raw: Vec<u8>,
     pub access_authority_raw: Vec<u8>,
     pub extensions_raw: Vec<u8>,
-    pub mint_authority: Option<ScriptAttr>,
-    pub metadata_authority: Option<ScriptAttr>,
-    pub access_authority: Option<ScriptAttr>,
+    pub mint_authority: Option<ParsedAuthority>,
+    pub metadata_authority: Option<ParsedAuthority>,
+    pub access_authority: Option<ParsedAuthority>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ScriptAttr {
-    pub location: u8,
+pub struct ParsedAuthority {
+    pub authority_type: u8,
     pub script_hash: [u8; 32],
+    pub script: Option<Script>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ParsedExtension {
+    pub extension_type: u8,
+    pub script: Script,
 }
 
 pub(crate) fn parse_meta(data: &[u8]) -> Result<ParsedXudtMeta, Error> {
@@ -51,10 +59,10 @@ pub(crate) fn parse_meta(data: &[u8]) -> Result<ParsedXudtMeta, Error> {
     let metadata_authority_raw = data[offsets[8]..offsets[9]].to_vec();
     let access_authority_raw = data[offsets[9]..offsets[10]].to_vec();
     let extensions_raw = data[offsets[10]..offsets[11]].to_vec();
-    let mint_authority = parse_script_attr_opt(&mint_authority_raw)?;
-    let metadata_authority = parse_script_attr_opt(&metadata_authority_raw)?;
-    let access_authority = parse_script_attr_opt(&access_authority_raw)?;
-    parse_script_attr_vec(&extensions_raw)?;
+    let mint_authority = parse_authority_opt(&mint_authority_raw)?;
+    let metadata_authority = parse_authority_opt(&metadata_authority_raw)?;
+    let access_authority = parse_authority_opt(&access_authority_raw)?;
+    parse_extension_vec(&extensions_raw)?;
 
     if !config::is_supply_tracked(config_flags) && current_supply != 0 {
         return Err(Error::InvalidSupply);
@@ -74,7 +82,7 @@ pub(crate) fn parse_meta(data: &[u8]) -> Result<ParsedXudtMeta, Error> {
     })
 }
 
-fn parse_script_attr_vec(data: &[u8]) -> Result<(), Error> {
+fn parse_extension_vec(data: &[u8]) -> Result<Vec<ParsedExtension>, Error> {
     if data.len() < 4 {
         return Err(Error::InvalidMetaData);
     }
@@ -83,7 +91,7 @@ fn parse_script_attr_vec(data: &[u8]) -> Result<(), Error> {
         return Err(Error::InvalidMetaData);
     }
     if total_size == 4 {
-        return Ok(());
+        return Ok(Vec::new());
     }
     let first_offset = read_u32(data, 4)? as usize;
     if first_offset < 8 || first_offset % 4 != 0 || first_offset > total_size {
@@ -101,51 +109,71 @@ fn parse_script_attr_vec(data: &[u8]) -> Result<(), Error> {
     offsets.push(total_size);
 
     let mut prev_key: Option<(u8, [u8; 32])> = None;
+    let mut extensions = Vec::with_capacity(count);
     for pair in offsets.windows(2) {
         if pair[0] > pair[1] {
             return Err(Error::InvalidMetaData);
         }
-        let attr = parse_script_attr(&data[pair[0]..pair[1]])?;
-        let key = (attr.location, attr.script_hash);
+        let extension = parse_extension(&data[pair[0]..pair[1]])?;
+        let script_hash: [u8; 32] = extension.script.calc_script_hash().unpack();
+        let key = (extension.extension_type, script_hash);
         if let Some(prev) = prev_key {
             if key <= prev {
                 return Err(Error::InvalidMetaData);
             }
         }
         prev_key = Some(key);
+        extensions.push(extension);
     }
-    Ok(())
+    Ok(extensions)
 }
 
-fn parse_script_attr_opt(data: &[u8]) -> Result<Option<ScriptAttr>, Error> {
+fn parse_authority_opt(data: &[u8]) -> Result<Option<ParsedAuthority>, Error> {
     if data.is_empty() {
         return Ok(None);
     }
-    parse_script_attr(data).map(Some)
+    parse_authority(data).map(Some)
 }
 
-fn parse_script_attr(data: &[u8]) -> Result<ScriptAttr, Error> {
-    let offsets = table_offsets(data, SCRIPT_ATTR_FIELDS, false)?;
-    let location = single_byte_field(data, offsets[0], offsets[1])?;
+fn parse_authority(data: &[u8]) -> Result<ParsedAuthority, Error> {
+    let offsets = table_offsets(data, AUTHORITY_FIELDS, false)?;
+    let authority_type = single_byte_field(data, offsets[0], offsets[1])?;
     let script_hash = byte32_field(data, offsets[1], offsets[2])?;
     let script_opt = &data[offsets[2]..offsets[3]];
 
-    match location {
-        0..=2 if script_opt.is_empty() => {}
+    let script = match authority_type {
+        0..=2 if script_opt.is_empty() => None,
         3 | 4 if !script_opt.is_empty() => {
             let script = Script::from_slice(script_opt).map_err(|_| Error::InvalidMetaData)?;
             let parsed_hash: [u8; 32] = script.calc_script_hash().unpack();
             if parsed_hash != script_hash {
                 return Err(Error::InvalidMetaData);
             }
+            Some(script)
         }
         0..=4 => return Err(Error::InvalidMetaData),
         _ => return Err(Error::InvalidMetaData),
-    }
+    };
 
-    Ok(ScriptAttr {
-        location,
+    Ok(ParsedAuthority {
+        authority_type,
         script_hash,
+        script,
+    })
+}
+
+fn parse_extension(data: &[u8]) -> Result<ParsedExtension, Error> {
+    let offsets = table_offsets(data, EXTENSION_FIELDS, false)?;
+    let extension_type = single_byte_field(data, offsets[0], offsets[1])?;
+    if extension_type > 1 {
+        return Err(Error::InvalidMetaData);
+    }
+    let script =
+        Script::from_slice(&data[offsets[1]..offsets[2]]).map_err(|_| Error::InvalidMetaData)?;
+
+    Ok(ParsedExtension {
+        extension_type,
+        script,
     })
 }
 
