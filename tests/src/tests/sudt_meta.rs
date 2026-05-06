@@ -69,6 +69,19 @@ fn always_success_lock(context: &mut Context) -> DeployedScript {
     }
 }
 
+fn non_whitelisted_lock(context: &mut Context) -> DeployedScript {
+    let out_point = context.deploy_cell(Bytes::from(vec![1u8]));
+    let script = context
+        .build_script_with_hash_type(&out_point, ScriptHashType::Data2, Bytes::new())
+        .expect("build non-whitelisted lock");
+    let script_hash = script_hash(&script);
+    DeployedScript {
+        out_point,
+        script,
+        script_hash,
+    }
+}
+
 fn fake_data2_script(context: &mut Context, meta_type_hash: [u8; 32]) -> DeployedScript {
     let out_point = context.deploy_cell(ALWAYS_SUCCESS.clone());
     let script = context
@@ -227,6 +240,45 @@ where
         .output(typed_output(&lock.script, &meta.script, 100_000_000_000))
         .output_data(output_meta_data.pack())
         .cell_dep(cell_dep_for_script(&lock))
+        .cell_dep(cell_dep_for_script(&meta))
+        .build();
+    let tx = context.complete_tx(tx);
+    (context, tx)
+}
+
+fn update_meta_tx_with_locks<F>(build_data: F) -> (Context, TransactionView)
+where
+    F: FnOnce(&mut Context, [u8; 32], Script) -> (DeployedScript, Bytes, Bytes),
+{
+    let mut context = Context::default();
+    let input_lock = always_success_lock(&mut context);
+    let (output_lock, input_meta_data, output_meta_data) = build_data(
+        &mut context,
+        input_lock.script_hash,
+        input_lock.script.clone(),
+    );
+    let meta = meta_script(&mut context, Bytes::from(vec![2u8; 32]));
+    let input_out_point = create_typed_cell(
+        &mut context,
+        &input_lock.script,
+        &meta.script,
+        100_000_000_000,
+        input_meta_data,
+    );
+    let tx = TransactionBuilder::default()
+        .input(
+            CellInput::new_builder()
+                .previous_output(input_out_point)
+                .build(),
+        )
+        .output(typed_output(
+            &output_lock.script,
+            &meta.script,
+            100_000_000_000,
+        ))
+        .output_data(output_meta_data.pack())
+        .cell_dep(cell_dep_for_script(&input_lock))
+        .cell_dep(cell_dep_for_script(&output_lock))
         .cell_dep(cell_dep_for_script(&meta))
         .build();
     let tx = context.complete_tx(tx);
@@ -403,6 +455,35 @@ fn sudt_meta_update_metadata_change_with_input_lock_authority_passes() {
     });
 
     expect_tx_pass(&context, &tx);
+}
+
+#[test]
+fn sudt_meta_rejects_non_whitelisted_output_lock() {
+    let (context, tx) = update_meta_tx_with_locks(|context, lock_hash, _| {
+        let output_lock = non_whitelisted_lock(context);
+        let authority = input_lock_authority(lock_hash);
+        (
+            output_lock,
+            sudt_meta_data(
+                CONFIG_SUPPLY_TRACKED,
+                0,
+                None,
+                Some(authority.clone()),
+                Vec::new(),
+                Vec::new(),
+            ),
+            sudt_meta_data(
+                CONFIG_SUPPLY_TRACKED,
+                0,
+                None,
+                Some(authority),
+                b"new name".to_vec(),
+                Vec::new(),
+            ),
+        )
+    });
+
+    expect_tx_fail(&context, &tx);
 }
 
 #[test]

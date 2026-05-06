@@ -62,6 +62,19 @@ fn always_success_lock(context: &mut Context) -> DeployedScript {
     }
 }
 
+fn non_whitelisted_lock(context: &mut Context) -> DeployedScript {
+    let out_point = context.deploy_cell(Bytes::from(vec![1u8]));
+    let script = context
+        .build_script_with_hash_type(&out_point, ScriptHashType::Data2, Bytes::new())
+        .expect("build non-whitelisted lock");
+    let script_hash = script_hash(&script);
+    DeployedScript {
+        out_point,
+        script,
+        script_hash,
+    }
+}
+
 fn meta_script(context: &mut Context) -> DeployedScript {
     deploy_data2_script(context, "xudt-meta", Bytes::from(vec![2u8; 32]))
 }
@@ -229,6 +242,58 @@ where
     UpdateCase { context, tx }
 }
 
+fn update_meta_tx_with_output_lock<F>(build_lock: F) -> UpdateCase
+where
+    F: FnOnce(&mut Context) -> DeployedScript,
+{
+    let mut context = Context::default();
+    let lock = always_success_lock(&mut context);
+    let output_lock = build_lock(&mut context);
+    let meta = meta_script(&mut context);
+    let input = xudt_meta_data(
+        0,
+        0,
+        None,
+        Some(input_lock_authority(lock.script_hash)),
+        None,
+        Vec::new(),
+    );
+    let output = xudt_meta_data(
+        0,
+        0,
+        None,
+        Some(input_lock_authority(lock.script_hash)),
+        None,
+        Vec::new(),
+    );
+
+    let input_out_point = create_typed_cell(
+        &mut context,
+        &lock.script,
+        &meta.script,
+        100_000_000_000,
+        input,
+    );
+    let tx = TransactionBuilder::default()
+        .input(
+            CellInput::new_builder()
+                .previous_output(input_out_point)
+                .build(),
+        )
+        .output(typed_output(
+            &output_lock.script,
+            &meta.script,
+            100_000_000_000,
+        ))
+        .output_data(output.pack())
+        .cell_dep(cell_dep_for_script(&lock))
+        .cell_dep(cell_dep_for_script(&output_lock))
+        .cell_dep(cell_dep_for_script(&meta))
+        .build();
+    let tx = context.complete_tx(tx);
+    UpdateCase { context, tx }
+}
+
 enum ExtraCell {
     Output {
         lock: Script,
@@ -274,6 +339,13 @@ fn xudt_meta_rejects_oversized_name_field() {
     });
 
     expect_tx_fail_with_code(&case.context, &case.tx, "error code 14");
+}
+
+#[test]
+fn xudt_meta_rejects_non_whitelisted_output_lock() {
+    let case = update_meta_tx_with_output_lock(non_whitelisted_lock);
+
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 12");
 }
 
 #[test]

@@ -64,6 +64,19 @@ fn always_success_lock(context: &mut Context, args: Bytes) -> DeployedScript {
     }
 }
 
+fn non_whitelisted_lock(context: &mut Context) -> DeployedScript {
+    let out_point = context.deploy_cell(Bytes::from(vec![1u8]));
+    let script = context
+        .build_script_with_hash_type(&out_point, ScriptHashType::Data2, Bytes::new())
+        .expect("build non-whitelisted lock");
+    let script_hash = script_hash(&script);
+    DeployedScript {
+        out_point,
+        script,
+        script_hash,
+    }
+}
+
 fn meta_script(context: &mut Context) -> DeployedScript {
     deploy_data2_script(context, "xudt-meta", Bytes::from(vec![2u8; 32]))
 }
@@ -181,6 +194,23 @@ impl XudtFixture {
         let out_point = create_typed_cell(
             &mut self.context,
             &self.lock.script,
+            &self.meta.script,
+            100_000_000_000,
+            xudt_meta_data(config_flags, supply, mint_authority, Vec::new()),
+        );
+        CellInput::new_builder().previous_output(out_point).build()
+    }
+
+    fn live_meta_input_with_lock(
+        &mut self,
+        lock: &Script,
+        config_flags: u8,
+        supply: u128,
+        mint_authority: Option<Authority>,
+    ) -> CellInput {
+        let out_point = create_typed_cell(
+            &mut self.context,
+            lock,
             &self.meta.script,
             100_000_000_000,
             xudt_meta_data(config_flags, supply, mint_authority, Vec::new()),
@@ -438,6 +468,42 @@ fn xudt_mint_with_spawn_authority_denies() {
         "authority-spawn-deny",
         true
     ));
+}
+
+#[test]
+fn xudt_mint_allows_visible_meta_with_non_whitelisted_lock() {
+    let mut fixture = XudtFixture::new();
+    let meta_lock = non_whitelisted_lock(&mut fixture.context);
+    let authority = input_lock_authority(fixture.lock.script_hash);
+    let input_lock = fixture.lock.script.clone();
+    let meta_input = fixture.live_meta_input_with_lock(
+        &input_lock,
+        CONFIG_SUPPLY_TRACKED,
+        0,
+        Some(authority.clone()),
+    );
+    let funding = create_funding_input(&mut fixture.context, &fixture.lock.script, 100_000_000_000);
+
+    let tx = TransactionBuilder::default()
+        .input(meta_input)
+        .input(funding)
+        .output(typed_output(
+            &meta_lock.script,
+            &fixture.meta.script,
+            100_000_000_000,
+        ))
+        .output(typed_output(
+            &fixture.lock.script,
+            &fixture.xudt.script,
+            100_000_000_000,
+        ))
+        .output_data(xudt_meta_data(CONFIG_SUPPLY_TRACKED, 50, Some(authority), Vec::new()).pack())
+        .output_data(udt_amount_bytes(50).pack())
+        .cell_dep(cell_dep_for_script(&meta_lock))
+        .build();
+    let tx = fixture.complete(tx);
+
+    expect_tx_pass(&fixture.context, &tx);
 }
 
 #[test]

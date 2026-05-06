@@ -1,7 +1,7 @@
 use crate::{
     fixtures::{
         cell_dep_for_script, create_funding_input, create_typed_cell, expect_tx_fail,
-        expect_tx_fail_with_code, expect_tx_pass, typed_output,
+        expect_tx_pass, typed_output,
     },
     metadata_builders::{
         build_sudt_meta_bytes, dynamic_linking_authority, input_lock_authority, script_hash,
@@ -305,7 +305,7 @@ fn sudt_mint_requires_mint_authority() {
 }
 
 #[test]
-fn sudt_mint_rejects_non_whitelisted_meta_lock() {
+fn sudt_mint_allows_visible_meta_with_non_whitelisted_lock() {
     let mut fixture = SudtFixture::new();
     let meta_lock = non_whitelisted_lock(&mut fixture.context);
     let meta_input = fixture.live_meta_input(0, true);
@@ -329,7 +329,7 @@ fn sudt_mint_rejects_non_whitelisted_meta_lock() {
         .build();
     let tx = fixture.complete(tx);
 
-    expect_tx_fail_with_code(&fixture.context, &tx, "error code 25");
+    expect_tx_pass(&fixture.context, &tx);
 }
 
 #[test]
