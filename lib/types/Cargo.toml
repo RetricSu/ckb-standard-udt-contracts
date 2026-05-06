@@ -4,13 +4,13 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-ckb-std = { version = "0.16.3", optional = true }
-ckb-types = { version = "0.120.0", optional = true }
-molecule = { version = "0.8.0", default-features = false }
+ckb-std = { version = "1.1", optional = true }
+ckb-types = { version = "1.1", optional = true }
+molecule = { version = "0.9", default-features = false, optional = true }
 cfg-if = "1.0.0"
 
 [features]
 default = ["std"]
 std = ["dep:ckb-types"]
-no-std = ["dep:ckb-std"]
+no-std = ["dep:ckb-std", "dep:molecule"]
 native-simulator = ["no-std", "ckb-std/native-simulator"]

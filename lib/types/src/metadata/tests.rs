@@ -1,21 +1,21 @@
 use super::{codec::*, *};
 
+use crate::molecule::prelude::{Builder, Entity};
 use alloc::vec;
-#[cfg(all(not(feature = "std"), feature = "no-std"))]
+#[cfg(feature = "no-std")]
 use ckb_std::ckb_types::{
     bytes::Bytes,
     core::ScriptHashType,
     packed::{Byte32, Script},
     prelude::*,
 };
-#[cfg(feature = "std")]
+#[cfg(all(feature = "std", not(feature = "no-std")))]
 use ckb_types::{
     bytes::Bytes,
     core::ScriptHashType,
     packed::{Byte32, Script},
     prelude::*,
 };
-use molecule::prelude::{Builder, Entity};
 
 use crate::{error::Error, generated};
 
@@ -70,7 +70,7 @@ fn append_empty_table_field(raw: &[u8]) -> Vec<u8> {
 fn build_script(tag: u8) -> Script {
     Script::new_builder()
         .code_hash(Byte32::from_slice(&[tag; 32]).expect("byte32"))
-        .hash_type(ScriptHashType::Data.into())
+        .hash_type(ScriptHashType::Data)
         .args(Bytes::from(vec![tag; 4]).pack())
         .build()
 }

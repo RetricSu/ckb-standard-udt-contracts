@@ -13,8 +13,8 @@ pub enum Error {
     AccessListTooLarge,
 }
 
-impl From<molecule::error::VerificationError> for Error {
-    fn from(_: molecule::error::VerificationError) -> Self {
+impl From<crate::molecule::error::VerificationError> for Error {
+    fn from(_: crate::molecule::error::VerificationError) -> Self {
         Error::Molecule
     }
 }

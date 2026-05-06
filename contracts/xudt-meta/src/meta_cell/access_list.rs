@@ -55,13 +55,16 @@ fn is_access_list_script(type_script: &Script, meta_type_hash: &[u8; 32]) -> boo
 }
 
 fn parse_access_list_range(data: &[u8]) -> Result<([u8; 32], [u8; 32]), Error> {
-    let offsets = table_offsets(data, ACCESS_LIST_SHARD_FIELDS, false)?;
+    let offsets = table_offsets(data, ACCESS_LIST_SHARD_FIELDS, false)
+        .map_err(|_| Error::AccessListRequired)?;
     if offsets[1] != offsets[0] + 64 {
         return Err(Error::AccessListRequired);
     }
 
-    let start = byte32_field(data, offsets[0], offsets[0] + 32)?;
-    let end = byte32_field(data, offsets[0] + 32, offsets[1])?;
+    let start =
+        byte32_field(data, offsets[0], offsets[0] + 32).map_err(|_| Error::AccessListRequired)?;
+    let end =
+        byte32_field(data, offsets[0] + 32, offsets[1]).map_err(|_| Error::AccessListRequired)?;
     if start > end {
         return Err(Error::AccessListRequired);
     }

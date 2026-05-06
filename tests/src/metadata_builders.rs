@@ -1,5 +1,5 @@
 use ckb_testtool::ckb_types::{bytes::Bytes, packed::Script, prelude::*};
-use ckb_types_120::{packed::Script as MetadataScript, prelude::Entity};
+use ckb_types::{packed::Script as MetadataScript, prelude::Entity as CkbEntity};
 use standard_udt_types::metadata::{
     AccessListRange, AccessListShard, Authority, AuthorityType, Extension, ExtensionType, SudtMeta,
     XudtMeta,

@@ -19,7 +19,7 @@ use ckb_testtool::{
     },
     context::Context,
 };
-use ckb_types_120::{packed::Script as MetadataScript, prelude::Entity};
+use ckb_types::{packed::Script as MetadataScript, prelude::Entity as CkbEntity};
 use standard_udt_types::metadata::{Extension, ExtensionType, CONFIG_SUPPLY_TRACKED};
 
 fn extension_attr(extension_type: ExtensionType, deployed: &DeployedScript) -> Extension {

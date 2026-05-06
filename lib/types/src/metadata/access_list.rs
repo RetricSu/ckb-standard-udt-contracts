@@ -1,6 +1,6 @@
 use alloc::vec::Vec;
 
-use molecule::prelude::{Builder, Entity};
+use crate::molecule::prelude::{Builder, Entity};
 
 use crate::{error::Error, generated};
 

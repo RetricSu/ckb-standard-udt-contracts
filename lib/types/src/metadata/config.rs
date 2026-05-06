@@ -13,7 +13,7 @@ pub const MAX_METADATA_NAME_BYTES: usize = 1024;
 pub const MAX_METADATA_SYMBOL_BYTES: usize = 128;
 pub const MAX_METADATA_URI_BYTES: usize = 2048;
 pub const MAX_METADATA_EXTRA_DATA_BYTES: usize = 16 * 1024;
-pub const MAX_ACCESSLIST_ENTRIES: usize = 8192;
+pub const MAX_ACCESSLIST_ENTRIES: usize = 4096;
 
 pub fn is_supply_tracked(config_flags: u8) -> bool {
     config_flags & CONFIG_SUPPLY_TRACKED != 0

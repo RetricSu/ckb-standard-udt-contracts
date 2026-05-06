@@ -1,8 +1,8 @@
-#[cfg(all(not(feature = "std"), feature = "no-std"))]
+use crate::molecule::prelude::{Builder, Entity};
+#[cfg(feature = "no-std")]
 use ckb_std::ckb_types::{packed::Script, prelude::*};
-#[cfg(feature = "std")]
+#[cfg(all(feature = "std", not(feature = "no-std")))]
 use ckb_types::{packed::Script, prelude::*};
-use molecule::prelude::{Builder, Entity};
 
 use crate::{error::Error, generated};
 

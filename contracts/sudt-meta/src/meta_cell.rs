@@ -7,12 +7,12 @@ use ckb_std::{
     high_level::{load_cell_data, load_cell_lock, load_cell_type, load_script, load_script_hash},
     type_id::check_type_id,
 };
+use standard_udt_types::metadata::{Authority as TypeAuthority, SudtMeta};
 
 use crate::{constants::SUDT_CODE_HASH, error::Error};
 
 pub const CONFIG_SUPPLY_TRACKED: u8 = 0b0000_0001;
 const SUDT_META_FIELDS: usize = 9;
-const SUDT_ALLOWED_CONFIG_MASK: u8 = CONFIG_SUPPLY_TRACKED;
 const ALWAYS_SUCCESS_LOCK_CODE_HASH_WHITELIST: [[u8; 32]; 1] = [[
     0x3b, 0x52, 0x1c, 0xc4, 0xb5, 0x52, 0xf1, 0x09, 0xd0, 0x92, 0xd8, 0xcc, 0x46, 0x8a, 0x80, 0x48,
     0xac, 0xb5, 0x3c, 0x59, 0x52, 0xdb, 0xe7, 0x69, 0xd2, 0xb2, 0xf9, 0xcf, 0x6e, 0x47, 0xf7, 0xf1,
@@ -172,31 +172,20 @@ fn validate_meta_lock(index: usize) -> Result<(), Error> {
 
 fn parse_meta(data: &[u8]) -> Result<ParsedSudtMeta, Error> {
     let offsets = table_offsets(data, SUDT_META_FIELDS)?;
-    let config_flags = single_byte_field(data, offsets[0], offsets[1])?;
-    if config_flags & !SUDT_ALLOWED_CONFIG_MASK != 0 {
-        return Err(Error::InvalidMetaData);
-    }
+    let meta = SudtMeta::from_slice(data).map_err(Error::from)?;
 
-    let current_supply = u128_field(data, offsets[1], offsets[2])?;
-    let _decimals = single_byte_field(data, offsets[2], offsets[3])?;
     let metadata_fields = data[offsets[2]..offsets[7]].to_vec();
     let mint_authority_raw = data[offsets[7]..offsets[8]].to_vec();
     let metadata_authority_raw = data[offsets[8]..offsets[9]].to_vec();
-    let mint_authority = parse_authority_opt(&mint_authority_raw)?;
-    let metadata_authority = parse_authority_opt(&metadata_authority_raw)?;
-
-    if !is_supply_tracked(config_flags) && current_supply != 0 {
-        return Err(Error::InvalidSupply);
-    }
 
     Ok(ParsedSudtMeta {
-        config_flags,
-        current_supply,
+        config_flags: meta.config_flags,
+        current_supply: meta.current_supply,
         metadata_fields,
         mint_authority_raw,
         metadata_authority_raw,
-        mint_authority,
-        metadata_authority,
+        mint_authority: meta.mint_authority.map(parsed_authority),
+        metadata_authority: meta.metadata_authority.map(parsed_authority),
     })
 }
 
@@ -249,66 +238,12 @@ fn table_offsets(data: &[u8], fields: usize) -> Result<Vec<usize>, Error> {
     Ok(offsets)
 }
 
-fn single_byte_field(data: &[u8], start: usize, end: usize) -> Result<u8, Error> {
-    if end != start + 1 || end > data.len() {
-        return Err(Error::InvalidMetaData);
+fn parsed_authority(authority: TypeAuthority) -> ParsedAuthority {
+    ParsedAuthority {
+        authority_type: authority.authority_type.into(),
+        script_hash: authority.script_hash,
+        script: authority.script,
     }
-    Ok(data[start])
-}
-
-fn u128_field(data: &[u8], start: usize, end: usize) -> Result<u128, Error> {
-    if end != start + 16 || end > data.len() {
-        return Err(Error::InvalidMetaData);
-    }
-
-    let mut raw = [0u8; 16];
-    raw.copy_from_slice(&data[start..end]);
-    Ok(u128::from_le_bytes(raw))
-}
-
-fn parse_authority_opt(data: &[u8]) -> Result<Option<ParsedAuthority>, Error> {
-    if data.is_empty() {
-        return Ok(None);
-    }
-
-    parse_authority(data).map(Some)
-}
-
-fn parse_authority(data: &[u8]) -> Result<ParsedAuthority, Error> {
-    let offsets = table_offsets(data, 3)?;
-    let authority_type = single_byte_field(data, offsets[0], offsets[1])?;
-    let script_hash = byte32_field(data, offsets[1], offsets[2])?;
-    let script_opt = &data[offsets[2]..offsets[3]];
-
-    let script = match authority_type {
-        0..=2 if script_opt.is_empty() => None,
-        3 | 4 if !script_opt.is_empty() => {
-            let script = Script::from_slice(script_opt).map_err(|_| Error::InvalidMetaData)?;
-            let parsed_hash: [u8; 32] = script.calc_script_hash().unpack();
-            if parsed_hash != script_hash {
-                return Err(Error::InvalidMetaData);
-            }
-            Some(script)
-        }
-        0..=4 => return Err(Error::InvalidMetaData),
-        _ => return Err(Error::InvalidMetaData),
-    };
-
-    Ok(ParsedAuthority {
-        authority_type,
-        script_hash,
-        script,
-    })
-}
-
-fn byte32_field(data: &[u8], start: usize, end: usize) -> Result<[u8; 32], Error> {
-    if end != start + 32 || end > data.len() {
-        return Err(Error::InvalidMetaData);
-    }
-
-    let mut raw = [0u8; 32];
-    raw.copy_from_slice(&data[start..end]);
-    Ok(raw)
 }
 
 fn read_u32(data: &[u8], start: usize) -> Result<u32, Error> {

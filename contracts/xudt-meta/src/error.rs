@@ -1,4 +1,5 @@
 use ckb_std::error::SysError;
+use standard_udt_types::error::Error as TypesError;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Error {
@@ -54,6 +55,15 @@ impl Error {
 impl From<Error> for i8 {
     fn from(error: Error) -> Self {
         error.code()
+    }
+}
+
+impl From<TypesError> for Error {
+    fn from(error: TypesError) -> Self {
+        match error {
+            TypesError::InvalidSupply => Self::InvalidSupply,
+            _ => Self::InvalidMetaData,
+        }
     }
 }
 
