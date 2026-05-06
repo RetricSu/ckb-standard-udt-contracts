@@ -269,10 +269,10 @@ fn parse_byte32_vec(data: &[u8]) -> Result<Vec<[u8; 32]>, Error> {
     for index in 0..count {
         let start = 4 + index * 32;
         let entry = byte32_field(data, start, start + 32)?;
-        if let Some(previous_entry) = previous {
-            if entry <= previous_entry {
-                return Err(Error::InvalidShardData);
-            }
+        if let Some(previous_entry) = previous
+            && entry <= previous_entry
+        {
+            return Err(Error::InvalidShardData);
         }
         previous = Some(entry);
         entries.push(entry);

@@ -2,16 +2,7 @@ use ckb_std::error::SysError;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Error {
-    InvalidArgs,
-    InvalidTypeId,
-    InvalidMetaData,
-    InvalidSupply,
-    ImmutableSupplyMode,
-    AuthorityMissing,
-    AuthorityFailed,
     Syscall,
-    AccessListRequired,
-    AccessModeTokenCells,
     SysIndexOutOfBound,
     SysItemMissing,
     SysLengthNotEnough,
@@ -22,6 +13,15 @@ pub enum Error {
     SysMaxVmsSpawned,
     SysMaxFdsCreated,
     SysTypeIdError,
+    InvalidArgs,
+    InvalidTypeId,
+    InvalidMetaData,
+    InvalidSupply,
+    ImmutableSupplyMode,
+    AuthorityMissing,
+    AuthorityFailed,
+    AccessListRequired,
+    AccessModeTokenCells,
 }
 
 impl Error {

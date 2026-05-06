@@ -3,6 +3,15 @@ use ckb_std::error::SysError;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Error {
     Syscall,
+    SysIndexOutOfBound,
+    SysItemMissing,
+    SysLengthNotEnough,
+    SysEncoding,
+    SysWaitFailure,
+    SysInvalidFd,
+    SysOtherEndClosed,
+    SysMaxVmsSpawned,
+    SysMaxFdsCreated,
     InvalidArgs,
     AmountEncoding,
     AmountOverflow,
@@ -18,15 +27,6 @@ pub enum Error {
     AuthorityFailed,
     UnsupportedAuthorityLocation,
     MetaLockNotAllowed,
-    SysIndexOutOfBound,
-    SysItemMissing,
-    SysLengthNotEnough,
-    SysEncoding,
-    SysWaitFailure,
-    SysInvalidFd,
-    SysOtherEndClosed,
-    SysMaxVmsSpawned,
-    SysMaxFdsCreated,
 }
 
 impl Error {
