@@ -163,6 +163,74 @@ where
     (context, tx)
 }
 
+fn update_meta_tx_with_udt_delta(
+    input_supply: u128,
+    output_supply: u128,
+    input_udt_amount: Option<u128>,
+    output_udt_amount: Option<u128>,
+) -> (Context, TransactionView) {
+    let mut context = Context::default();
+    let lock = always_success_lock(&mut context);
+    let authority = input_lock_authority(lock.script_hash);
+    let input_meta_data = sudt_meta_data(
+        CONFIG_SUPPLY_TRACKED,
+        input_supply,
+        Some(authority.clone()),
+        None,
+        Vec::new(),
+        Vec::new(),
+    );
+    let output_meta_data = sudt_meta_data(
+        CONFIG_SUPPLY_TRACKED,
+        output_supply,
+        Some(authority),
+        None,
+        Vec::new(),
+        Vec::new(),
+    );
+    let meta = meta_script(&mut context, Bytes::from(vec![2u8; 32]));
+    let udt = udt_script(&mut context, meta.script_hash);
+    let input_out_point = create_typed_cell(
+        &mut context,
+        &lock.script,
+        &meta.script,
+        100_000_000_000,
+        input_meta_data,
+    );
+
+    let mut builder = TransactionBuilder::default()
+        .input(
+            CellInput::new_builder()
+                .previous_output(input_out_point)
+                .build(),
+        )
+        .output(typed_output(&lock.script, &meta.script, 100_000_000_000))
+        .output_data(output_meta_data.pack())
+        .cell_dep(cell_dep_for_script(&lock))
+        .cell_dep(cell_dep_for_script(&meta))
+        .cell_dep(cell_dep_for_script(&udt));
+
+    if let Some(amount) = input_udt_amount {
+        let out_point = create_typed_cell(
+            &mut context,
+            &lock.script,
+            &udt.script,
+            100_000_000_000,
+            udt_amount_bytes(amount),
+        );
+        builder = builder.input(CellInput::new_builder().previous_output(out_point).build());
+    }
+
+    if let Some(amount) = output_udt_amount {
+        builder = builder
+            .output(typed_output(&lock.script, &udt.script, 100_000_000_000))
+            .output_data(udt_amount_bytes(amount).pack());
+    }
+
+    let tx = context.complete_tx(builder.build());
+    (context, tx)
+}
+
 fn update_meta_tx_with_locks<F>(build_data: F) -> (Context, TransactionView)
 where
     F: FnOnce(&mut Context, [u8; 32], Script) -> (DeployedScript, Bytes, Bytes),
@@ -474,6 +542,20 @@ fn sudt_meta_update_supply_change_with_input_lock_mint_authority_passes() {
     });
 
     expect_tx_pass(&context, &tx);
+}
+
+#[test]
+fn sudt_meta_rejects_supply_increase_without_udt_delta() {
+    let (context, tx) = update_meta_tx_with_udt_delta(100, 101, None, None);
+
+    expect_tx_fail_with_code(&context, &tx, "error code 31");
+}
+
+#[test]
+fn sudt_meta_rejects_supply_decrease_without_udt_delta() {
+    let (context, tx) = update_meta_tx_with_udt_delta(100, 99, None, None);
+
+    expect_tx_fail_with_code(&context, &tx, "error code 31");
 }
 
 #[test]

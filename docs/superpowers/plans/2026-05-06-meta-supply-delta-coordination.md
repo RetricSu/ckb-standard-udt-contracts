@@ -29,7 +29,7 @@
 **Files:**
 - Modify: `tests/src/tests/sudt_meta.rs`
 
-- [ ] **Step 1: Add a helper that can include UDT inputs and outputs**
+- [x] **Step 1: Add a helper that can include UDT inputs and outputs**
 
 Add this helper near `update_meta_tx_with_data`:
 
@@ -103,7 +103,7 @@ fn update_meta_tx_with_udt_delta(
 }
 ```
 
-- [ ] **Step 2: Add failing tests for meta-only supply changes**
+- [x] **Step 2: Add failing tests for meta-only supply changes**
 
 Add these tests near `sudt_meta_update_supply_change_with_input_lock_mint_authority_passes`:
 
@@ -124,6 +124,8 @@ fn sudt_meta_rejects_supply_decrease_without_udt_delta() {
 ```
 
 - [ ] **Step 3: Add matching-delta and mismatch tests**
+
+Deferred from Task 1 red-stage commit: same-token SUDT input/output cells activate the SUDT type script before the planned `sudt-meta` fix, so these tests are not clean meta-side assertions yet.
 
 Add these tests after the tests from Step 2:
 
@@ -150,7 +152,7 @@ fn sudt_meta_rejects_supply_delta_mismatch() {
 }
 ```
 
-- [ ] **Step 4: Run the new sUDT meta tests and verify failure**
+- [x] **Step 4: Run the new sUDT meta tests and verify failure**
 
 Run:
 
