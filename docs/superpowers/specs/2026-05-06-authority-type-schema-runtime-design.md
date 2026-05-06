@@ -32,7 +32,6 @@ table Authority {
 }
 
 option AuthorityOpt (Authority);
-vector AuthorityVec <Authority>;
 
 table Extension {
     extension_type: byte,
@@ -205,7 +204,7 @@ int eudt_validate(const unsigned char *script_hash,
 
 Tests must prove:
 
-- Schema-generated names are `Authority`, `AuthorityOpt`, `AuthorityVec`.
+- Schema-generated names are `Authority` and `AuthorityOpt`; no unused `AuthorityVec` is generated.
 - Schema-generated names are `Extension` and `ExtensionVec`.
 - Host metadata builders use `Authority`, `AuthorityType`, `Extension`, and `ExtensionType`.
 - `authority_type` 0/1/2 still authorize through input/output scanning.

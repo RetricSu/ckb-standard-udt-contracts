@@ -1,6 +1,6 @@
 # Authority Type Schema Runtime Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Rename `ScriptAttr` / `ScriptLocation` to `Authority` / `AuthorityType`, split xUDT extensions into `Extension` / `ExtensionType`, and make every authority field support input hash scanning, dynamic linking, and spawn.
 
@@ -55,7 +55,7 @@
 - Modify generated: `lib/types/src/generated/metadata.rs`
 - Modify tests: `tests/src/metadata_builders.rs`, `tests/src/tests/plugin_runtime.rs`, `tests/src/tests/sudt_meta.rs`, `tests/src/tests/xudt.rs`, `tests/src/tests/xudt_meta.rs`
 
-- [ ] **Step 1: Update Molecule schema names**
+- [x] **Step 1: Update Molecule schema names**
 
 Replace the authority section in `lib/types/src/schemas/metadata.mol` with:
 
@@ -67,7 +67,6 @@ table Authority {
 }
 
 option AuthorityOpt (Authority);
-vector AuthorityVec <Authority>;
 
 table Extension {
     extension_type: byte,
@@ -86,13 +85,13 @@ access_authority: AuthorityOpt,
 extensions: ExtensionVec,
 ```
 
-- [ ] **Step 2: Regenerate Molecule bindings**
+- [x] **Step 2: Regenerate Molecule bindings**
 
 Run the repository's existing generation command. If there is no Makefile target, inspect `build.rs`, `moleculec` usage, or previous generation script, then run the exact generator that updates `lib/types/src/generated/metadata.rs`.
 
-Expected result: generated Rust contains `pub struct Authority`, `AuthorityOpt`, `AuthorityVec`, `Extension`, and `ExtensionVec`, and no generated `ScriptAttr` types.
+Expected result: generated Rust contains `pub struct Authority`, `AuthorityOpt`, `Extension`, and `ExtensionVec`, and no generated `ScriptAttr` or unused `AuthorityVec` types.
 
-- [ ] **Step 3: Rename host authority module**
+- [x] **Step 3: Rename host authority module**
 
 Move:
 
@@ -116,7 +115,7 @@ mod extension;
 pub use extension::{Extension, ExtensionType};
 ```
 
-- [ ] **Step 4: Rewrite host authority types**
+- [x] **Step 4: Rewrite host authority types**
 
 In `lib/types/src/metadata/authority.rs`, define:
 
@@ -155,10 +154,9 @@ Use generated types:
 ```rust
 generated::metadata::Authority
 generated::metadata::AuthorityOpt
-generated::metadata::AuthorityVec
 ```
 
-- [ ] **Step 5: Add host extension types**
+- [x] **Step 5: Add host extension types**
 
 Create `lib/types/src/metadata/extension.rs`:
 
@@ -192,7 +190,7 @@ pack_extension_vec
 validate_extensions
 ```
 
-- [ ] **Step 6: Update token host types**
+- [x] **Step 6: Update token host types**
 
 In `lib/types/src/metadata/token.rs`, replace `ScriptAttr` with `Authority` and helper calls with the renamed authority helpers. Final fields should be:
 
@@ -203,7 +201,7 @@ pub access_authority: Option<Authority>,
 pub extensions: Vec<Extension>,
 ```
 
-- [ ] **Step 7: Update host tests and builders**
+- [x] **Step 7: Update host tests and builders**
 
 Replace imports in tests:
 
@@ -240,7 +238,7 @@ Extension {
 }
 ```
 
-- [ ] **Step 8: Verify and commit**
+- [x] **Step 8: Verify and commit**
 
 Run:
 
@@ -268,7 +266,7 @@ git commit -m "refactor: split authority and extension schema"
 - Modify: `lib/script-utils/src/lib.rs`
 - Test: `lib/script-utils/src/authority.rs`
 
-- [ ] **Step 1: Define runtime input type**
+- [x] **Step 1: Define runtime input type**
 
 Add a no_std-compatible contract runtime type:
 
@@ -282,7 +280,7 @@ pub struct ParsedAuthority {
 
 Keep it independent from `standard_udt_types::metadata::Authority` to avoid linking host generated Molecule parsing into every contract.
 
-- [ ] **Step 2: Implement check dispatch**
+- [x] **Step 2: Implement check dispatch**
 
 Implement:
 
@@ -301,7 +299,7 @@ pub fn check_authority(authority: &ParsedAuthority) -> Result<bool, ScriptError>
 
 If `ScriptError::InvalidAuthority` does not exist, add it at the end of `ScriptError` and assign the next sequential code. Keep existing error code order deterministic.
 
-- [ ] **Step 3: Implement dynamic linking authority**
+- [x] **Step 3: Implement dynamic linking authority**
 
 Use `CKBDLContext` and load by `authority.script.code_hash().raw_data()`. Look up symbol:
 
@@ -325,7 +323,7 @@ let rc = authorize(
 
 Return `Ok(rc == 0)`.
 
-- [ ] **Step 4: Implement spawn authority**
+- [x] **Step 4: Implement spawn authority**
 
 Use:
 
@@ -342,7 +340,7 @@ argv[1] = hex(script.args)
 
 Use existing `wait(pid)` handling. Exit `0` returns `Ok(true)`, nonzero returns `Ok(false)`.
 
-- [ ] **Step 5: Validate authority shape before execution**
+- [x] **Step 5: Validate authority shape before execution**
 
 Add:
 
@@ -357,7 +355,7 @@ Rules:
 
 Invalid shape returns `ScriptError::InvalidAuthority`.
 
-- [ ] **Step 6: Unit test scan modes and invalid shapes**
+- [x] **Step 6: Unit test scan modes and invalid shapes**
 
 Keep existing scan tests. Add tests that call `check_authority` for invalid shapes:
 
@@ -380,7 +378,7 @@ assert_eq!(
 );
 ```
 
-- [ ] **Step 7: Verify and commit**
+- [x] **Step 7: Verify and commit**
 
 Run:
 
@@ -409,7 +407,7 @@ git commit -m "feat: add authority runtime for dl and spawn"
 - Modify: `contracts/xudt-meta/src/meta_cell/parser.rs`
 - Modify: `contracts/access-list/src/meta/parser.rs`
 
-- [ ] **Step 1: Rename parsed struct fields**
+- [x] **Step 1: Rename parsed struct fields**
 
 In each parser, replace local `ScriptAttr` with:
 
@@ -424,7 +422,7 @@ pub struct ParsedAuthority {
 
 If a module already has a public `Authority` name with no ambiguity, `Authority` is acceptable, but the field names must be `authority_type`, `script_hash`, and `script`.
 
-- [ ] **Step 2: Parse renamed schema field**
+- [x] **Step 2: Parse renamed schema field**
 
 Update table parsing to read `authority_type` from field 0. The binary position remains field 0, so parsing logic is unchanged except variable names:
 
@@ -434,7 +432,7 @@ let script_hash = byte32_field(data, offsets[1], offsets[2])?;
 let script_opt = &data[offsets[2]..offsets[3]];
 ```
 
-- [ ] **Step 3: Preserve script for 3/4**
+- [x] **Step 3: Preserve script for 3/4**
 
 Use:
 
@@ -464,7 +462,7 @@ Ok(ParsedAuthority {
 })
 ```
 
-- [ ] **Step 4: Parse xUDT extensions as dedicated executable plugins**
+- [x] **Step 4: Parse xUDT extensions as dedicated executable plugins**
 
 In xUDT and xUDT-meta parsers, define a separate parsed extension:
 
@@ -494,7 +492,7 @@ let script_hash: [u8; 32] = extension.script.calc_script_hash().unpack();
 let key = (extension.extension_type, script_hash);
 ```
 
-- [ ] **Step 5: Verify parser compile**
+- [x] **Step 5: Verify parser compile**
 
 Run:
 
@@ -523,7 +521,7 @@ git commit -m "refactor: preserve parsed authority scripts"
 - Modify: `contracts/access-list/src/meta/authority.rs`
 - Modify: `contracts/xudt/src/extensions.rs`
 
-- [ ] **Step 1: Replace per-contract scan-only checks**
+- [x] **Step 1: Replace per-contract scan-only checks**
 
 Each authority checker should convert local parsed authority into `standard_udt_script_utils::authority::ParsedAuthority` and call shared `check_authority`.
 
@@ -542,7 +540,7 @@ fn check_authority(authority: &ParsedAuthority) -> Result<bool, Error> {
 }
 ```
 
-- [ ] **Step 2: Map shared errors to contract errors**
+- [x] **Step 2: Map shared errors to contract errors**
 
 For each contract, map:
 
@@ -556,7 +554,7 @@ other syscall-derived errors => matching Sys* variants where available
 
 If `ScriptError` lacks enough detail for syscall variants, keep local scanning in shared runtime returning `ScriptError::SyscallUnknown` and map it to the contract's `SyscallUnknown`.
 
-- [ ] **Step 3: Remove direct scanning helpers**
+- [x] **Step 3: Remove direct scanning helpers**
 
 Delete duplicated helpers where no longer used:
 
@@ -570,7 +568,7 @@ SysError imports
 
 Keep parser helpers and meta lookup helpers unchanged.
 
-- [ ] **Step 4: Preserve xUDT extension ABI**
+- [x] **Step 4: Preserve xUDT extension ABI**
 
 In `contracts/xudt/src/extensions.rs`, change local type references to `ParsedExtension`. Keep this behavior:
 
@@ -590,7 +588,7 @@ let script_hash: [u8; 32] = extension.script.calc_script_hash().unpack();
 
 Do not use the authority runtime for xUDT extensions, because extensions use `eudt_validate` with operation context, while authority uses `eudt_authorize`.
 
-- [ ] **Step 5: Verify contract packages**
+- [x] **Step 5: Verify contract packages**
 
 Run:
 
@@ -626,7 +624,7 @@ git commit -m "feat: use shared authority runtime in contracts"
 - Modify: `tests/src/tests/xudt_meta.rs`
 - Modify: `tests/src/tests/access_list.rs`
 
-- [ ] **Step 1: Add dynamic linking authority fixtures**
+- [x] **Step 1: Add dynamic linking authority fixtures**
 
 Create C fixtures exporting:
 
@@ -650,7 +648,7 @@ __attribute__((visibility("default"))) int eudt_authorize(
 
 The deny fixture returns `1`.
 
-- [ ] **Step 2: Add spawn authority fixtures**
+- [x] **Step 2: Add spawn authority fixtures**
 
 Create no_std Rust fixtures where `program_entry()` returns:
 
@@ -666,7 +664,7 @@ for allow, and:
 
 for deny. They should accept exactly two argv items and return a distinct nonzero code if argv count is wrong, so ABI mistakes are caught.
 
-- [ ] **Step 3: Add metadata builder helpers**
+- [x] **Step 3: Add metadata builder helpers**
 
 In `tests/src/metadata_builders.rs`, add:
 
@@ -692,7 +690,7 @@ extension_type: ExtensionType::DynamicLinking // or Spawn
 script: deployed.script.clone()
 ```
 
-- [ ] **Step 4: Add sUDT authority tests**
+- [x] **Step 4: Add sUDT authority tests**
 
 Add tests:
 
@@ -705,7 +703,7 @@ sudt_mint_with_spawn_authority_denies
 
 Each test should mint by including the meta dep and using the plugin authority as `mint_authority`.
 
-- [ ] **Step 5: Add sUDT meta authority tests**
+- [x] **Step 5: Add sUDT meta authority tests**
 
 Replace the old `sudt_meta_update_rejects_dynamic_linking_authority_for_now` with pass/deny tests:
 
@@ -716,7 +714,7 @@ sudt_meta_update_metadata_change_with_dynamic_linking_authority_denies
 sudt_meta_update_metadata_change_with_spawn_authority_denies
 ```
 
-- [ ] **Step 6: Add xUDT authority tests**
+- [x] **Step 6: Add xUDT authority tests**
 
 Add mint authority tests equivalent to sUDT:
 
@@ -729,7 +727,7 @@ xudt_mint_with_spawn_authority_denies
 
 Keep existing xUDT extension tests; they verify a different ABI.
 
-- [ ] **Step 7: Add xUDT meta access authority tests**
+- [x] **Step 7: Add xUDT meta access authority tests**
 
 Add tests proving access mode or paused updates can use dynamic linking and spawn authorities:
 
@@ -740,7 +738,7 @@ xudt_meta_access_update_with_dynamic_linking_authority_denies
 xudt_meta_access_update_with_spawn_authority_denies
 ```
 
-- [ ] **Step 8: Add AccessList authority tests**
+- [x] **Step 8: Add AccessList authority tests**
 
 Add:
 
@@ -751,7 +749,7 @@ access_list_update_with_dynamic_linking_authority_denies
 access_list_update_with_spawn_authority_denies
 ```
 
-- [ ] **Step 9: Verify full test suite**
+- [x] **Step 9: Verify full test suite**
 
 Run:
 
@@ -778,7 +776,7 @@ git commit -m "test: cover dynamic and spawn authorities"
 - Modify: `TODO.md`
 - Review: `AGENTS.md`
 
-- [ ] **Step 1: Update standard terminology**
+- [x] **Step 1: Update standard terminology**
 
 In `ref/Enhanced UDT Standard V1.md`, replace the authority model section with `Authority` / `AuthorityType`. Remove the old implementation note that says no-witness authority path fails closed for 3/4.
 
@@ -789,7 +787,7 @@ Use:
 AuthorityType=3/4 MUST be executable in every authority field, not only xUDT extensions.
 ```
 
-- [ ] **Step 2: Update schema section**
+- [x] **Step 2: Update schema section**
 
 Replace:
 
@@ -802,16 +800,15 @@ with:
 
 ```mol
 option AuthorityOpt (Authority);
-vector AuthorityVec <Authority>;
 table Extension { extension_type: byte, script: Script }
 vector ExtensionVec <Extension>;
 ```
 
-- [ ] **Step 3: Update TODO status**
+- [x] **Step 3: Update TODO status**
 
 In `TODO.md`, mark the authority rename and runtime unification as completed or add a completed note if the TODO format is free-form.
 
-- [ ] **Step 4: Run release/debug safety checks**
+- [x] **Step 4: Run release/debug safety checks**
 
 Run:
 
@@ -831,7 +828,7 @@ Expected:
 - debug build succeeds
 - no whitespace errors
 
-- [ ] **Step 5: Commit docs and final cleanup**
+- [x] **Step 5: Commit docs and final cleanup**
 
 Run:
 

@@ -11,6 +11,9 @@
 - [x] Implement AccessList.
 - [x] Implement xUDT.
 - [x] Implement dynamic-linking and spawn extension tests.
+- [x] Rename ScriptAttr/ScriptLocation to Authority/AuthorityType and split xUDT extensions into Extension/ExtensionType.
+- [x] Unify authority runtime so input_lock/input_type/output_type/dynamic_linking/spawn work across sUDT, xUDT, Meta, and AccessList authority fields.
+- [x] Add dynamic-linking and spawn authority plugin coverage for mint, metadata, access-mode, and access-list update paths.
 - [x] Publish project docs and final standard draft.
 - [x] Run final debug and release verification.
 
