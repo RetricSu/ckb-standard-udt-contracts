@@ -519,27 +519,7 @@ fn sudt_meta_update_rejects_metadata_authority_recreation() {
 
 #[test]
 fn sudt_meta_update_supply_change_with_input_lock_mint_authority_passes() {
-    let (context, tx) = update_meta_tx_with_data(|lock_hash, _| {
-        let authority = input_lock_authority(lock_hash);
-        (
-            sudt_meta_data(
-                CONFIG_SUPPLY_TRACKED,
-                100,
-                Some(authority.clone()),
-                None,
-                Vec::new(),
-                Vec::new(),
-            ),
-            sudt_meta_data(
-                CONFIG_SUPPLY_TRACKED,
-                101,
-                Some(authority),
-                None,
-                Vec::new(),
-                Vec::new(),
-            ),
-        )
-    });
+    let (context, tx) = update_meta_tx_with_udt_delta(100, 101, None, Some(1));
 
     expect_tx_pass(&context, &tx);
 }
@@ -554,6 +534,27 @@ fn sudt_meta_rejects_supply_increase_without_udt_delta() {
 #[test]
 fn sudt_meta_rejects_supply_decrease_without_udt_delta() {
     let (context, tx) = update_meta_tx_with_udt_delta(100, 99, None, None);
+
+    expect_tx_fail_with_code(&context, &tx, "error code 31");
+}
+
+#[test]
+fn sudt_meta_accepts_supply_increase_matching_udt_delta() {
+    let (context, tx) = update_meta_tx_with_udt_delta(100, 125, None, Some(25));
+
+    expect_tx_pass(&context, &tx);
+}
+
+#[test]
+fn sudt_meta_accepts_supply_decrease_matching_udt_delta() {
+    let (context, tx) = update_meta_tx_with_udt_delta(100, 75, Some(25), None);
+
+    expect_tx_pass(&context, &tx);
+}
+
+#[test]
+fn sudt_meta_rejects_supply_delta_mismatch() {
+    let (context, tx) = update_meta_tx_with_udt_delta(100, 125, None, Some(24));
 
     expect_tx_fail_with_code(&context, &tx, "error code 31");
 }

@@ -9,7 +9,9 @@ pub fn main() -> Result<(), Error> {
             crate::meta_cell::validate_create_type_id()?;
             crate::meta_cell::validate_create(output, &group.meta_type_hash)
         }
-        (Some(input), Some(output)) => crate::update::validate_update(input, output),
+        (Some(input), Some(output)) => {
+            crate::update::validate_update(input, output, &group.meta_type_hash)
+        }
         _ => Err(Error::InvalidArgs),
     }
 }

@@ -1,10 +1,11 @@
 use ckb_std::{
     ckb_constants::Source,
-    ckb_types::{core::ScriptHashType, prelude::*},
+    ckb_types::prelude::*,
     error::SysError,
-    high_level::{load_cell_data, load_cell_lock, load_cell_type, load_script, load_script_hash},
+    high_level::{load_cell_data, load_cell_lock, load_script, load_script_hash},
     type_id::check_type_id,
 };
+use standard_udt_script_utils::{error::ScriptError, token::sum_token_amount};
 pub use standard_udt_types::metadata::CONFIG_SUPPLY_TRACKED;
 use standard_udt_types::metadata::{SudtMeta, is_supply_tracked as types_is_supply_tracked};
 
@@ -65,7 +66,8 @@ pub fn validate_create_type_id() -> Result<(), Error> {
 
 pub fn validate_create(output_meta: &SudtMeta, meta_type_hash: &[u8; 32]) -> Result<(), Error> {
     if is_supply_tracked(output_meta.config_flags) {
-        let initial_supply = sum_initial_udt_outputs(meta_type_hash, &SUDT_CODE_HASH)?;
+        let initial_supply = sum_token_amount(Source::Output, meta_type_hash, &SUDT_CODE_HASH)
+            .map_err(map_token_error)?;
         if output_meta.current_supply != initial_supply {
             return Err(Error::InvalidSupply);
         }
@@ -74,44 +76,6 @@ pub fn validate_create(output_meta: &SudtMeta, meta_type_hash: &[u8; 32]) -> Res
     }
 
     Ok(())
-}
-
-pub fn sum_initial_udt_outputs(
-    meta_type_hash: &[u8; 32],
-    udt_code_hash: &[u8; 32],
-) -> Result<u128, Error> {
-    let mut total = 0u128;
-    let mut index = 0;
-
-    loop {
-        let type_script = match load_cell_type(index, Source::Output) {
-            Ok(Some(script)) => script,
-            Ok(None) => {
-                index += 1;
-                continue;
-            }
-            Err(SysError::IndexOutOfBound) => return Ok(total),
-            Err(error) => return Err(error.into()),
-        };
-
-        if is_initial_udt_script(&type_script, meta_type_hash, udt_code_hash) {
-            let data = load_cell_data(index, Source::Output).map_err(Error::from)?;
-            let amount = decode_amount(&data)?;
-            total = total.checked_add(amount).ok_or(Error::InvalidSupply)?;
-        }
-
-        index += 1;
-    }
-}
-
-fn decode_amount(data: &[u8]) -> Result<u128, Error> {
-    if data.len() < 16 {
-        return Err(Error::InvalidSupply);
-    }
-
-    let mut raw = [0u8; 16];
-    raw.copy_from_slice(&data[..16]);
-    Ok(u128::from_le_bytes(raw))
 }
 
 fn load_group_meta(source: Source) -> Result<Option<SudtMeta>, Error> {
@@ -150,22 +114,14 @@ fn parse_meta(data: &[u8]) -> Result<SudtMeta, Error> {
     SudtMeta::from_slice(data).map_err(Error::from)
 }
 
-fn is_initial_udt_script(
-    type_script: &ckb_std::ckb_types::packed::Script,
-    meta_type_hash: &[u8; 32],
-    udt_code_hash: &[u8; 32],
-) -> bool {
-    if type_script.hash_type() != ScriptHashType::Data2.into() {
-        return false;
-    }
-    if type_script.args().raw_data().as_ref() != meta_type_hash {
-        return false;
-    }
-
-    let code_hash: [u8; 32] = type_script.code_hash().unpack();
-    &code_hash == udt_code_hash
-}
-
 pub fn is_supply_tracked(config_flags: u8) -> bool {
     types_is_supply_tracked(config_flags)
+}
+
+fn map_token_error(error: ScriptError) -> Error {
+    match error {
+        ScriptError::AmountEncoding | ScriptError::AmountOverflow => Error::InvalidSupply,
+        ScriptError::SyscallUnknown => Error::SyscallUnknown,
+        _ => Error::SyscallUnknown,
+    }
 }

@@ -123,7 +123,7 @@ fn sudt_meta_rejects_supply_decrease_without_udt_delta() {
 }
 ```
 
-- [ ] **Step 3: Add matching-delta and mismatch tests**
+- [x] **Step 3: Add matching-delta and mismatch tests**
 
 Deferred from Task 1 red-stage commit: same-token SUDT input/output cells activate the SUDT type script before the planned `sudt-meta` fix, so these tests are not clean meta-side assertions yet.
 
@@ -471,7 +471,7 @@ Expected: PASS.
 - Modify: `contracts/sudt-meta/src/meta_cell.rs`
 - Modify: `contracts/sudt-meta/src/update.rs`
 
-- [ ] **Step 1: Reuse the shared output sum in create validation**
+- [x] **Step 1: Reuse the shared output sum in create validation**
 
 In `contracts/sudt-meta/src/meta_cell.rs`, import:
 
@@ -501,7 +501,7 @@ fn map_supply_scan_error(error: standard_udt_script_utils::error::ScriptError) -
 
 After this replacement, remove the local `sum_initial_udt_outputs`, `decode_amount`, and `is_initial_udt_script` functions when `rg` shows no remaining references in `contracts/sudt-meta/src`.
 
-- [ ] **Step 2: Pass `meta_type_hash` into update validation**
+- [x] **Step 2: Pass `meta_type_hash` into update validation**
 
 Find the call site in `contracts/sudt-meta/src/entry.rs` that currently calls:
 
@@ -525,7 +525,7 @@ pub fn validate_update(
 ) -> Result<(), Error> {
 ```
 
-- [ ] **Step 3: Add tracked supply delta validation**
+- [x] **Step 3: Add tracked supply delta validation**
 
 In `contracts/sudt-meta/src/update.rs`, add imports:
 
@@ -576,7 +576,7 @@ fn map_supply_error(error: ScriptError) -> Error {
 }
 ```
 
-- [ ] **Step 4: Run sUDT meta tests**
+- [x] **Step 4: Run sUDT meta tests**
 
 Run:
 
