@@ -516,7 +516,7 @@ fn xudt_protocol_burn_requires_mint_authority_and_updates_supply() {
 }
 
 #[test]
-fn xudt_burn_with_meta_dep_is_user_destruction_even_with_input_meta() {
+fn xudt_protocol_burn_with_meta_dep_still_uses_input_meta() {
     let mut fixture = XudtFixture::new();
     let meta_input = fixture.live_meta_input(CONFIG_SUPPLY_TRACKED, 100, true);
     let duplicate_meta_dep = fixture.live_meta_dep(CONFIG_SUPPLY_TRACKED, 100, true);
@@ -569,7 +569,7 @@ fn xudt_user_destruction_skips_access_and_extensions() {
 }
 
 #[test]
-fn xudt_user_destruction_with_meta_dep_skips_protocol_burn_authority() {
+fn xudt_protocol_burn_with_meta_dep_requires_mint_authority() {
     let mut fixture = XudtFixture::new_with_always_success_meta();
     let meta_input = fixture.live_meta_input(CONFIG_SUPPLY_TRACKED, 100, false);
     let udt_input = fixture.live_udt_input(100);
@@ -587,11 +587,11 @@ fn xudt_user_destruction_with_meta_dep_skips_protocol_burn_authority() {
         .build();
     let tx = fixture.complete(tx);
 
-    expect_tx_pass(&fixture.context, &tx);
+    expect_tx_fail_with_code(&fixture.context, &tx, "error code 50");
 }
 
 #[test]
-fn xudt_user_destruction_with_real_meta_update_requires_matching_supply_delta() {
+fn xudt_negative_delta_with_input_meta_requires_protocol_burn_authority() {
     let mut fixture = XudtFixture::new();
     let meta_input = fixture.live_meta_input(CONFIG_SUPPLY_TRACKED, 100, false);
     let udt_input = fixture.live_udt_input(100);
@@ -609,7 +609,7 @@ fn xudt_user_destruction_with_real_meta_update_requires_matching_supply_delta() 
         .build();
     let tx = fixture.complete(tx);
 
-    expect_tx_fail_with_code(&fixture.context, &tx, "error code 31");
+    expect_tx_fail_with_code(&fixture.context, &tx, "error code 50");
 }
 
 #[test]

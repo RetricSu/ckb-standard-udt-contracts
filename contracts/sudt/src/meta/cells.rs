@@ -5,9 +5,8 @@ use ckb_std::{
 };
 
 use crate::{error::Error, meta::parser::parse_meta};
+use standard_udt_script_utils::{amount, error::ScriptError};
 use standard_udt_types::metadata::SudtMeta;
-
-const UDT_AMOUNT_LEN: usize = 16;
 
 pub fn load_meta_type_hash_arg() -> Result<[u8; 32], Error> {
     let script = load_script().map_err(Error::from)?;
@@ -22,20 +21,7 @@ pub fn load_meta_type_hash_arg() -> Result<[u8; 32], Error> {
 }
 
 pub fn collect_group_amount(source: Source) -> Result<u128, Error> {
-    let mut total = 0u128;
-    let mut index = 0;
-
-    loop {
-        match load_cell_data(index, source) {
-            Ok(data) => {
-                let amount = decode_amount(&data)?;
-                total = total.checked_add(amount).ok_or(Error::AmountOverflow)?;
-                index += 1;
-            }
-            Err(SysError::IndexOutOfBound) => return Ok(total),
-            Err(error) => return Err(error.into()),
-        }
-    }
+    amount::collect_group_amount(source).map_err(map_amount_error)
 }
 
 pub(crate) fn find_unique_visible_meta(
@@ -77,12 +63,11 @@ pub(crate) fn find_meta_in_source(
     }
 }
 
-fn decode_amount(data: &[u8]) -> Result<u128, Error> {
-    if data.len() < UDT_AMOUNT_LEN {
-        return Err(Error::AmountEncoding);
+fn map_amount_error(error: ScriptError) -> Error {
+    match error {
+        ScriptError::AmountEncoding => Error::AmountEncoding,
+        ScriptError::AmountOverflow => Error::AmountOverflow,
+        ScriptError::SyscallUnknown => Error::SyscallUnknown,
+        _ => Error::SyscallUnknown,
     }
-
-    let mut raw = [0u8; UDT_AMOUNT_LEN];
-    raw.copy_from_slice(&data[..UDT_AMOUNT_LEN]);
-    Ok(u128::from_le_bytes(raw))
 }

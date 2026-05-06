@@ -5,7 +5,7 @@ use ckb_std::{
     high_level::{load_cell_data, load_cell_type_hash, load_script},
 };
 use standard_udt_script_utils::{
-    authority::check_authority as check_runtime_authority, error::ScriptError,
+    amount, authority::check_authority as check_runtime_authority, error::ScriptError,
 };
 use standard_udt_types::metadata::{
     Authority, Extension, ExtensionType, XudtMeta, access_enabled as types_access_enabled,
@@ -15,7 +15,6 @@ use standard_udt_types::metadata::{
 
 use crate::error::Error;
 
-const UDT_AMOUNT_LEN: usize = 16;
 pub fn is_supply_tracked(meta: &XudtMeta) -> bool {
     types_is_supply_tracked(meta.config_flags)
 }
@@ -45,20 +44,7 @@ pub fn load_meta_type_hash_arg() -> Result<[u8; 32], Error> {
 }
 
 pub fn collect_group_amount(source: Source) -> Result<u128, Error> {
-    let mut total = 0u128;
-    let mut index = 0;
-
-    loop {
-        match load_cell_data(index, source) {
-            Ok(data) => {
-                let amount = decode_amount(&data)?;
-                total = total.checked_add(amount).ok_or(Error::AmountOverflow)?;
-                index += 1;
-            }
-            Err(SysError::IndexOutOfBound) => return Ok(total),
-            Err(error) => return Err(error.into()),
-        }
-    }
+    amount::collect_group_amount(source).map_err(map_amount_error)
 }
 
 pub fn find_unique_visible_meta(meta_type_hash: &[u8; 32]) -> Result<Option<XudtMeta>, Error> {
@@ -106,18 +92,17 @@ pub fn require_authority(authority: Option<&Authority>) -> Result<(), Error> {
     }
 }
 
-fn decode_amount(data: &[u8]) -> Result<u128, Error> {
-    if data.len() < UDT_AMOUNT_LEN {
-        return Err(Error::AmountEncoding);
-    }
-
-    let mut raw = [0u8; UDT_AMOUNT_LEN];
-    raw.copy_from_slice(&data[..UDT_AMOUNT_LEN]);
-    Ok(u128::from_le_bytes(raw))
-}
-
 fn parse_meta(data: &[u8]) -> Result<XudtMeta, Error> {
     XudtMeta::from_slice(data).map_err(Error::from)
+}
+
+fn map_amount_error(error: ScriptError) -> Error {
+    match error {
+        ScriptError::AmountEncoding => Error::AmountEncoding,
+        ScriptError::AmountOverflow => Error::AmountOverflow,
+        ScriptError::SyscallUnknown => Error::SyscallUnknown,
+        _ => Error::SyscallUnknown,
+    }
 }
 
 fn check_authority(authority: &Authority) -> Result<bool, Error> {
