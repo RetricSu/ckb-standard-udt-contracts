@@ -9,18 +9,13 @@ use crate::error::Error;
 pub use authority::check_authority;
 use cells::find_meta_in_source;
 use ckb_std::ckb_constants::Source;
-pub use parser::ParsedAuthority;
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(super) struct ParsedXudtMeta {
-    pub(super) config_flags: u8,
-    pub(super) access_authority: Option<ParsedAuthority>,
-}
+use standard_udt_types::metadata::Authority;
 
 pub struct MetaContext {
     pub input_config_flags: Option<u8>,
     pub output_config_flags: Option<u8>,
-    pub access_authority: Option<ParsedAuthority>,
+    pub mint_authority: Option<Authority>,
+    pub access_authority: Option<Authority>,
 }
 
 pub fn load_meta_type_hash_arg() -> Result<[u8; 32], Error> {
@@ -54,6 +49,7 @@ pub fn load_meta_context(meta_type_hash: &[u8; 32]) -> Result<MetaContext, Error
             .as_ref()
             .or(cell_dep.as_ref())
             .map(|meta| meta.config_flags),
+        mint_authority: authority_meta.mint_authority.clone(),
         access_authority: authority_meta.access_authority.clone(),
     })
 }

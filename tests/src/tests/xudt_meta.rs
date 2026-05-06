@@ -43,6 +43,12 @@ fn oversized_name_meta_data() -> Bytes {
     replace_xudt_meta_table_field(xudt_meta_data(0, 0, None, None, None, Vec::new()), 3, &name)
 }
 
+fn with_name(data: Bytes, name: &[u8]) -> Bytes {
+    let mut field = (name.len() as u32).to_le_bytes().to_vec();
+    field.extend_from_slice(name);
+    replace_xudt_meta_table_field(data, 3, &field)
+}
+
 fn replace_xudt_meta_table_field(data: Bytes, field_index: usize, replacement: &[u8]) -> Bytes {
     let data = data.to_vec();
     let first_offset = read_u32(&data, 4) as usize;
@@ -631,6 +637,50 @@ fn xudt_meta_access_authority_controls_pause_and_access_mode() {
         )
     });
     expect_tx_pass(&with_authority.context, &with_authority.tx);
+}
+
+#[test]
+fn xudt_meta_mint_authority_can_update_access_state() {
+    let case = update_meta_tx(|context, lock, meta| {
+        let authority = input_lock_authority(lock.script_hash);
+        let access_list = access_list_script(context, meta.script_hash);
+        (
+            xudt_meta_data(0, 0, Some(authority.clone()), None, None, Vec::new()),
+            xudt_meta_data(
+                CONFIG_ACCESS_ENABLED | CONFIG_ACCESS_WHITELIST | CONFIG_PAUSED,
+                0,
+                Some(authority),
+                None,
+                None,
+                Vec::new(),
+            ),
+            vec![ExtraCell::Output {
+                lock: lock.script.clone(),
+                type_script: access_list.script.clone(),
+                data: full_domain_shard(),
+                cell_dep: access_list,
+            }],
+        )
+    });
+
+    expect_tx_pass(&case.context, &case.tx);
+}
+
+#[test]
+fn xudt_meta_mint_authority_can_update_metadata() {
+    let case = update_meta_tx(|_, lock, _| {
+        let authority = input_lock_authority(lock.script_hash);
+        (
+            xudt_meta_data(0, 0, Some(authority.clone()), None, None, Vec::new()),
+            with_name(
+                xudt_meta_data(0, 0, Some(authority), None, None, Vec::new()),
+                b"new name",
+            ),
+            Vec::new(),
+        )
+    });
+
+    expect_tx_pass(&case.context, &case.tx);
 }
 
 fn xudt_meta_access_update_with_plugin_authority(plugin_name: &str, spawn: bool) -> UpdateCase {

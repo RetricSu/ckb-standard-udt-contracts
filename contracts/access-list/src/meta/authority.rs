@@ -1,17 +1,12 @@
 use standard_udt_script_utils::{
-    authority::{ParsedAuthority as RuntimeAuthority, check_authority as check_runtime_authority},
-    error::ScriptError,
+    authority::check_authority as check_runtime_authority, error::ScriptError,
 };
+use standard_udt_types::metadata::Authority;
 
-use crate::{error::Error, meta::ParsedAuthority};
+use crate::error::Error;
 
-pub fn check_authority(authority: &ParsedAuthority) -> Result<bool, Error> {
-    check_runtime_authority(&RuntimeAuthority {
-        authority_type: authority.authority_type,
-        script_hash: authority.script_hash,
-        script: authority.script.clone(),
-    })
-    .map_err(map_script_error)
+pub fn check_authority(authority: &Authority) -> Result<bool, Error> {
+    check_runtime_authority(authority).map_err(map_script_error)
 }
 
 fn map_script_error(error: ScriptError) -> Error {

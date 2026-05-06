@@ -1,11 +1,7 @@
 use ckb_std::ckb_constants::Source;
 
-use crate::{
-    access,
-    error::Error,
-    extensions,
-    meta::{self, ParsedXudtMeta},
-};
+use crate::{access, error::Error, extensions, meta};
+use standard_udt_types::metadata::XudtMeta;
 
 #[derive(Clone, Copy)]
 pub enum Operation {
@@ -55,11 +51,8 @@ pub fn main() -> Result<(), Error> {
     }
 }
 
-fn validate_transfer(
-    meta_type_hash: &[u8; 32],
-    current_meta: &ParsedXudtMeta,
-) -> Result<(), Error> {
-    if current_meta.is_paused() {
+fn validate_transfer(meta_type_hash: &[u8; 32], current_meta: &XudtMeta) -> Result<(), Error> {
+    if meta::is_paused(current_meta) {
         return Err(Error::MetaStateMismatch);
     }
     access::validate_if_enabled(meta_type_hash, current_meta)?;
@@ -68,14 +61,14 @@ fn validate_transfer(
 
 fn validate_mint(
     meta_type_hash: &[u8; 32],
-    current_meta: &ParsedXudtMeta,
+    current_meta: &XudtMeta,
     delta: u128,
 ) -> Result<(), Error> {
-    if current_meta.is_paused() {
+    if meta::is_paused(current_meta) {
         return Err(Error::MetaStateMismatch);
     }
     meta::require_authority(current_meta.mint_authority.as_ref())?;
-    if current_meta.is_supply_tracked() {
+    if meta::is_supply_tracked(current_meta) {
         validate_supply_delta(meta_type_hash, delta, true)?;
     } else if current_meta.current_supply != 0 {
         return Err(Error::MetaStateMismatch);
@@ -94,11 +87,11 @@ fn validate_initial_create_mint(meta_type_hash: &[u8; 32]) -> Result<(), Error> 
 
 fn validate_protocol_burn(
     meta_type_hash: &[u8; 32],
-    input_meta: &ParsedXudtMeta,
+    input_meta: &XudtMeta,
     delta: u128,
 ) -> Result<(), Error> {
     meta::require_authority(input_meta.mint_authority.as_ref())?;
-    if input_meta.is_supply_tracked() {
+    if meta::is_supply_tracked(input_meta) {
         validate_supply_delta(meta_type_hash, delta, false)?;
     } else if input_meta.current_supply != 0 {
         return Err(Error::MetaStateMismatch);
@@ -113,7 +106,7 @@ fn validate_supply_delta(meta_type_hash: &[u8; 32], delta: u128, mint: bool) -> 
     let output_meta = meta::find_meta_in_source(meta_type_hash, Source::Output)?
         .ok_or(Error::MetaOutputMissing)?;
 
-    if input_meta.is_supply_tracked() {
+    if meta::is_supply_tracked(&input_meta) {
         let expected = if mint {
             input_meta
                 .current_supply

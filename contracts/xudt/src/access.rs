@@ -7,11 +7,8 @@ use ckb_std::{
     high_level::{load_cell_data, load_cell_lock_hash, load_cell_type},
 };
 
-use crate::{
-    config::ACCESS_LIST_CODE_HASH,
-    error::Error,
-    meta::{self, ParsedXudtMeta},
-};
+use crate::{config::ACCESS_LIST_CODE_HASH, error::Error, meta};
+use standard_udt_types::metadata::XudtMeta;
 
 const ACCESS_LIST_SHARD_FIELDS: usize = 2;
 const MAX_ACCESSLIST_ENTRIES: usize = 4096;
@@ -23,8 +20,8 @@ struct AccessListShard {
     entries: Vec<[u8; 32]>,
 }
 
-pub fn validate_if_enabled(meta_type_hash: &[u8; 32], meta: &ParsedXudtMeta) -> Result<(), Error> {
-    if !meta.is_access_enabled() {
+pub fn validate_if_enabled(meta_type_hash: &[u8; 32], meta_data: &XudtMeta) -> Result<(), Error> {
+    if !meta::is_access_enabled(meta_data) {
         return Ok(());
     }
 
@@ -33,7 +30,7 @@ pub fn validate_if_enabled(meta_type_hash: &[u8; 32], meta: &ParsedXudtMeta) -> 
     let mut index = 0;
     loop {
         match load_cell_lock_hash(index, Source::GroupInput) {
-            Ok(lock_hash) => validate_lock_hash(meta.is_whitelist(), lock_hash, &shards)?,
+            Ok(lock_hash) => validate_lock_hash(meta::is_whitelist(meta_data), lock_hash, &shards)?,
             Err(SysError::IndexOutOfBound) => return Ok(()),
             Err(error) => return Err(error.into()),
         }

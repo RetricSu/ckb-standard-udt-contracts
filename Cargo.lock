@@ -1971,6 +1971,7 @@ name = "standard-udt-script-utils"
 version = "0.1.0"
 dependencies = [
  "ckb-std",
+ "standard-udt-types",
 ]
 
 [[package]]

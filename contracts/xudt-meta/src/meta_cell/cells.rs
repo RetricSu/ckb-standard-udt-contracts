@@ -6,10 +6,8 @@ use ckb_std::{
     type_id::check_type_id,
 };
 
-use crate::{
-    error::Error,
-    meta_cell::parser::{ParsedXudtMeta, parse_meta},
-};
+use crate::{error::Error, meta_cell::parser::parse_meta};
+use standard_udt_types::metadata::XudtMeta;
 
 const ALWAYS_SUCCESS_LOCK_CODE_HASH_WHITELIST: [[u8; 32]; 1] = [[
     0x3b, 0x52, 0x1c, 0xc4, 0xb5, 0x52, 0xf1, 0x09, 0xd0, 0x92, 0xd8, 0xcc, 0x46, 0x8a, 0x80, 0x48,
@@ -39,8 +37,8 @@ fn is_allowed_always_success_lock_code_hash(code_hash: &[u8; 32]) -> bool {
 }
 
 pub struct MetaGroup {
-    pub input: Option<ParsedXudtMeta>,
-    pub output: Option<ParsedXudtMeta>,
+    pub input: Option<XudtMeta>,
+    pub output: Option<XudtMeta>,
     pub meta_type_hash: [u8; 32],
 }
 
@@ -64,7 +62,7 @@ pub fn validate_create_type_id() -> Result<(), Error> {
     check_type_id(0, 32).map_err(|_| Error::InvalidTypeId)
 }
 
-fn load_group_meta(source: Source) -> Result<Option<ParsedXudtMeta>, Error> {
+fn load_group_meta(source: Source) -> Result<Option<XudtMeta>, Error> {
     let mut found = None;
     let mut index = 0;
 

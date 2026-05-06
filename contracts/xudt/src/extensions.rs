@@ -10,7 +10,8 @@ use ckb_std::{
     syscalls::wait,
 };
 
-use crate::{entry::Operation, error::Error, meta::ParsedExtension};
+use crate::{entry::Operation, error::Error, meta};
+use standard_udt_types::metadata::{Extension, ExtensionType};
 
 type ExtensionFn = unsafe extern "C" fn(*const u8, u8, u8, *const u8, usize, u8) -> i8;
 
@@ -26,16 +27,17 @@ const fn mint_authority_context_code(value: MintAuthorityContext) -> u8 {
 
 pub fn run_extensions(
     operation: Operation,
-    extensions: &[ParsedExtension],
+    extensions: &[Extension],
     mint_authority_context: MintAuthorityContext,
 ) -> Result<(), Error> {
     for (index, extension) in extensions.iter().enumerate() {
-        match extension.extension_type {
-            0 => {
+        match meta::extension_kind(extension) {
+            ExtensionType::DynamicLinking => {
                 run_dynamic_linking_extension(operation, index, extension, mint_authority_context)?
             }
-            1 => run_spawn_extension(operation, index, extension, mint_authority_context)?,
-            _ => return Err(Error::InvalidMetaData),
+            ExtensionType::Spawn => {
+                run_spawn_extension(operation, index, extension, mint_authority_context)?
+            }
         }
     }
     Ok(())
@@ -44,10 +46,10 @@ pub fn run_extensions(
 fn run_dynamic_linking_extension(
     operation: Operation,
     index: usize,
-    extension: &ParsedExtension,
+    extension: &Extension,
     mint_authority_context: MintAuthorityContext,
 ) -> Result<(), Error> {
-    let script = &extension.script;
+    let script = meta::extension_script(extension);
     let code_hash = script.code_hash().raw_data();
     let mut context = unsafe { CKBDLContext::<[u8; 128 * 1024]>::new() };
     let library = context
@@ -79,10 +81,10 @@ fn run_dynamic_linking_extension(
 fn run_spawn_extension(
     operation: Operation,
     index: usize,
-    extension: &ParsedExtension,
+    extension: &Extension,
     mint_authority_context: MintAuthorityContext,
 ) -> Result<(), Error> {
-    let script = &extension.script;
+    let script = meta::extension_script(extension);
     let code_hash = script.code_hash().raw_data();
     let op = CString::new(decimal_byte(operation.code())).map_err(|_| Error::InvalidMetaData)?;
     let ext_index = CString::new(decimal_byte(index as u8)).map_err(|_| Error::InvalidMetaData)?;

@@ -5,7 +5,8 @@ edition = "2021"
 
 [dependencies]
 ckb-std = "1.1"
+standard-udt-types = { path = "../types", default-features = false, features = ["no-std"] }
 
 [features]
 default = []
-native-simulator = ["ckb-std/native-simulator"]
+native-simulator = ["ckb-std/native-simulator", "standard-udt-types/native-simulator"]

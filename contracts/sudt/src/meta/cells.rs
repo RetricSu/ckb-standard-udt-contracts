@@ -4,10 +4,8 @@ use ckb_std::{
     high_level::{load_cell_data, load_cell_type_hash, load_script},
 };
 
-use crate::{
-    error::Error,
-    meta::parser::{ParsedSudtMeta, parse_meta},
-};
+use crate::{error::Error, meta::parser::parse_meta};
+use standard_udt_types::metadata::SudtMeta;
 
 const UDT_AMOUNT_LEN: usize = 16;
 
@@ -42,7 +40,7 @@ pub fn collect_group_amount(source: Source) -> Result<u128, Error> {
 
 pub(crate) fn find_unique_visible_meta(
     meta_type_hash: &[u8; 32],
-) -> Result<Option<ParsedSudtMeta>, Error> {
+) -> Result<Option<SudtMeta>, Error> {
     let mut found = None;
     for source in [Source::CellDep, Source::Input] {
         if let Some(meta) = find_meta_in_source(meta_type_hash, source)? {
@@ -58,7 +56,7 @@ pub(crate) fn find_unique_visible_meta(
 pub(crate) fn find_meta_in_source(
     meta_type_hash: &[u8; 32],
     source: Source,
-) -> Result<Option<ParsedSudtMeta>, Error> {
+) -> Result<Option<SudtMeta>, Error> {
     let mut found = None;
     let mut index = 0;
 

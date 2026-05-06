@@ -123,6 +123,87 @@ fn access_list_update_tx(
     AccessListCase { context, tx }
 }
 
+fn access_list_update_tx_with_mint_authority(
+    config_flags: u8,
+    include_authority_input: bool,
+    input_shards: Vec<Bytes>,
+    output_shards: Vec<Bytes>,
+) -> AccessListCase {
+    let mut context = Context::default();
+    let authority = always_success_lock(&mut context, Bytes::from(vec![1u8]));
+    let cell_lock = always_success_lock(&mut context, Bytes::from(vec![2u8]));
+    let meta = meta_script(&mut context);
+    let access_list = access_list_script(&mut context, meta.script_hash);
+    let mint_authority = input_lock_authority(authority.script_hash);
+    let meta_data = build_xudt_meta_data(
+        config_flags,
+        0,
+        Some(mint_authority.clone()),
+        None,
+        None,
+        Vec::new(),
+    );
+
+    let meta_out_point = create_typed_cell(
+        &mut context,
+        &cell_lock.script,
+        &meta.script,
+        100_000_000_000,
+        meta_data.clone(),
+    );
+    let mut builder = TransactionBuilder::default()
+        .input(
+            CellInput::new_builder()
+                .previous_output(meta_out_point)
+                .build(),
+        )
+        .output(typed_output(
+            &cell_lock.script,
+            &meta.script,
+            100_000_000_000,
+        ))
+        .output_data(meta_data.pack())
+        .cell_dep(cell_dep_for_script(&cell_lock))
+        .cell_dep(cell_dep_for_script(&authority))
+        .cell_dep(cell_dep_for_script(&meta))
+        .cell_dep(cell_dep_for_script(&access_list));
+
+    if include_authority_input {
+        let out_point = context.create_cell(
+            ckb_testtool::ckb_types::packed::CellOutput::new_builder()
+                .capacity(100_000_000_000u64.pack())
+                .lock(authority.script.clone())
+                .build(),
+            Bytes::new(),
+        );
+        builder = builder.input(CellInput::new_builder().previous_output(out_point).build());
+    }
+
+    for data in input_shards {
+        let out_point = create_typed_cell(
+            &mut context,
+            &cell_lock.script,
+            &access_list.script,
+            100_000_000_000,
+            data,
+        );
+        builder = builder.input(CellInput::new_builder().previous_output(out_point).build());
+    }
+
+    for data in output_shards {
+        builder = builder
+            .output(typed_output(
+                &cell_lock.script,
+                &access_list.script,
+                100_000_000_000,
+            ))
+            .output_data(data.pack());
+    }
+
+    let tx = context.complete_tx(builder.build());
+    AccessListCase { context, tx }
+}
+
 fn access_list_transition_tx(
     input_config_flags: u8,
     output_config_flags: u8,
@@ -713,6 +794,18 @@ fn access_list_rejects_unauthorized_update() {
     );
 
     expect_tx_fail(&case.context, &case.tx);
+}
+
+#[test]
+fn access_list_update_accepts_mint_authority() {
+    let case = access_list_update_tx_with_mint_authority(
+        CONFIG_ACCESS_ENABLED,
+        true,
+        vec![full_domain_shard(Vec::new())],
+        vec![full_domain_shard(vec![entry(0x10)])],
+    );
+
+    expect_tx_pass(&case.context, &case.tx);
 }
 
 #[test]

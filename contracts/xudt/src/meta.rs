@@ -7,12 +7,9 @@ use ckb_std::{
     high_level::{load_cell_data, load_cell_type_hash, load_script},
 };
 use standard_udt_script_utils::{
-    authority::{ParsedAuthority as RuntimeAuthority, check_authority as check_runtime_authority},
-    error::ScriptError,
+    authority::check_authority as check_runtime_authority, error::ScriptError,
 };
-use standard_udt_types::metadata::{
-    Authority as TypeAuthority, Extension as TypeExtension, XudtMeta,
-};
+use standard_udt_types::metadata::{Authority, Extension, ExtensionType, XudtMeta};
 
 use crate::error::Error;
 
@@ -22,43 +19,20 @@ const CONFIG_ACCESS_ENABLED: u8 = 0b0000_0010;
 const CONFIG_ACCESS_WHITELIST: u8 = 0b0000_0100;
 const CONFIG_PAUSED: u8 = 0b0000_1000;
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ParsedXudtMeta {
-    pub config_flags: u8,
-    pub current_supply: u128,
-    pub mint_authority: Option<ParsedAuthority>,
-    pub extensions: Vec<ParsedExtension>,
+pub fn is_supply_tracked(meta: &XudtMeta) -> bool {
+    meta.config_flags & CONFIG_SUPPLY_TRACKED != 0
 }
 
-impl ParsedXudtMeta {
-    pub fn is_supply_tracked(&self) -> bool {
-        self.config_flags & CONFIG_SUPPLY_TRACKED != 0
-    }
-
-    pub fn is_access_enabled(&self) -> bool {
-        self.config_flags & CONFIG_ACCESS_ENABLED != 0
-    }
-
-    pub fn is_whitelist(&self) -> bool {
-        self.config_flags & CONFIG_ACCESS_WHITELIST != 0
-    }
-
-    pub fn is_paused(&self) -> bool {
-        self.config_flags & CONFIG_PAUSED != 0
-    }
+pub fn is_access_enabled(meta: &XudtMeta) -> bool {
+    meta.config_flags & CONFIG_ACCESS_ENABLED != 0
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ParsedAuthority {
-    pub authority_type: u8,
-    pub script_hash: [u8; 32],
-    pub script: Option<Script>,
+pub fn is_whitelist(meta: &XudtMeta) -> bool {
+    meta.config_flags & CONFIG_ACCESS_WHITELIST != 0
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ParsedExtension {
-    pub extension_type: u8,
-    pub script: Script,
+pub fn is_paused(meta: &XudtMeta) -> bool {
+    meta.config_flags & CONFIG_PAUSED != 0
 }
 
 pub fn load_meta_type_hash_arg() -> Result<[u8; 32], Error> {
@@ -90,9 +64,7 @@ pub fn collect_group_amount(source: Source) -> Result<u128, Error> {
     }
 }
 
-pub fn find_unique_visible_meta(
-    meta_type_hash: &[u8; 32],
-) -> Result<Option<ParsedXudtMeta>, Error> {
+pub fn find_unique_visible_meta(meta_type_hash: &[u8; 32]) -> Result<Option<XudtMeta>, Error> {
     let mut found = None;
     for source in [Source::CellDep, Source::Input] {
         if let Some(meta) = find_meta_in_source(meta_type_hash, source)? {
@@ -108,7 +80,7 @@ pub fn find_unique_visible_meta(
 pub fn find_meta_in_source(
     meta_type_hash: &[u8; 32],
     source: Source,
-) -> Result<Option<ParsedXudtMeta>, Error> {
+) -> Result<Option<XudtMeta>, Error> {
     let mut found = None;
     let mut index = 0;
 
@@ -129,7 +101,7 @@ pub fn find_meta_in_source(
     }
 }
 
-pub fn require_authority(authority: Option<&ParsedAuthority>) -> Result<(), Error> {
+pub fn require_authority(authority: Option<&Authority>) -> Result<(), Error> {
     let authority = authority.ok_or(Error::AuthorityMissing)?;
     match check_authority(authority)? {
         true => Ok(()),
@@ -197,24 +169,12 @@ fn decode_amount(data: &[u8]) -> Result<u128, Error> {
     Ok(u128::from_le_bytes(raw))
 }
 
-fn parse_meta(data: &[u8]) -> Result<ParsedXudtMeta, Error> {
-    let meta = XudtMeta::from_slice(data).map_err(Error::from)?;
-
-    Ok(ParsedXudtMeta {
-        config_flags: meta.config_flags,
-        current_supply: meta.current_supply,
-        mint_authority: meta.mint_authority.map(parsed_authority),
-        extensions: meta.extensions.into_iter().map(parsed_extension).collect(),
-    })
+fn parse_meta(data: &[u8]) -> Result<XudtMeta, Error> {
+    XudtMeta::from_slice(data).map_err(Error::from)
 }
 
-fn check_authority(authority: &ParsedAuthority) -> Result<bool, Error> {
-    check_runtime_authority(&RuntimeAuthority {
-        authority_type: authority.authority_type,
-        script_hash: authority.script_hash,
-        script: authority.script.clone(),
-    })
-    .map_err(map_script_error)
+fn check_authority(authority: &Authority) -> Result<bool, Error> {
+    check_runtime_authority(authority).map_err(map_script_error)
 }
 
 fn map_script_error(error: ScriptError) -> Error {
@@ -227,17 +187,10 @@ fn map_script_error(error: ScriptError) -> Error {
     }
 }
 
-fn parsed_authority(authority: TypeAuthority) -> ParsedAuthority {
-    ParsedAuthority {
-        authority_type: authority.authority_type.into(),
-        script_hash: authority.script_hash,
-        script: authority.script,
-    }
+pub fn extension_script(extension: &Extension) -> &Script {
+    &extension.script
 }
 
-fn parsed_extension(extension: TypeExtension) -> ParsedExtension {
-    ParsedExtension {
-        extension_type: extension.extension_type.into(),
-        script: extension.script,
-    }
+pub fn extension_kind(extension: &Extension) -> ExtensionType {
+    extension.extension_type
 }

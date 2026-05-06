@@ -1,19 +1,19 @@
 use crate::{
     error::Error,
     meta_cell::{
-        CONFIG_SUPPLY_TRACKED, ParsedAuthority, ParsedXudtMeta, access_enabled,
-        has_full_domain_access_list_inputs, has_full_domain_access_list_outputs,
-        has_same_token_cells, is_supply_tracked, paused, whitelist_mode,
+        CONFIG_SUPPLY_TRACKED, access_enabled, has_full_domain_access_list_inputs,
+        has_full_domain_access_list_outputs, has_same_token_cells, is_supply_tracked, paused,
+        whitelist_mode,
     },
 };
 use standard_udt_script_utils::{
-    authority::{ParsedAuthority as RuntimeAuthority, check_authority as check_runtime_authority},
-    error::ScriptError,
+    authority::check_authority as check_runtime_authority, error::ScriptError,
 };
+use standard_udt_types::metadata::{Authority, XudtMeta};
 
 pub fn validate_update(
-    input: &ParsedXudtMeta,
-    output: &ParsedXudtMeta,
+    input: &XudtMeta,
+    output: &XudtMeta,
     meta_type_hash: &[u8; 32],
 ) -> Result<(), Error> {
     if input.config_flags & CONFIG_SUPPLY_TRACKED != output.config_flags & CONFIG_SUPPLY_TRACKED {
@@ -28,31 +28,35 @@ pub fn validate_update(
         != access_enabled(output.config_flags)
         || whitelist_mode(input.config_flags) != whitelist_mode(output.config_flags)
         || paused(input.config_flags) != paused(output.config_flags)
-        || input.access_authority_raw != output.access_authority_raw;
+        || input.access_authority != output.access_authority;
     if access_state_changed {
-        require_authority(input.access_authority.as_ref())?;
-    } else if input.access_authority.is_none() && output.access_authority.is_some() {
-        return Err(Error::AuthorityMissing);
+        require_authority_with_mint_fallback(
+            input.access_authority.as_ref(),
+            input.mint_authority.as_ref(),
+        )?;
     }
 
-    if input.extensions_raw != output.extensions_raw {
+    if input.extensions != output.extensions {
         require_authority(input.mint_authority.as_ref())?;
     }
 
-    if input.metadata_fields != output.metadata_fields
-        || input.metadata_authority_raw != output.metadata_authority_raw
+    if input.decimals != output.decimals
+        || input.name != output.name
+        || input.symbol != output.symbol
+        || input.uri != output.uri
+        || input.extra_data != output.extra_data
+        || input.metadata_authority != output.metadata_authority
     {
-        require_authority(input.metadata_authority.as_ref())?;
-    } else if input.metadata_authority.is_none() && output.metadata_authority.is_some() {
-        return Err(Error::AuthorityMissing);
+        require_authority_with_mint_fallback(
+            input.metadata_authority.as_ref(),
+            input.mint_authority.as_ref(),
+        )?;
     }
 
     if input.current_supply != output.current_supply
-        || input.mint_authority_raw != output.mint_authority_raw
+        || input.mint_authority != output.mint_authority
     {
         require_authority(input.mint_authority.as_ref())?;
-    } else if input.mint_authority.is_none() && output.mint_authority.is_some() {
-        return Err(Error::AuthorityMissing);
     }
 
     validate_access_mode_transition(input.config_flags, output.config_flags, meta_type_hash)?;
@@ -107,7 +111,7 @@ fn validate_access_mode_transition(
     Ok(())
 }
 
-fn require_authority(authority: Option<&ParsedAuthority>) -> Result<(), Error> {
+fn require_authority(authority: Option<&Authority>) -> Result<(), Error> {
     let authority = authority.ok_or(Error::AuthorityMissing)?;
     match check_authority(authority) {
         Ok(true) => Ok(()),
@@ -116,13 +120,20 @@ fn require_authority(authority: Option<&ParsedAuthority>) -> Result<(), Error> {
     }
 }
 
-fn check_authority(authority: &ParsedAuthority) -> Result<bool, Error> {
-    check_runtime_authority(&RuntimeAuthority {
-        authority_type: authority.authority_type,
-        script_hash: authority.script_hash,
-        script: authority.script.clone(),
-    })
-    .map_err(map_script_error)
+fn require_authority_with_mint_fallback(
+    authority: Option<&Authority>,
+    mint_authority: Option<&Authority>,
+) -> Result<(), Error> {
+    match authority {
+        Some(authority) if check_authority(authority)? => return Ok(()),
+        Some(_) if mint_authority.is_none() => return Err(Error::AuthorityFailed),
+        Some(_) | None => {}
+    }
+    require_authority(mint_authority)
+}
+
+fn check_authority(authority: &Authority) -> Result<bool, Error> {
+    check_runtime_authority(authority).map_err(map_script_error)
 }
 
 fn map_script_error(error: ScriptError) -> Error {

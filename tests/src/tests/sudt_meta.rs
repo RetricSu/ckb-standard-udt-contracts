@@ -375,6 +375,33 @@ fn sudt_meta_update_metadata_change_with_input_lock_authority_passes() {
 }
 
 #[test]
+fn sudt_meta_mint_authority_can_update_metadata() {
+    let (context, tx) = update_meta_tx_with_data(|lock_hash, _| {
+        let authority = input_lock_authority(lock_hash);
+        (
+            sudt_meta_data(
+                CONFIG_SUPPLY_TRACKED,
+                0,
+                Some(authority.clone()),
+                None,
+                Vec::new(),
+                Vec::new(),
+            ),
+            sudt_meta_data(
+                CONFIG_SUPPLY_TRACKED,
+                0,
+                Some(authority),
+                None,
+                b"new name".to_vec(),
+                Vec::new(),
+            ),
+        )
+    });
+
+    expect_tx_pass(&context, &tx);
+}
+
+#[test]
 fn sudt_meta_rejects_non_whitelisted_output_lock() {
     let (context, tx) = update_meta_tx_with_locks(|context, lock_hash, _| {
         let output_lock = non_whitelisted_lock(context);

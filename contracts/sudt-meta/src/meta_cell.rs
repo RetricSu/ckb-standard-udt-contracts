@@ -1,18 +1,15 @@
-use alloc::vec::Vec;
-
 use ckb_std::{
     ckb_constants::Source,
-    ckb_types::{core::ScriptHashType, packed::Script, prelude::*},
+    ckb_types::{core::ScriptHashType, prelude::*},
     error::SysError,
     high_level::{load_cell_data, load_cell_lock, load_cell_type, load_script, load_script_hash},
     type_id::check_type_id,
 };
-use standard_udt_types::metadata::{Authority as TypeAuthority, SudtMeta};
+use standard_udt_types::metadata::SudtMeta;
 
 use crate::{constants::SUDT_CODE_HASH, error::Error};
 
 pub const CONFIG_SUPPLY_TRACKED: u8 = 0b0000_0001;
-const SUDT_META_FIELDS: usize = 9;
 const ALWAYS_SUCCESS_LOCK_CODE_HASH_WHITELIST: [[u8; 32]; 1] = [[
     0x3b, 0x52, 0x1c, 0xc4, 0xb5, 0x52, 0xf1, 0x09, 0xd0, 0x92, 0xd8, 0xcc, 0x46, 0x8a, 0x80, 0x48,
     0xac, 0xb5, 0x3c, 0x59, 0x52, 0xdb, 0xe7, 0x69, 0xd2, 0xb2, 0xf9, 0xcf, 0x6e, 0x47, 0xf7, 0xf1,
@@ -40,27 +37,9 @@ fn is_allowed_always_success_lock_code_hash(code_hash: &[u8; 32]) -> bool {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ParsedSudtMeta {
-    pub config_flags: u8,
-    pub current_supply: u128,
-    pub metadata_fields: Vec<u8>,
-    pub mint_authority_raw: Vec<u8>,
-    pub metadata_authority_raw: Vec<u8>,
-    pub mint_authority: Option<ParsedAuthority>,
-    pub metadata_authority: Option<ParsedAuthority>,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ParsedAuthority {
-    pub authority_type: u8,
-    pub script_hash: [u8; 32],
-    pub script: Option<Script>,
-}
-
 pub struct MetaGroup {
-    pub input: Option<ParsedSudtMeta>,
-    pub output: Option<ParsedSudtMeta>,
+    pub input: Option<SudtMeta>,
+    pub output: Option<SudtMeta>,
     pub meta_type_hash: [u8; 32],
 }
 
@@ -84,10 +63,7 @@ pub fn validate_create_type_id() -> Result<(), Error> {
     check_type_id(0, 32).map_err(|_| Error::InvalidTypeId)
 }
 
-pub fn validate_create(
-    output_meta: &ParsedSudtMeta,
-    meta_type_hash: &[u8; 32],
-) -> Result<(), Error> {
+pub fn validate_create(output_meta: &SudtMeta, meta_type_hash: &[u8; 32]) -> Result<(), Error> {
     if is_supply_tracked(output_meta.config_flags) {
         let initial_supply = sum_initial_udt_outputs(meta_type_hash, &SUDT_CODE_HASH)?;
         if output_meta.current_supply != initial_supply {
@@ -138,7 +114,7 @@ fn decode_amount(data: &[u8]) -> Result<u128, Error> {
     Ok(u128::from_le_bytes(raw))
 }
 
-fn load_group_meta(source: Source) -> Result<Option<ParsedSudtMeta>, Error> {
+fn load_group_meta(source: Source) -> Result<Option<SudtMeta>, Error> {
     let mut found = None;
     let mut index = 0;
 
@@ -170,23 +146,8 @@ fn validate_meta_lock(index: usize) -> Result<(), Error> {
     }
 }
 
-fn parse_meta(data: &[u8]) -> Result<ParsedSudtMeta, Error> {
-    let offsets = table_offsets(data, SUDT_META_FIELDS)?;
-    let meta = SudtMeta::from_slice(data).map_err(Error::from)?;
-
-    let metadata_fields = data[offsets[2]..offsets[7]].to_vec();
-    let mint_authority_raw = data[offsets[7]..offsets[8]].to_vec();
-    let metadata_authority_raw = data[offsets[8]..offsets[9]].to_vec();
-
-    Ok(ParsedSudtMeta {
-        config_flags: meta.config_flags,
-        current_supply: meta.current_supply,
-        metadata_fields,
-        mint_authority_raw,
-        metadata_authority_raw,
-        mint_authority: meta.mint_authority.map(parsed_authority),
-        metadata_authority: meta.metadata_authority.map(parsed_authority),
-    })
+fn parse_meta(data: &[u8]) -> Result<SudtMeta, Error> {
+    SudtMeta::from_slice(data).map_err(Error::from)
 }
 
 fn is_initial_udt_script(
@@ -207,51 +168,4 @@ fn is_initial_udt_script(
 
 pub fn is_supply_tracked(config_flags: u8) -> bool {
     config_flags & CONFIG_SUPPLY_TRACKED != 0
-}
-
-fn table_offsets(data: &[u8], fields: usize) -> Result<Vec<usize>, Error> {
-    if data.len() < 4 + fields * 4 {
-        return Err(Error::InvalidMetaData);
-    }
-
-    let total_size = read_u32(data, 0)? as usize;
-    if total_size != data.len() {
-        return Err(Error::InvalidMetaData);
-    }
-
-    let mut offsets = Vec::with_capacity(fields + 1);
-    for index in 0..fields {
-        offsets.push(read_u32(data, 4 + index * 4)? as usize);
-    }
-    offsets.push(total_size);
-
-    let expected_header = 4 + fields * 4;
-    if offsets[0] != expected_header {
-        return Err(Error::InvalidMetaData);
-    }
-    for index in 1..offsets.len() {
-        if offsets[index] < offsets[index - 1] || offsets[index] > total_size {
-            return Err(Error::InvalidMetaData);
-        }
-    }
-
-    Ok(offsets)
-}
-
-fn parsed_authority(authority: TypeAuthority) -> ParsedAuthority {
-    ParsedAuthority {
-        authority_type: authority.authority_type.into(),
-        script_hash: authority.script_hash,
-        script: authority.script,
-    }
-}
-
-fn read_u32(data: &[u8], start: usize) -> Result<u32, Error> {
-    if start + 4 > data.len() {
-        return Err(Error::InvalidMetaData);
-    }
-
-    let mut raw = [0u8; 4];
-    raw.copy_from_slice(&data[start..start + 4]);
-    Ok(u32::from_le_bytes(raw))
 }

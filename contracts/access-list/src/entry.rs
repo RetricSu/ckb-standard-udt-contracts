@@ -56,11 +56,20 @@ pub fn main() -> Result<(), Error> {
         return Ok(());
     }
 
-    let authority = meta_context
-        .access_authority
+    if let Some(authority) = meta_context.access_authority.as_ref() {
+        if check_authority(authority)? {
+            return Ok(());
+        }
+        if meta_context.mint_authority.is_none() {
+            return Err(Error::AuthorityFailed);
+        }
+    }
+
+    let mint_authority = meta_context
+        .mint_authority
         .as_ref()
         .ok_or(Error::AuthorityMissing)?;
-    match check_authority(authority)? {
+    match check_authority(mint_authority)? {
         true => Ok(()),
         false => Err(Error::AuthorityFailed),
     }

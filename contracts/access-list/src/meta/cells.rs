@@ -6,12 +6,13 @@ use ckb_std::{
 
 use crate::error::Error;
 
-use super::{ParsedXudtMeta, parser::parse_meta};
+use super::parser::parse_meta;
+use standard_udt_types::metadata::XudtMeta;
 
 pub(super) fn find_meta_in_source(
     meta_type_hash: &[u8; 32],
     source: Source,
-) -> Result<Option<ParsedXudtMeta>, Error> {
+) -> Result<Option<XudtMeta>, Error> {
     let mut found = None;
     let mut index = 0;
 

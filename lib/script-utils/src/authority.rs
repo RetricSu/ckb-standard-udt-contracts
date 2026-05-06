@@ -11,34 +11,32 @@ use ckb_std::{
     high_level::{load_cell_lock_hash, load_cell_type_hash, spawn_cell},
     syscalls::wait,
 };
+use standard_udt_types::metadata::{Authority, AuthorityType};
 
 use crate::error::ScriptError;
 
 type AuthorityFn = unsafe extern "C" fn(*const u8, *const u8, usize) -> i8;
 
-pub struct ParsedAuthority {
-    pub authority_type: u8,
-    pub script_hash: [u8; 32],
-    pub script: Option<Script>,
-}
-
-pub fn check_authority(authority: &ParsedAuthority) -> Result<bool, ScriptError> {
+pub fn check_authority(authority: &Authority) -> Result<bool, ScriptError> {
     validate_authority_shape(authority)?;
 
     match authority.authority_type {
-        0 => has_input_lock_hash(&authority.script_hash),
-        1 => has_input_type_hash(&authority.script_hash),
-        2 => has_output_type_hash(&authority.script_hash),
-        3 => run_dynamic_linking_authority(authority),
-        4 => run_spawn_authority(authority),
-        _ => Err(ScriptError::InvalidAuthority),
+        AuthorityType::InputLock => has_input_lock_hash(&authority.script_hash),
+        AuthorityType::InputType => has_input_type_hash(&authority.script_hash),
+        AuthorityType::OutputType => has_output_type_hash(&authority.script_hash),
+        AuthorityType::DynamicLinking => run_dynamic_linking_authority(authority),
+        AuthorityType::Spawn => run_spawn_authority(authority),
     }
 }
 
-fn validate_authority_shape(authority: &ParsedAuthority) -> Result<(), ScriptError> {
+fn validate_authority_shape(authority: &Authority) -> Result<(), ScriptError> {
     match authority.authority_type {
-        0..=2 if authority.script.is_none() => Ok(()),
-        3 | 4 => {
+        AuthorityType::InputLock | AuthorityType::InputType | AuthorityType::OutputType
+            if authority.script.is_none() =>
+        {
+            Ok(())
+        }
+        AuthorityType::DynamicLinking | AuthorityType::Spawn => {
             let script = authority
                 .script
                 .as_ref()
@@ -50,8 +48,9 @@ fn validate_authority_shape(authority: &ParsedAuthority) -> Result<(), ScriptErr
                 Err(ScriptError::InvalidAuthority)
             }
         }
-        0..=4 => Err(ScriptError::InvalidAuthority),
-        _ => Err(ScriptError::InvalidAuthority),
+        AuthorityType::InputLock | AuthorityType::InputType | AuthorityType::OutputType => {
+            Err(ScriptError::InvalidAuthority)
+        }
     }
 }
 
@@ -105,7 +104,7 @@ where
     }
 }
 
-fn run_dynamic_linking_authority(authority: &ParsedAuthority) -> Result<bool, ScriptError> {
+fn run_dynamic_linking_authority(authority: &Authority) -> Result<bool, ScriptError> {
     let script = authority
         .script
         .as_ref()
@@ -127,7 +126,7 @@ fn run_dynamic_linking_authority(authority: &ParsedAuthority) -> Result<bool, Sc
     Ok(result == 0)
 }
 
-fn run_spawn_authority(authority: &ParsedAuthority) -> Result<bool, ScriptError> {
+fn run_spawn_authority(authority: &Authority) -> Result<bool, ScriptError> {
     let script = authority
         .script
         .as_ref()
@@ -174,6 +173,7 @@ mod tests {
         bytes::Bytes,
         packed::{Byte32, Script},
     };
+    use standard_udt_types::metadata::AuthorityType;
 
     fn dummy_script() -> Script {
         Script::new_builder()
@@ -183,8 +183,8 @@ mod tests {
             .build()
     }
 
-    fn attr(authority_type: u8) -> ParsedAuthority {
-        ParsedAuthority {
+    fn attr(authority_type: AuthorityType) -> Authority {
+        Authority {
             authority_type,
             script_hash: [7u8; 32],
             script: None,
@@ -250,11 +250,11 @@ mod tests {
     #[test]
     fn unsupported_authority_locations_do_not_scan_cells() {
         assert_eq!(
-            check_authority(&attr(3)),
+            check_authority(&attr(AuthorityType::DynamicLinking)),
             Err(ScriptError::InvalidAuthority)
         );
         assert_eq!(
-            check_authority(&attr(4)),
+            check_authority(&attr(AuthorityType::Spawn)),
             Err(ScriptError::InvalidAuthority)
         );
     }
@@ -262,8 +262,8 @@ mod tests {
     #[test]
     fn authority_shape_rejects_scripts_for_hash_scan_modes() {
         let script = dummy_script();
-        let authority = ParsedAuthority {
-            authority_type: 0,
+        let authority = Authority {
+            authority_type: AuthorityType::InputLock,
             script_hash: [0u8; 32],
             script: Some(script),
         };
@@ -276,8 +276,8 @@ mod tests {
 
     #[test]
     fn authority_shape_requires_script_for_executable_modes() {
-        let authority = ParsedAuthority {
-            authority_type: 3,
+        let authority = Authority {
+            authority_type: AuthorityType::DynamicLinking,
             script_hash: [0u8; 32],
             script: None,
         };
@@ -291,8 +291,8 @@ mod tests {
     #[test]
     fn authority_shape_rejects_mismatched_script_hash() {
         let script = dummy_script();
-        let authority = ParsedAuthority {
-            authority_type: 4,
+        let authority = Authority {
+            authority_type: AuthorityType::Spawn,
             script_hash: [0u8; 32],
             script: Some(script),
         };
@@ -307,8 +307,8 @@ mod tests {
     fn authority_shape_accepts_matching_executable_script() {
         let script = dummy_script();
         let script_hash: [u8; 32] = script.calc_script_hash().unpack();
-        let authority = ParsedAuthority {
-            authority_type: 3,
+        let authority = Authority {
+            authority_type: AuthorityType::DynamicLinking,
             script_hash,
             script: Some(script),
         };
