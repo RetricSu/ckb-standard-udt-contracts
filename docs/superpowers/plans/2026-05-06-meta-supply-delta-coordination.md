@@ -710,7 +710,7 @@ Expected: all xUDT meta tests pass, including the new supply delta tests.
 **Files:**
 - Review all modified files.
 
-- [ ] **Step 1: Search for duplicated token scan helpers**
+- [x] **Step 1: Search for duplicated token scan helpers**
 
 Run:
 
@@ -720,7 +720,7 @@ rg "sum_initial_udt_outputs|fn decode_amount|fn is_initial_udt_script|pub\\(crat
 
 Expected: no local `decode_amount`, `sum_initial_udt_outputs`, or token-script matcher remains in `contracts/sudt-meta` or `contracts/xudt-meta`. The remaining amount decoder should be `lib/script-utils/src/amount.rs`, and the remaining token matcher should be `lib/script-utils/src/token.rs`.
 
-- [ ] **Step 2: Format**
+- [x] **Step 2: Format**
 
 Run:
 
@@ -730,7 +730,7 @@ cargo fmt
 
 Expected: no output.
 
-- [ ] **Step 3: Run unit tests**
+- [x] **Step 3: Run unit tests**
 
 Run:
 
@@ -741,7 +741,7 @@ RUSTUP_TOOLCHAIN=1.92.0 cargo test -p standard-udt-types --lib
 
 Expected: both pass.
 
-- [ ] **Step 4: Run contract build**
+- [x] **Step 4: Run contract build**
 
 Run:
 
@@ -751,7 +751,7 @@ RUSTUP_TOOLCHAIN=1.92.0 make build MODE=debug
 
 Expected: all contracts and test plugins build.
 
-- [ ] **Step 5: Run integration tests**
+- [x] **Step 5: Run integration tests**
 
 Run:
 
@@ -761,7 +761,7 @@ RUSTUP_TOOLCHAIN=1.92.0 MODE=debug make test
 
 Expected: all integration tests pass.
 
-- [ ] **Step 6: Check diff hygiene**
+- [x] **Step 6: Check diff hygiene**
 
 Run:
 
@@ -772,12 +772,12 @@ git status --short
 
 Expected: `git diff --check` prints nothing. `git status --short` lists only intentional source, test, and docs changes.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 Run:
 
 ```bash
-git add lib/script-utils/src/lib.rs lib/script-utils/src/token.rs contracts/sudt-meta/src contracts/xudt-meta/src tests/src/tests/sudt_meta.rs tests/src/tests/xudt_meta.rs docs/superpowers/specs/2026-05-06-meta-supply-delta-coordination-design.md docs/superpowers/plans/2026-05-06-meta-supply-delta-coordination.md
+git add lib/script-utils/src/lib.rs lib/script-utils/src/token.rs contracts/sudt-meta/src contracts/xudt-meta/src tests/src/tests/sudt_meta.rs tests/src/tests/xudt_meta.rs tests/src/tests/xudt.rs docs/superpowers/specs/2026-05-06-meta-supply-delta-coordination-design.md docs/superpowers/plans/2026-05-06-meta-supply-delta-coordination.md
 git commit -m "Enforce meta supply deltas against UDT amounts"
 ```
 

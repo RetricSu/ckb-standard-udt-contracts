@@ -570,7 +570,7 @@ fn xudt_user_destruction_skips_access_and_extensions() {
 
 #[test]
 fn xudt_user_destruction_with_meta_dep_skips_protocol_burn_authority() {
-    let mut fixture = XudtFixture::new();
+    let mut fixture = XudtFixture::new_with_always_success_meta();
     let meta_input = fixture.live_meta_input(CONFIG_SUPPLY_TRACKED, 100, false);
     let udt_input = fixture.live_udt_input(100);
 
@@ -588,6 +588,28 @@ fn xudt_user_destruction_with_meta_dep_skips_protocol_burn_authority() {
     let tx = fixture.complete(tx);
 
     expect_tx_pass(&fixture.context, &tx);
+}
+
+#[test]
+fn xudt_user_destruction_with_real_meta_update_requires_matching_supply_delta() {
+    let mut fixture = XudtFixture::new();
+    let meta_input = fixture.live_meta_input(CONFIG_SUPPLY_TRACKED, 100, false);
+    let udt_input = fixture.live_udt_input(100);
+
+    let tx = TransactionBuilder::default()
+        .input(meta_input.clone())
+        .input(udt_input)
+        .cell_dep(cell_dep(meta_input.previous_output()))
+        .output(typed_output(
+            &fixture.lock.script,
+            &fixture.meta.script,
+            100_000_000_000,
+        ))
+        .output_data(xudt_meta_data(CONFIG_SUPPLY_TRACKED, 100, None, Vec::new()).pack())
+        .build();
+    let tx = fixture.complete(tx);
+
+    expect_tx_fail_with_code(&fixture.context, &tx, "error code 31");
 }
 
 #[test]
