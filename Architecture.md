@@ -99,10 +99,33 @@ The AccessList type script owns:
 - entry range containment;
 - non-overlapping ordered shards;
 - create, update, split, merge, and destroy rules;
+- output shard lock restrictions;
 - full-domain requirements for global access-mode changes.
 
 Consumers use AccessList facts and proofs. They do not revalidate the shard
 lifecycle rules.
+
+## State Cell Locks and Unlock Authority
+
+Metadata cells and AccessList cells are state cells. Their locks are not the
+authorization policy for state changes. Authorization is encoded in metadata
+authority descriptors and enforced by the type scripts.
+
+Consuming an existing metadata or AccessList cell requires authority even when
+the output data is unchanged. A no-op state-cell update is still an unlock of
+governed state. The scripts therefore do not rely on capacity preservation or
+lock script ownership to protect the state cell.
+
+To make that ownership boundary explicit, newly produced metadata and AccessList
+state cells must use an always-success lock. The accepted production lock is
+identified by:
+
+- `hash_type = Data2`;
+- `code_hash` equal to the whitelisted always-success code hash.
+
+Lock args are not part of this restriction. Debug builds additionally whitelist
+the ckb-testtool always-success code hash for integration tests; release builds
+compile that allowance out.
 
 ## Metadata Types
 
@@ -224,9 +247,9 @@ For an existing token:
 ```text
 transaction
   inputs:
-    existing token cells, optional metadata input
+    existing token cells, metadata input if tracked supply is updated
   outputs:
-    increased token amount, metadata output if supply is tracked
+    increased token amount, metadata output if tracked supply is updated
 ```
 
 Validation split:
@@ -239,6 +262,11 @@ Validation split:
 
 For initial create mint, the token script can use output metadata because no
 input metadata exists yet.
+
+For untracked supply, `current_supply` remains zero and mint does not need to
+consume the metadata cell. The token script may load the current metadata from a
+cell dep as read-only context, allowing independent mints without serializing on
+the metadata cell.
 
 ## Protocol Burn Flow
 
