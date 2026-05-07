@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-ckb-std = "1.1"
+ckb-std = { version = "1.1", features = ["dlopen-c"] }
 standard-udt-types = { path = "../types", default-features = false, features = ["no-std"] }
 
 [features]

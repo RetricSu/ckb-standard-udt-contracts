@@ -1,4 +1,5 @@
 use super::*;
+use ckb_testtool::ckb_types::packed::CellOutput;
 
 #[test]
 fn xudt_tracked_mint_updates_supply() {
@@ -36,19 +37,15 @@ fn xudt_tracked_mint_updates_supply() {
 }
 
 fn xudt_mint_with_plugin_authority(plugin_name: &str, spawn: bool) -> bool {
+    xudt_mint_with_plugin_authority_args(plugin_name, spawn, Bytes::from_static(b"allow"))
+}
+
+fn xudt_mint_with_plugin_authority_args(plugin_name: &str, spawn: bool, args: Bytes) -> bool {
     let mut fixture = XudtFixture::new();
     let plugin = if spawn {
-        deploy_data2_script(
-            &mut fixture.context,
-            plugin_name,
-            Bytes::from_static(b"allow"),
-        )
+        deploy_data2_script(&mut fixture.context, plugin_name, args)
     } else {
-        deploy_data_script(
-            &mut fixture.context,
-            plugin_name,
-            Bytes::from_static(b"allow"),
-        )
+        deploy_data_script(&mut fixture.context, plugin_name, args)
     };
     let authority = if spawn {
         spawn_authority(&plugin)
@@ -87,9 +84,77 @@ fn xudt_mint_with_plugin_authority(plugin_name: &str, spawn: bool) -> bool {
         .is_ok()
 }
 
+fn xudt_mint_with_type_hash_dynamic_linking_authority(args: Bytes) -> bool {
+    let mut fixture = XudtFixture::new();
+    let out_point = fixture.context.create_cell(
+        CellOutput::new_builder()
+            .capacity(100_000_000_000u64.pack())
+            .lock(fixture.lock.script.clone())
+            .type_(Some(fixture.lock.script.clone()).pack())
+            .build(),
+        Loader::default().load_binary("authority-dl-allow"),
+    );
+    let script = fixture
+        .context
+        .build_script_with_hash_type(&out_point, ScriptHashType::Type, args)
+        .expect("build Type dynamic-linking authority script");
+    let plugin = DeployedScript {
+        out_point,
+        script_hash: script_hash(&script),
+        script,
+    };
+    let authority = dynamic_linking_authority(&plugin);
+    let meta_input =
+        fixture.live_meta_input_with_authority(CONFIG_SUPPLY_TRACKED, 0, Some(authority.clone()));
+    let funding = create_funding_input(&mut fixture.context, &fixture.lock.script, 100_000_000_000);
+
+    let tx = TransactionBuilder::default()
+        .input(meta_input)
+        .input(funding)
+        .output(typed_output(
+            &fixture.lock.script,
+            &fixture.meta.script,
+            100_000_000_000,
+        ))
+        .output(typed_output(
+            &fixture.lock.script,
+            &fixture.xudt.script,
+            100_000_000_000,
+        ))
+        .output_data(xudt_meta_data(CONFIG_SUPPLY_TRACKED, 50, Some(authority), Vec::new()).pack())
+        .output_data(udt_amount_bytes(50).pack())
+        .build();
+    let tx = fixture
+        .complete(tx)
+        .as_advanced_builder()
+        .cell_dep(cell_dep_for_script(&plugin))
+        .build();
+
+    fixture
+        .context
+        .verify_tx(&tx, crate::fixtures::MAX_CYCLES)
+        .is_ok()
+}
+
 #[test]
 fn xudt_mint_with_dynamic_linking_authority_passes() {
     assert!(xudt_mint_with_plugin_authority("authority-dl-allow", false));
+}
+
+#[test]
+fn xudt_mint_with_type_hash_dynamic_linking_authority_passes() {
+    assert!(xudt_mint_with_type_hash_dynamic_linking_authority(
+        Bytes::from_static(b"allow"),
+    ));
+}
+
+#[test]
+fn xudt_mint_with_dynamic_linking_authority_validates_hash_context() {
+    assert!(xudt_mint_with_plugin_authority_args(
+        "authority-dl-allow",
+        false,
+        Bytes::from_static(b"require_hash"),
+    ));
 }
 
 #[test]

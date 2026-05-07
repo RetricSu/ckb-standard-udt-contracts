@@ -5,7 +5,7 @@ use core::ffi::CStr;
 
 use ckb_std::{
     ckb_types::{core::ScriptHashType, prelude::*},
-    dynamic_loading::{CKBDLContext, Symbol},
+    dynamic_loading_c_impl::{CKBDLContext, Symbol},
     high_level::spawn_cell,
     syscalls::wait,
 };
@@ -53,7 +53,7 @@ fn run_dynamic_linking_extension(
     let code_hash = script.code_hash().raw_data();
     let mut context = unsafe { CKBDLContext::<[u8; 128 * 1024]>::new() };
     let library = context
-        .load(&code_hash)
+        .load_by(&code_hash, script_hash_type(script)?)
         .map_err(|_| Error::ExtensionFailed)?;
     let ext_data = script.args().raw_data();
 

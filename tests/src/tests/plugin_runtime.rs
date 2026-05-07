@@ -13,14 +13,16 @@ use crate::{
 use ckb_testtool::{
     ckb_types::{
         bytes::Bytes,
-        core::{TransactionBuilder, TransactionView},
-        packed::CellInput,
+        core::{ScriptHashType, TransactionBuilder, TransactionView},
+        packed::{CellInput, CellOutput},
         prelude::*,
     },
     context::Context,
 };
 use ckb_types::{packed::Script as MetadataScript, prelude::Entity as CkbEntity};
 use standard_udt_types::metadata::{Extension, ExtensionType, CONFIG_SUPPLY_TRACKED};
+
+use crate::Loader;
 
 fn extension_attr(extension_type: ExtensionType, deployed: &DeployedScript) -> Extension {
     let script = MetadataScript::from_slice(deployed.script.as_slice()).expect("convert script");
@@ -177,12 +179,53 @@ impl PluginFixture {
     }
 }
 
+fn deploy_type_hash_dynamic_library(
+    fixture: &mut PluginFixture,
+    binary_name: &str,
+    args: Bytes,
+) -> DeployedScript {
+    let out_point = fixture.context.create_cell(
+        CellOutput::new_builder()
+            .capacity(100_000_000_000u64.pack())
+            .lock(fixture.lock.script.clone())
+            .type_(Some(fixture.lock.script.clone()).pack())
+            .build(),
+        Loader::default().load_binary(binary_name),
+    );
+    let script = fixture
+        .context
+        .build_script_with_hash_type(&out_point, ScriptHashType::Type, args)
+        .expect("build Type dynamic library script");
+    DeployedScript {
+        out_point,
+        script_hash: script.calc_script_hash().unpack(),
+        script,
+    }
+}
+
 #[test]
 fn xudt_extension_allow_plugin_passes() {
     let mut fixture = PluginFixture::new();
     let plugin = dynamic_library_script(&mut fixture.context, "dl-shared-allow", Bytes::new());
     let extension = extension_attr(ExtensionType::DynamicLinking, &plugin);
     let meta_input = fixture.live_meta_input(0, 0, vec![extension.clone()]);
+    let udt_input = fixture.live_udt_input(100);
+
+    let tx = fixture
+        .transfer_tx(meta_input, udt_input)
+        .as_advanced_builder()
+        .cell_dep(cell_dep_for_script(&plugin))
+        .build();
+
+    expect_tx_pass(&fixture.context, &tx);
+}
+
+#[test]
+fn xudt_dynamic_linking_extension_loads_type_hash_cell_dep() {
+    let mut fixture = PluginFixture::new();
+    let plugin = deploy_type_hash_dynamic_library(&mut fixture, "dl-shared-allow", Bytes::new());
+    let extension = extension_attr(ExtensionType::DynamicLinking, &plugin);
+    let meta_input = fixture.live_meta_input(0, 0, vec![extension]);
     let udt_input = fixture.live_udt_input(100);
 
     let tx = fixture
@@ -214,7 +257,7 @@ fn xudt_extension_deny_plugin_rejects() {
 #[test]
 fn xudt_executable_dynamic_linking_fixture_fails_closed() {
     let mut fixture = PluginFixture::new();
-    let plugin = deploy_script_with_args(&mut fixture.context, "dl-deny", Bytes::new());
+    let plugin = deploy_script_with_args(&mut fixture.context, "dl-allow", Bytes::new());
     let extension = extension_attr(ExtensionType::DynamicLinking, &plugin);
     let meta_input = fixture.live_meta_input(0, 0, vec![extension]);
     let udt_input = fixture.live_udt_input(100);
@@ -260,6 +303,128 @@ fn xudt_spawn_extension_deny_plugin_rejects() {
         .build();
 
     expect_tx_fail(&fixture.context, &tx);
+}
+
+#[test]
+fn xudt_dynamic_linking_extension_rejects_wrong_operation() {
+    let mut fixture = PluginFixture::new();
+    let plugin = dynamic_library_script(
+        &mut fixture.context,
+        "dl-shared-allow",
+        Bytes::from_static(b"require_mint"),
+    );
+    let extension = extension_attr(ExtensionType::DynamicLinking, &plugin);
+    let meta_input = fixture.live_meta_input(0, 0, vec![extension.clone()]);
+    let udt_input = fixture.live_udt_input(100);
+
+    let tx = fixture
+        .transfer_tx(meta_input, udt_input)
+        .as_advanced_builder()
+        .cell_dep(cell_dep_for_script(&plugin))
+        .build();
+
+    expect_tx_fail(&fixture.context, &tx);
+}
+
+#[test]
+fn xudt_dynamic_linking_extension_checks_extension_index() {
+    let mut fixture = PluginFixture::new();
+    let plugin = dynamic_library_script(
+        &mut fixture.context,
+        "dl-shared-allow",
+        Bytes::from_static(b"require_index_1"),
+    );
+    let extension = extension_attr(ExtensionType::DynamicLinking, &plugin);
+    let meta_input = fixture.live_meta_input(0, 0, vec![extension.clone()]);
+    let udt_input = fixture.live_udt_input(100);
+
+    let tx = fixture
+        .transfer_tx(meta_input, udt_input)
+        .as_advanced_builder()
+        .cell_dep(cell_dep_for_script(&plugin))
+        .build();
+
+    expect_tx_fail(&fixture.context, &tx);
+}
+
+#[test]
+fn xudt_dynamic_linking_extension_accepts_expected_operation_and_index() {
+    let mut fixture = PluginFixture::new();
+    let transfer_plugin = dynamic_library_script(
+        &mut fixture.context,
+        "dl-shared-allow",
+        Bytes::from_static(b"require_transfer"),
+    );
+    let transfer_extension = extension_attr(ExtensionType::DynamicLinking, &transfer_plugin);
+    let meta_input = fixture.live_meta_input(0, 0, vec![transfer_extension]);
+    let udt_input = fixture.live_udt_input(100);
+
+    let tx = fixture
+        .transfer_tx(meta_input, udt_input)
+        .as_advanced_builder()
+        .cell_dep(cell_dep_for_script(&transfer_plugin))
+        .build();
+
+    expect_tx_pass(&fixture.context, &tx);
+
+    let mut index_fixture = PluginFixture::new();
+    let index_plugin = dynamic_library_script(
+        &mut index_fixture.context,
+        "dl-shared-allow",
+        Bytes::from_static(b"require_index_0"),
+    );
+    let index_extension = extension_attr(ExtensionType::DynamicLinking, &index_plugin);
+    let meta_input = index_fixture.live_meta_input(0, 0, vec![index_extension]);
+    let udt_input = index_fixture.live_udt_input(100);
+    let tx = index_fixture
+        .transfer_tx(meta_input, udt_input)
+        .as_advanced_builder()
+        .cell_dep(cell_dep_for_script(&index_plugin))
+        .build();
+
+    expect_tx_pass(&index_fixture.context, &tx);
+}
+
+#[test]
+fn xudt_spawn_extension_rejects_wrong_operation() {
+    let mut fixture = PluginFixture::new();
+    let plugin = deploy_script_with_args(
+        &mut fixture.context,
+        "spawn-allow",
+        Bytes::from_static(b"require_mint"),
+    );
+    let extension = extension_attr(ExtensionType::Spawn, &plugin);
+    let meta_input = fixture.live_meta_input(0, 0, vec![extension.clone()]);
+    let udt_input = fixture.live_udt_input(100);
+
+    let tx = fixture
+        .transfer_tx(meta_input, udt_input)
+        .as_advanced_builder()
+        .cell_dep(cell_dep_for_script(&plugin))
+        .build();
+
+    expect_tx_fail(&fixture.context, &tx);
+}
+
+#[test]
+fn xudt_spawn_extension_accepts_expected_operation() {
+    let mut fixture = PluginFixture::new();
+    let plugin = deploy_script_with_args(
+        &mut fixture.context,
+        "spawn-allow",
+        Bytes::from_static(b"require_transfer"),
+    );
+    let extension = extension_attr(ExtensionType::Spawn, &plugin);
+    let meta_input = fixture.live_meta_input(0, 0, vec![extension.clone()]);
+    let udt_input = fixture.live_udt_input(100);
+
+    let tx = fixture
+        .transfer_tx(meta_input, udt_input)
+        .as_advanced_builder()
+        .cell_dep(cell_dep_for_script(&plugin))
+        .build();
+
+    expect_tx_pass(&fixture.context, &tx);
 }
 
 #[test]

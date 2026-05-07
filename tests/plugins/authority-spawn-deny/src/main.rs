@@ -17,5 +17,8 @@ pub fn program_entry() -> i8 {
     if args.len() != 2 {
         return 2;
     }
+    if args[0].to_bytes().len() != 64 {
+        return 3;
+    }
     1
 }

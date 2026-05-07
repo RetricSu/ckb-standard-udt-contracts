@@ -953,13 +953,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dl-deny"
-version = "0.1.0"
-dependencies = [
- "ckb-std",
-]
-
-[[package]]
 name = "dyn-clone"
 version = "1.0.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"

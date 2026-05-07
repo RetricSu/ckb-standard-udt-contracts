@@ -6,7 +6,7 @@ use core::ffi::CStr;
 use ckb_std::{
     ckb_constants::Source,
     ckb_types::{core::ScriptHashType, packed::Script, prelude::*},
-    dynamic_loading::{CKBDLContext, Symbol},
+    dynamic_loading_c_impl::{CKBDLContext, Symbol},
     error::SysError,
     high_level::{load_cell_lock_hash, load_cell_type_hash, spawn_cell},
     syscalls::wait,
@@ -112,7 +112,7 @@ fn run_dynamic_linking_authority(authority: &Authority) -> Result<bool, ScriptEr
     let code_hash = script.code_hash().raw_data();
     let mut context = unsafe { CKBDLContext::<[u8; 128 * 1024]>::new() };
     let library = context
-        .load(&code_hash)
+        .load_by(&code_hash, script_hash_type(script)?)
         .map_err(|_| ScriptError::AuthorityFailed)?;
     let args = script.args().raw_data();
 

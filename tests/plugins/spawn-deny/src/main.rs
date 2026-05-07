@@ -23,5 +23,11 @@ pub fn program_entry() -> i8 {
     if args.len() != 4 {
         return 2;
     }
+    let op_type = args[0].to_bytes();
+    let ext_index = args[1].to_bytes();
+    let mint_authority_checked = args[3].to_bytes();
+    if op_type.len() != 1 || ext_index.len() != 1 || mint_authority_checked.len() != 1 {
+        return 3;
+    }
     1
 }
