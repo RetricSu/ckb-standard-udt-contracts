@@ -320,10 +320,20 @@ pub(super) fn access_list_update_tx_with_non_whitelisted_meta_lock(
 pub(super) fn access_list_update_tx_with_non_whitelisted_output_lock(
     output_shards: Vec<Bytes>,
 ) -> AccessListCase {
+    access_list_update_tx_with_output_lock(non_whitelisted_lock, output_shards)
+}
+
+pub(super) fn access_list_update_tx_with_output_lock<F>(
+    build_output_lock: F,
+    output_shards: Vec<Bytes>,
+) -> AccessListCase
+where
+    F: FnOnce(&mut Context) -> DeployedScript,
+{
     let mut context = Context::default();
     let authority = always_success_lock(&mut context, Bytes::from(vec![1u8]));
     let cell_lock = always_success_lock(&mut context, Bytes::from(vec![2u8]));
-    let output_lock = non_whitelisted_lock(&mut context);
+    let output_lock = build_output_lock(&mut context);
     let meta = meta_script(&mut context);
     let access_list = access_list_script(&mut context, meta.script_hash);
     let meta_data = xudt_meta_data(CONFIG_ACCESS_ENABLED, &authority);

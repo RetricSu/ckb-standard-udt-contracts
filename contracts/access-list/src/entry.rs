@@ -5,7 +5,10 @@ use crate::{
     shards::{collect_group_shards, validate_shards_for_modes},
 };
 use ckb_std::{
-    ckb_constants::Source, ckb_types::prelude::*, error::SysError, high_level::load_cell_lock,
+    ckb_constants::Source,
+    ckb_types::{core::ScriptHashType, prelude::*},
+    error::SysError,
+    high_level::load_cell_lock,
 };
 
 const ALWAYS_SUCCESS_LOCK_CODE_HASH_WHITELIST: [[u8; 32]; 1] = [[
@@ -80,7 +83,9 @@ fn validate_group_output_locks() -> Result<(), Error> {
         match load_cell_lock(index, Source::GroupOutput) {
             Ok(lock) => {
                 let code_hash: [u8; 32] = lock.code_hash().unpack();
-                if !is_allowed_always_success_lock_code_hash(&code_hash) {
+                if lock.hash_type() != ScriptHashType::Data2.into()
+                    || !is_allowed_always_success_lock_code_hash(&code_hash)
+                {
                     return Err(Error::InvalidArgs);
                 }
                 index += 1;

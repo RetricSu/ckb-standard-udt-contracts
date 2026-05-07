@@ -39,9 +39,17 @@ pub fn deploy_script(
 }
 
 pub fn always_success_lock(context: &mut Context, args: Bytes) -> DeployedScript {
+    always_success_lock_with_hash_type(context, ScriptHashType::Data2, args)
+}
+
+pub fn always_success_lock_with_hash_type(
+    context: &mut Context,
+    hash_type: ScriptHashType,
+    args: Bytes,
+) -> DeployedScript {
     let out_point = context.deploy_cell(ALWAYS_SUCCESS.clone());
     let script = context
-        .build_script_with_hash_type(&out_point, ScriptHashType::Data2, args)
+        .build_script_with_hash_type(&out_point, hash_type, args)
         .expect("build always-success lock");
     let script_hash = script_hash(&script);
     DeployedScript {

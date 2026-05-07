@@ -132,7 +132,7 @@ fn xudt_protocol_burn_with_meta_dep_requires_mint_authority() {
 
 #[test]
 fn xudt_negative_delta_with_input_meta_requires_protocol_burn_authority() {
-    let mut fixture = XudtFixture::new();
+    let mut fixture = XudtFixture::new_with_always_success_meta();
     let meta_input = fixture.live_meta_input(CONFIG_SUPPLY_TRACKED, 100, false);
     let udt_input = fixture.live_udt_input(100);
 

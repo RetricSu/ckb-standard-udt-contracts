@@ -8,9 +8,9 @@ use crate::{
         input_lock_authority, script_hash, spawn_authority, udt_amount_bytes, DeployedScript,
     },
     test_helpers::{
-        always_success_lock_empty as always_success_lock, calculate_type_id, deploy_data2_script,
-        deploy_data_script, fake_data2_script, non_whitelisted_lock,
-        sudt_meta_script as meta_script, sudt_script as udt_script,
+        always_success_lock_empty as always_success_lock, always_success_lock_with_hash_type,
+        calculate_type_id, deploy_data2_script, deploy_data_script, fake_data2_script,
+        non_whitelisted_lock, sudt_meta_script as meta_script, sudt_script as udt_script,
     },
     Loader,
 };

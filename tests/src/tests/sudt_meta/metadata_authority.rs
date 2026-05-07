@@ -170,6 +170,36 @@ fn sudt_meta_rejects_non_whitelisted_output_lock() {
 }
 
 #[test]
+fn sudt_meta_rejects_data_hash_type_output_lock() {
+    let (context, tx) = update_meta_tx_with_locks(|context, lock_hash, _| {
+        let output_lock =
+            always_success_lock_with_hash_type(context, ScriptHashType::Data, Bytes::new());
+        let authority = input_lock_authority(lock_hash);
+        (
+            output_lock,
+            sudt_meta_data(
+                CONFIG_SUPPLY_TRACKED,
+                0,
+                None,
+                Some(authority.clone()),
+                Vec::new(),
+                Vec::new(),
+            ),
+            sudt_meta_data(
+                CONFIG_SUPPLY_TRACKED,
+                0,
+                None,
+                Some(authority),
+                b"new name".to_vec(),
+                Vec::new(),
+            ),
+        )
+    });
+
+    expect_tx_fail_with_code(&context, &tx, "error code 20");
+}
+
+#[test]
 fn sudt_meta_update_rejects_metadata_authority_recreation() {
     let (context, tx) = update_meta_tx_with_data(|lock_hash, _| {
         (

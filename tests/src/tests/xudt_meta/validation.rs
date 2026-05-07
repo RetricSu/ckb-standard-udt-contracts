@@ -39,6 +39,15 @@ fn xudt_meta_rejects_non_whitelisted_output_lock() {
 }
 
 #[test]
+fn xudt_meta_rejects_data_hash_type_output_lock() {
+    let case = update_meta_tx_with_output_lock(|context| {
+        always_success_lock_with_hash_type(context, ScriptHashType::Data, Bytes::new())
+    });
+
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 20");
+}
+
+#[test]
 fn xudt_meta_update_rejects_duplicate_output_meta_cells() {
     let case = update_meta_tx_with_duplicate_outputs();
 

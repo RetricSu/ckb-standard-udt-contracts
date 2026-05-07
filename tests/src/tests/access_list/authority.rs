@@ -169,6 +169,16 @@ fn access_list_rejects_non_whitelisted_output_lock() {
 }
 
 #[test]
+fn access_list_rejects_data_hash_type_output_lock() {
+    let case = access_list_update_tx_with_output_lock(
+        |context| always_success_lock_with_hash_type(context, ScriptHashType::Data, Bytes::new()),
+        vec![full_domain_shard(Vec::new())],
+    );
+
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 20");
+}
+
+#[test]
 fn access_list_update_with_dynamic_linking_authority_passes() {
     let case = access_list_update_tx_with_plugin_authority(
         "authority-dl-allow",

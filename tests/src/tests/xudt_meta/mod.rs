@@ -8,11 +8,11 @@ use crate::{
         script_hash, spawn_authority, udt_amount_bytes, DeployedScript,
     },
     test_helpers::{
-        access_list_script, always_success_lock_empty as always_success_lock, calculate_type_id,
-        custom_shard, deploy_data2_script, deploy_data_script,
-        empty_full_domain_shard as full_domain_shard, fake_data2_script, non_whitelisted_lock,
-        xudt_meta_data_with_authorities as xudt_meta_data, xudt_meta_script as meta_script,
-        xudt_script,
+        access_list_script, always_success_lock_empty as always_success_lock,
+        always_success_lock_with_hash_type, calculate_type_id, custom_shard, deploy_data2_script,
+        deploy_data_script, empty_full_domain_shard as full_domain_shard, fake_data2_script,
+        non_whitelisted_lock, xudt_meta_data_with_authorities as xudt_meta_data,
+        xudt_meta_script as meta_script, xudt_script,
     },
     Loader,
 };

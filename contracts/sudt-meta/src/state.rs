@@ -1,6 +1,6 @@
 use ckb_std::{
     ckb_constants::Source,
-    ckb_types::prelude::*,
+    ckb_types::{core::ScriptHashType, prelude::*},
     error::SysError,
     high_level::{load_cell_data, load_cell_lock, load_script, load_script_hash},
     type_id::check_type_id,
@@ -103,7 +103,9 @@ fn load_group_meta(source: Source) -> Result<Option<SudtMeta>, Error> {
 fn validate_meta_lock(index: usize) -> Result<(), Error> {
     let lock = load_cell_lock(index, Source::GroupOutput).map_err(Error::from)?;
     let code_hash: [u8; 32] = lock.code_hash().unpack();
-    if is_allowed_always_success_lock_code_hash(&code_hash) {
+    if lock.hash_type() == ScriptHashType::Data2.into()
+        && is_allowed_always_success_lock_code_hash(&code_hash)
+    {
         Ok(())
     } else {
         Err(Error::InvalidArgs)
