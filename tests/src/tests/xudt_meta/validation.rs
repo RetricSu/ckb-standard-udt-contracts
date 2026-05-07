@@ -44,3 +44,33 @@ fn xudt_meta_update_rejects_duplicate_output_meta_cells() {
 
     expect_tx_fail_with_code(&case.context, &case.tx, "error code 21");
 }
+
+#[test]
+fn xudt_meta_rejects_noop_update_without_authority() {
+    let mut context = Context::default();
+    let lock = always_success_lock(&mut context);
+    let meta = meta_script(&mut context);
+    let meta_data = xudt_meta_data(0, 0, None, None, None, Vec::new());
+    let input_out_point = create_typed_cell(
+        &mut context,
+        &lock.script,
+        &meta.script,
+        100_000_000_000,
+        meta_data.clone(),
+    );
+
+    let tx = TransactionBuilder::default()
+        .input(
+            CellInput::new_builder()
+                .previous_output(input_out_point)
+                .build(),
+        )
+        .output(typed_output(&lock.script, &meta.script, 100_000_000_000))
+        .output_data(meta_data.pack())
+        .cell_dep(cell_dep_for_script(&lock))
+        .cell_dep(cell_dep_for_script(&meta))
+        .build();
+    let tx = context.complete_tx(tx);
+
+    expect_tx_fail(&context, &tx);
+}

@@ -25,6 +25,36 @@ fn sudt_meta_update_rejects_duplicate_output_meta_cells() {
 }
 
 #[test]
+fn sudt_meta_rejects_noop_update_without_authority() {
+    let mut context = Context::default();
+    let lock = always_success_lock(&mut context);
+    let meta = meta_script(&mut context, Bytes::from(vec![2u8; 32]));
+    let meta_data = tracked_meta_data(0);
+    let input_out_point = create_typed_cell(
+        &mut context,
+        &lock.script,
+        &meta.script,
+        100_000_000_000,
+        meta_data.clone(),
+    );
+
+    let tx = TransactionBuilder::default()
+        .input(
+            CellInput::new_builder()
+                .previous_output(input_out_point)
+                .build(),
+        )
+        .output(typed_output(&lock.script, &meta.script, 100_000_000_000))
+        .output_data(meta_data.pack())
+        .cell_dep(cell_dep_for_script(&lock))
+        .cell_dep(cell_dep_for_script(&meta))
+        .build();
+    let tx = context.complete_tx(tx);
+
+    expect_tx_fail(&context, &tx);
+}
+
+#[test]
 fn sudt_meta_update_metadata_change_with_input_lock_authority_passes() {
     let (context, tx) = update_meta_tx_with_data(|lock_hash, _| {
         let authority = input_lock_authority(lock_hash);
@@ -69,6 +99,38 @@ fn sudt_meta_mint_authority_can_update_metadata() {
                 0,
                 Some(authority),
                 None,
+                b"new name".to_vec(),
+                Vec::new(),
+            ),
+        )
+    });
+
+    expect_tx_pass(&context, &tx);
+}
+
+#[test]
+fn sudt_meta_mint_authority_fallback_survives_broken_metadata_authority() {
+    let (context, tx) = update_meta_tx_with_locks(|context, lock_hash, _| {
+        let output_lock = always_success_lock(context);
+        let plugin =
+            deploy_data_script(context, "authority-dl-allow", Bytes::from_static(b"allow"));
+        let mint_authority = input_lock_authority(lock_hash);
+        let metadata_authority = deployed_dynamic_linking_authority(&plugin);
+        (
+            output_lock,
+            sudt_meta_data(
+                CONFIG_SUPPLY_TRACKED,
+                0,
+                Some(mint_authority.clone()),
+                Some(metadata_authority.clone()),
+                Vec::new(),
+                Vec::new(),
+            ),
+            sudt_meta_data(
+                CONFIG_SUPPLY_TRACKED,
+                0,
+                Some(mint_authority),
+                Some(metadata_authority),
                 b"new name".to_vec(),
                 Vec::new(),
             ),

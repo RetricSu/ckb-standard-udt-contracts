@@ -52,16 +52,15 @@ pub fn main() -> Result<(), Error> {
     };
     validate_shards_for_modes(input_mode, output_mode, &input_shards, &output_shards)?;
 
-    if input_shards == output_shards {
-        return Ok(());
-    }
-
     if let Some(authority) = meta_context.access_authority.as_ref() {
-        if check_authority(authority)? {
-            return Ok(());
-        }
-        if meta_context.mint_authority.is_none() {
-            return Err(Error::AuthorityFailed);
+        match check_authority(authority) {
+            Ok(true) => return Ok(()),
+            Ok(false) | Err(Error::AuthorityFailed) => {
+                if meta_context.mint_authority.is_none() {
+                    return Err(Error::AuthorityFailed);
+                }
+            }
+            Err(error) => return Err(error),
         }
     }
 

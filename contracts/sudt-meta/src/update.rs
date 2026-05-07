@@ -33,19 +33,26 @@ pub fn validate_update(
         }
     }
 
-    if input.current_supply != output.current_supply
-        || input.mint_authority != output.mint_authority
-    {
+    let supply_or_mint_authority_changed = input.current_supply != output.current_supply
+        || input.mint_authority != output.mint_authority;
+    if supply_or_mint_authority_changed {
         require_authority(input.mint_authority.as_ref())?;
     }
 
-    if input.decimals != output.decimals
+    let metadata_changed = input.decimals != output.decimals
         || input.name != output.name
         || input.symbol != output.symbol
         || input.uri != output.uri
         || input.extra_data != output.extra_data
-        || input.metadata_authority != output.metadata_authority
-    {
+        || input.metadata_authority != output.metadata_authority;
+    if metadata_changed {
+        require_authority_with_mint_fallback(
+            input.metadata_authority.as_ref(),
+            input.mint_authority.as_ref(),
+        )?;
+    }
+
+    if !supply_or_mint_authority_changed && !metadata_changed {
         require_authority_with_mint_fallback(
             input.metadata_authority.as_ref(),
             input.mint_authority.as_ref(),
@@ -68,10 +75,16 @@ fn require_authority_with_mint_fallback(
     authority: Option<&Authority>,
     mint_authority: Option<&Authority>,
 ) -> Result<(), Error> {
-    match authority {
-        Some(authority) if check_authority(authority)? => return Ok(()),
-        Some(_) if mint_authority.is_none() => return Err(Error::AuthorityFailed),
-        Some(_) | None => {}
+    if let Some(authority) = authority {
+        match check_authority(authority) {
+            Ok(true) => return Ok(()),
+            Ok(false) | Err(Error::AuthorityFailed) => {
+                if mint_authority.is_none() {
+                    return Err(Error::AuthorityFailed);
+                }
+            }
+            Err(error) => return Err(error),
+        }
     }
     require_authority(mint_authority)
 }
