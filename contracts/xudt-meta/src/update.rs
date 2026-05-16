@@ -1,5 +1,3 @@
-use alloc::vec::Vec;
-
 use crate::{
     constants::XUDT_CODE_HASH,
     error::Error,
@@ -10,10 +8,10 @@ use crate::{
     },
 };
 use standard_udt_script_utils::{
-    authority::check_authority as check_runtime_authority, error::ScriptError,
-    supply::apply_supply_delta, token::transaction_token_delta,
+    authority::AuthorityVerifier, error::ScriptError, supply::apply_supply_delta,
+    token::transaction_token_delta,
 };
-use standard_udt_types::metadata::{Authority, XudtMeta};
+use standard_udt_types::metadata::XudtMeta;
 
 pub fn validate_update(
     input: &XudtMeta,
@@ -40,14 +38,18 @@ pub fn validate_update(
         || paused(input.config_flags) != paused(output.config_flags)
         || input.access_authority != output.access_authority;
     if access_state_changed {
-        verifier.require_with_fallback(
-            input.access_authority.as_ref(),
-            input.mint_authority.as_ref(),
-        )?;
+        verifier
+            .require_with_fallback(
+                input.access_authority.as_ref(),
+                input.mint_authority.as_ref(),
+            )
+            .map_err(map_script_error)?;
     }
 
     if input.extensions != output.extensions {
-        verifier.require(input.mint_authority.as_ref())?;
+        verifier
+            .require(input.mint_authority.as_ref())
+            .map_err(map_script_error)?;
     }
 
     let metadata_changed = input.decimals != output.decimals
@@ -57,16 +59,20 @@ pub fn validate_update(
         || input.extra_data != output.extra_data
         || input.metadata_authority != output.metadata_authority;
     if metadata_changed {
-        verifier.require_with_fallback(
-            input.metadata_authority.as_ref(),
-            input.mint_authority.as_ref(),
-        )?;
+        verifier
+            .require_with_fallback(
+                input.metadata_authority.as_ref(),
+                input.mint_authority.as_ref(),
+            )
+            .map_err(map_script_error)?;
     }
 
     let supply_or_mint_authority_changed = input.current_supply != output.current_supply
         || input.mint_authority != output.mint_authority;
     if supply_or_mint_authority_changed {
-        verifier.require(input.mint_authority.as_ref())?;
+        verifier
+            .require(input.mint_authority.as_ref())
+            .map_err(map_script_error)?;
     }
 
     validate_access_mode_transition(input.config_flags, output.config_flags, meta_type_hash)?;
@@ -76,11 +82,13 @@ pub fn validate_update(
         && !metadata_changed
         && !supply_or_mint_authority_changed
     {
-        verifier.require_any(&[
-            input.metadata_authority.as_ref(),
-            input.access_authority.as_ref(),
-            input.mint_authority.as_ref(),
-        ])?;
+        verifier
+            .require_any(&[
+                input.metadata_authority.as_ref(),
+                input.access_authority.as_ref(),
+                input.mint_authority.as_ref(),
+            ])
+            .map_err(map_script_error)?;
     }
 
     Ok(())
@@ -96,7 +104,9 @@ pub fn validate_destroy(input: &XudtMeta, meta_type_hash: &[u8; 32]) -> Result<(
     }
 
     let mut verifier = AuthorityVerifier::new();
-    verifier.require(input.mint_authority.as_ref())
+    verifier
+        .require(input.mint_authority.as_ref())
+        .map_err(map_script_error)
 }
 
 fn validate_supply_delta(
@@ -172,84 +182,9 @@ fn validate_access_mode_transition(
     Ok(())
 }
 
-struct AuthorityVerifier {
-    checked: Vec<(Authority, bool)>,
-}
-
-impl AuthorityVerifier {
-    fn new() -> Self {
-        Self {
-            checked: Vec::new(),
-        }
-    }
-
-    fn require(&mut self, authority: Option<&Authority>) -> Result<(), Error> {
-        let authority = authority.ok_or(Error::AuthorityMissing)?;
-        match self.check(authority) {
-            Ok(true) => Ok(()),
-            Ok(false) => Err(Error::AuthorityFailed),
-            Err(error) => Err(error),
-        }
-    }
-
-    fn require_with_fallback(
-        &mut self,
-        authority: Option<&Authority>,
-        mint_authority: Option<&Authority>,
-    ) -> Result<(), Error> {
-        if let Some(authority) = authority {
-            match self.check(authority) {
-                Ok(true) => return Ok(()),
-                Ok(false) | Err(Error::AuthorityFailed) => {
-                    if mint_authority.is_none() {
-                        return Err(Error::AuthorityFailed);
-                    }
-                }
-                Err(error) => return Err(error),
-            }
-        }
-        self.require(mint_authority)
-    }
-
-    fn require_any(&mut self, authorities: &[Option<&Authority>]) -> Result<(), Error> {
-        let mut has_authority = false;
-        for authority in authorities.iter().filter_map(|authority| *authority) {
-            has_authority = true;
-            match self.check(authority) {
-                Ok(true) => return Ok(()),
-                Ok(false) | Err(Error::AuthorityFailed) => {}
-                Err(error) => return Err(error),
-            }
-        }
-
-        if has_authority {
-            Err(Error::AuthorityFailed)
-        } else {
-            Err(Error::AuthorityMissing)
-        }
-    }
-
-    fn check(&mut self, authority: &Authority) -> Result<bool, Error> {
-        if let Some((_, result)) = self
-            .checked
-            .iter()
-            .find(|(checked_authority, _)| checked_authority == authority)
-        {
-            return Ok(*result);
-        }
-
-        let result = check_authority(authority)?;
-        self.checked.push((authority.clone(), result));
-        Ok(result)
-    }
-}
-
-fn check_authority(authority: &Authority) -> Result<bool, Error> {
-    check_runtime_authority(authority).map_err(map_script_error)
-}
-
 fn map_script_error(error: ScriptError) -> Error {
     match error {
+        ScriptError::AuthorityMissing => Error::AuthorityMissing,
         ScriptError::AuthorityFailed | ScriptError::UnsupportedAuthorityLocation => {
             Error::AuthorityFailed
         }

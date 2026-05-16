@@ -1,8 +1,11 @@
 #![allow(deprecated)]
 
+#[cfg(target_arch = "riscv64")]
 use alloc::{ffi::CString, string::String, vec::Vec};
+#[cfg(target_arch = "riscv64")]
 use core::ffi::CStr;
 
+#[cfg(target_arch = "riscv64")]
 use ckb_std::{
     ckb_types::{core::ScriptHashType, prelude::*},
     dynamic_loading_c_impl::{CKBDLContext, Symbol},
@@ -10,13 +13,19 @@ use ckb_std::{
     syscalls::wait,
 };
 
-use crate::{entry::Operation, error::Error, meta};
-use standard_udt_types::metadata::{Extension, ExtensionType};
+#[cfg(target_arch = "riscv64")]
+use crate::meta;
+use crate::{entry::Operation, error::Error};
+use standard_udt_types::metadata::Extension;
+#[cfg(target_arch = "riscv64")]
+use standard_udt_types::metadata::ExtensionType;
 
+#[cfg(target_arch = "riscv64")]
 type ExtensionFn = unsafe extern "C" fn(*const u8, u8, u8, *const u8, usize, u8) -> i8;
 
 pub type MintAuthorityContext = Option<bool>;
 
+#[cfg(target_arch = "riscv64")]
 const fn mint_authority_context_code(value: MintAuthorityContext) -> u8 {
     match value {
         Some(true) => 1,
@@ -25,6 +34,7 @@ const fn mint_authority_context_code(value: MintAuthorityContext) -> u8 {
     }
 }
 
+#[cfg(target_arch = "riscv64")]
 pub fn run_extensions(
     operation: Operation,
     extensions: &[Extension],
@@ -43,6 +53,20 @@ pub fn run_extensions(
     Ok(())
 }
 
+#[cfg(not(target_arch = "riscv64"))]
+pub fn run_extensions(
+    _operation: Operation,
+    extensions: &[Extension],
+    _mint_authority_context: MintAuthorityContext,
+) -> Result<(), Error> {
+    if extensions.is_empty() {
+        Ok(())
+    } else {
+        Err(Error::ExtensionFailed)
+    }
+}
+
+#[cfg(target_arch = "riscv64")]
 fn run_dynamic_linking_extension(
     operation: Operation,
     index: usize,
@@ -78,6 +102,7 @@ fn run_dynamic_linking_extension(
     }
 }
 
+#[cfg(target_arch = "riscv64")]
 fn run_spawn_extension(
     operation: Operation,
     index: usize,
@@ -111,6 +136,7 @@ fn run_spawn_extension(
     }
 }
 
+#[cfg(target_arch = "riscv64")]
 fn script_hash_type(script: &ckb_std::ckb_types::packed::Script) -> Result<ScriptHashType, Error> {
     let value: u8 = script.hash_type().into();
     match value {
@@ -122,6 +148,7 @@ fn script_hash_type(script: &ckb_std::ckb_types::packed::Script) -> Result<Scrip
     }
 }
 
+#[cfg(target_arch = "riscv64")]
 fn decimal_byte(value: u8) -> String {
     if value < 10 {
         let mut s = String::new();
@@ -137,6 +164,7 @@ fn decimal_byte(value: u8) -> String {
     }
 }
 
+#[cfg(target_arch = "riscv64")]
 fn hex_encode(data: &[u8]) -> String {
     const HEX: &[u8; 16] = b"0123456789abcdef";
     let mut out = Vec::with_capacity(data.len() * 2);

@@ -1,6 +1,7 @@
+#[cfg(target_arch = "riscv64")]
+use ckb_std::ckb_types::packed::Script;
 use ckb_std::{
     ckb_constants::Source,
-    ckb_types::packed::Script,
     error::SysError,
     high_level::{load_cell_data, load_cell_type_hash, load_script},
 };
@@ -8,10 +9,12 @@ use standard_udt_script_utils::{
     amount, authority::check_authority as check_runtime_authority, error::ScriptError,
 };
 use standard_udt_types::metadata::{
-    Authority, Extension, ExtensionType, XudtMeta, access_enabled as types_access_enabled,
+    Authority, XudtMeta, access_enabled as types_access_enabled,
     is_supply_tracked as types_is_supply_tracked, paused as types_paused,
     whitelist_mode as types_whitelist_mode,
 };
+#[cfg(target_arch = "riscv64")]
+use standard_udt_types::metadata::{Extension, ExtensionType};
 
 use crate::error::Error;
 
@@ -119,10 +122,12 @@ fn map_script_error(error: ScriptError) -> Error {
     }
 }
 
+#[cfg(target_arch = "riscv64")]
 pub fn extension_script(extension: &Extension) -> &Script {
     &extension.script
 }
 
+#[cfg(target_arch = "riscv64")]
 pub fn extension_kind(extension: &Extension) -> ExtensionType {
     extension.extension_type
 }

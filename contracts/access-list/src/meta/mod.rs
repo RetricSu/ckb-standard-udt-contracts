@@ -1,4 +1,3 @@
-mod authority;
 mod cells;
 mod parser;
 
@@ -6,7 +5,6 @@ use ckb_std::high_level::load_script;
 
 use crate::error::Error;
 
-pub use authority::check_authority;
 use cells::find_meta_in_source;
 use ckb_std::ckb_constants::Source;
 use standard_udt_types::metadata::Authority;

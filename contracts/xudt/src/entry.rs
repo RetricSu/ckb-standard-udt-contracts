@@ -11,6 +11,7 @@ pub enum Operation {
 }
 
 impl Operation {
+    #[cfg(target_arch = "riscv64")]
     pub const fn code(self) -> u8 {
         match self {
             Self::Transfer => 0,

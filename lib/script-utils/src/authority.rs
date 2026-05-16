@@ -1,20 +1,29 @@
 #![allow(deprecated)]
 
-use alloc::{ffi::CString, string::String, vec::Vec};
+use alloc::vec::Vec;
+#[cfg(target_arch = "riscv64")]
+use alloc::{ffi::CString, string::String};
+#[cfg(target_arch = "riscv64")]
 use core::ffi::CStr;
 
 use ckb_std::{
     ckb_constants::Source,
-    ckb_types::{core::ScriptHashType, packed::Script, prelude::*},
-    dynamic_loading_c_impl::{CKBDLContext, Symbol},
+    ckb_types::prelude::*,
     error::SysError,
-    high_level::{load_cell_lock_hash, load_cell_type_hash, spawn_cell},
+    high_level::{load_cell_lock_hash, load_cell_type_hash},
+};
+#[cfg(target_arch = "riscv64")]
+use ckb_std::{
+    ckb_types::{core::ScriptHashType, packed::Script},
+    dynamic_loading_c_impl::{CKBDLContext, Symbol},
+    high_level::spawn_cell,
     syscalls::wait,
 };
 use standard_udt_types::metadata::{Authority, AuthorityType};
 
 use crate::error::ScriptError;
 
+#[cfg(target_arch = "riscv64")]
 type AuthorityFn = unsafe extern "C" fn(*const u8, *const u8, usize) -> i8;
 
 pub fn check_authority(authority: &Authority) -> Result<bool, ScriptError> {
@@ -26,6 +35,84 @@ pub fn check_authority(authority: &Authority) -> Result<bool, ScriptError> {
         AuthorityType::OutputType => has_output_type_hash(&authority.script_hash),
         AuthorityType::DynamicLinking => run_dynamic_linking_authority(authority),
         AuthorityType::Spawn => run_spawn_authority(authority),
+    }
+}
+
+pub struct AuthorityVerifier {
+    checked: Vec<(Authority, bool)>,
+    checker: fn(&Authority) -> Result<bool, ScriptError>,
+}
+
+impl AuthorityVerifier {
+    pub fn new() -> Self {
+        Self::with_checker(check_authority)
+    }
+
+    pub fn with_checker(checker: fn(&Authority) -> Result<bool, ScriptError>) -> Self {
+        Self {
+            checked: Vec::new(),
+            checker,
+        }
+    }
+
+    pub fn require(&mut self, authority: Option<&Authority>) -> Result<(), ScriptError> {
+        let authority = authority.ok_or(ScriptError::AuthorityMissing)?;
+        match self.check(authority) {
+            Ok(true) => Ok(()),
+            Ok(false) => Err(ScriptError::AuthorityFailed),
+            Err(error) => Err(error),
+        }
+    }
+
+    pub fn require_with_fallback(
+        &mut self,
+        authority: Option<&Authority>,
+        fallback: Option<&Authority>,
+    ) -> Result<(), ScriptError> {
+        if let Some(authority) = authority {
+            match self.check(authority) {
+                Ok(true) => return Ok(()),
+                Ok(false) | Err(ScriptError::AuthorityFailed) => {
+                    if fallback.is_none() {
+                        return Err(ScriptError::AuthorityFailed);
+                    }
+                }
+                Err(error) => return Err(error),
+            }
+        }
+        self.require(fallback)
+    }
+
+    pub fn require_any(&mut self, authorities: &[Option<&Authority>]) -> Result<(), ScriptError> {
+        let mut has_authority = false;
+        for authority in authorities.iter().filter_map(|authority| *authority) {
+            has_authority = true;
+            match self.check(authority) {
+                Ok(true) => return Ok(()),
+                Ok(false) | Err(ScriptError::AuthorityFailed) => {}
+                Err(error) => return Err(error),
+            }
+        }
+
+        if has_authority {
+            Err(ScriptError::AuthorityFailed)
+        } else {
+            Err(ScriptError::AuthorityMissing)
+        }
+    }
+
+    pub fn check(&mut self, authority: &Authority) -> Result<bool, ScriptError> {
+        if let Some((_, result)) = self
+            .checked
+            .iter()
+            .find(|(checked_authority, _)| checked_authority == authority)
+        {
+            return Ok(*result);
+        }
+
+        let result = (self.checker)(authority)?;
+        self.checked.push((authority.clone(), result));
+        Ok(result)
     }
 }
 
@@ -104,6 +191,7 @@ where
     }
 }
 
+#[cfg(target_arch = "riscv64")]
 fn run_dynamic_linking_authority(authority: &Authority) -> Result<bool, ScriptError> {
     let script = authority
         .script
@@ -126,6 +214,12 @@ fn run_dynamic_linking_authority(authority: &Authority) -> Result<bool, ScriptEr
     Ok(result == 0)
 }
 
+#[cfg(not(target_arch = "riscv64"))]
+fn run_dynamic_linking_authority(_authority: &Authority) -> Result<bool, ScriptError> {
+    Err(ScriptError::AuthorityFailed)
+}
+
+#[cfg(target_arch = "riscv64")]
 fn run_spawn_authority(authority: &Authority) -> Result<bool, ScriptError> {
     let script = authority
         .script
@@ -145,6 +239,12 @@ fn run_spawn_authority(authority: &Authority) -> Result<bool, ScriptError> {
     Ok(exit_code == 0)
 }
 
+#[cfg(not(target_arch = "riscv64"))]
+fn run_spawn_authority(_authority: &Authority) -> Result<bool, ScriptError> {
+    Err(ScriptError::AuthorityFailed)
+}
+
+#[cfg(target_arch = "riscv64")]
 fn script_hash_type(script: &Script) -> Result<ScriptHashType, ScriptError> {
     let value: u8 = script.hash_type().into();
     match value {
@@ -156,6 +256,7 @@ fn script_hash_type(script: &Script) -> Result<ScriptHashType, ScriptError> {
     }
 }
 
+#[cfg(target_arch = "riscv64")]
 fn hex_encode(data: &[u8]) -> String {
     const HEX: &[u8; 16] = b"0123456789abcdef";
     let mut out = Vec::with_capacity(data.len() * 2);
@@ -171,6 +272,7 @@ mod tests {
     use super::*;
     use ckb_std::ckb_types::{
         bytes::Bytes,
+        core::ScriptHashType,
         packed::{Byte32, Script},
     };
     use standard_udt_types::metadata::AuthorityType;
@@ -187,6 +289,14 @@ mod tests {
         Authority {
             authority_type,
             script_hash: [7u8; 32],
+            script: None,
+        }
+    }
+
+    fn valid_input_lock_authority(script_hash: [u8; 32]) -> Authority {
+        Authority {
+            authority_type: AuthorityType::InputLock,
+            script_hash,
             script: None,
         }
     }
@@ -314,5 +424,43 @@ mod tests {
         };
 
         assert_eq!(validate_authority_shape(&authority), Ok(()));
+    }
+
+    #[test]
+    fn authority_verifier_reports_missing_authority() {
+        let mut verifier = AuthorityVerifier::with_checker(|_| Ok(true));
+
+        assert_eq!(verifier.require(None), Err(ScriptError::AuthorityMissing));
+    }
+
+    #[test]
+    fn authority_verifier_falls_back_to_mint_authority() {
+        let access = valid_input_lock_authority([1u8; 32]);
+        let mint = valid_input_lock_authority([2u8; 32]);
+        let mut verifier =
+            AuthorityVerifier::with_checker(|authority| Ok(authority.script_hash == [2u8; 32]));
+
+        assert_eq!(
+            verifier.require_with_fallback(Some(&access), Some(&mint)),
+            Ok(())
+        );
+    }
+
+    #[test]
+    fn authority_verifier_caches_repeated_checks() {
+        use core::sync::atomic::{AtomicUsize, Ordering};
+
+        static CALLS: AtomicUsize = AtomicUsize::new(0);
+        CALLS.store(0, Ordering::SeqCst);
+
+        let authority = valid_input_lock_authority([3u8; 32]);
+        let mut verifier = AuthorityVerifier::with_checker(|_| {
+            CALLS.fetch_add(1, Ordering::SeqCst);
+            Ok(true)
+        });
+
+        assert_eq!(verifier.require(Some(&authority)), Ok(()));
+        assert_eq!(verifier.require(Some(&authority)), Ok(()));
+        assert_eq!(CALLS.load(Ordering::SeqCst), 1);
     }
 }
