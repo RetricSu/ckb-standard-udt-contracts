@@ -6,7 +6,6 @@ use ckb_std::{
     type_id::check_type_id,
 };
 use standard_udt_script_utils::{error::ScriptError, token::sum_token_amount};
-pub use standard_udt_types::metadata::CONFIG_SUPPLY_TRACKED;
 use standard_udt_types::metadata::{SudtMeta, is_supply_tracked as types_is_supply_tracked};
 
 use crate::{constants::SUDT_CODE_HASH, error::Error};

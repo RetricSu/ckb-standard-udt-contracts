@@ -351,6 +351,24 @@ pub(super) fn destroy_meta_tx(
     )
 }
 
+pub(super) fn destroy_meta_tx_with_extra_cells<F>(
+    input_flags: u8,
+    input_supply: u128,
+    include_full_access_list_input: bool,
+    build_extra_cells: F,
+) -> UpdateCase
+where
+    F: FnOnce(&mut Context, &DeployedScript, &DeployedScript) -> Vec<ExtraCell>,
+{
+    destroy_meta_tx_with_authorities_and_extra_cells(
+        input_flags,
+        input_supply,
+        include_full_access_list_input,
+        |lock_hash| (Some(input_lock_authority(lock_hash)), None, None),
+        build_extra_cells,
+    )
+}
+
 pub(super) fn destroy_meta_tx_with_authorities<F>(
     input_flags: u8,
     input_supply: u128,
@@ -359,6 +377,26 @@ pub(super) fn destroy_meta_tx_with_authorities<F>(
 ) -> UpdateCase
 where
     F: FnOnce([u8; 32]) -> (Option<Authority>, Option<Authority>, Option<Authority>),
+{
+    destroy_meta_tx_with_authorities_and_extra_cells(
+        input_flags,
+        input_supply,
+        include_full_access_list_input,
+        build_authorities,
+        |_, _, _| Vec::new(),
+    )
+}
+
+fn destroy_meta_tx_with_authorities_and_extra_cells<F, G>(
+    input_flags: u8,
+    input_supply: u128,
+    include_full_access_list_input: bool,
+    build_authorities: F,
+    build_extra_cells: G,
+) -> UpdateCase
+where
+    F: FnOnce([u8; 32]) -> (Option<Authority>, Option<Authority>, Option<Authority>),
+    G: FnOnce(&mut Context, &DeployedScript, &DeployedScript) -> Vec<ExtraCell>,
 {
     let mut context = Context::default();
     let lock = always_success_lock(&mut context);
@@ -406,6 +444,40 @@ where
                     .build(),
             )
             .cell_dep(cell_dep_for_script(&access_list));
+    }
+
+    for extra in build_extra_cells(&mut context, &lock, &meta) {
+        match extra {
+            ExtraCell::Output {
+                lock,
+                type_script,
+                data,
+                cell_dep,
+            } => {
+                builder = builder
+                    .output(typed_output(&lock, &type_script, 100_000_000_000))
+                    .output_data(data.pack())
+                    .cell_dep(cell_dep_for_script(&cell_dep));
+            }
+            ExtraCell::Input {
+                previous_output,
+                cell_dep,
+            } => {
+                builder = builder
+                    .input(
+                        CellInput::new_builder()
+                            .previous_output(previous_output)
+                            .build(),
+                    )
+                    .cell_dep(cell_dep_for_script(&cell_dep));
+            }
+            ExtraCell::Dep { cell_dep } => {
+                builder = builder.cell_dep(cell_dep_for_script(&cell_dep));
+            }
+            ExtraCell::CellDep { previous_output } => {
+                builder = builder.cell_dep(cell_dep(previous_output));
+            }
+        }
     }
 
     let tx = context.complete_tx(builder.build());

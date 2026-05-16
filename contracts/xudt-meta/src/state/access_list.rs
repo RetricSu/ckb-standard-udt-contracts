@@ -6,7 +6,9 @@ use ckb_std::{
 };
 use standard_udt_types::metadata::AccessListShard;
 
-use crate::{constants::ACCESS_LIST_CODE_HASH, error::Error, state::token::is_token_script};
+use crate::{
+    constants::ACCESS_LIST_CODE_HASH, error::Error, state::token::matches_bound_type_script,
+};
 
 const FULL_START: [u8; 32] = [0u8; 32];
 const FULL_END: [u8; 32] = [0xffu8; 32];
@@ -17,6 +19,23 @@ pub fn has_full_domain_access_list_inputs(meta_type_hash: &[u8; 32]) -> Result<b
 
 pub fn has_full_domain_access_list_outputs(meta_type_hash: &[u8; 32]) -> Result<bool, Error> {
     has_full_domain_access_list_cells(meta_type_hash, Source::Output)
+}
+
+pub fn has_bound_access_list_outputs(meta_type_hash: &[u8; 32]) -> Result<bool, Error> {
+    has_bound_access_list_cells(meta_type_hash, Source::Output)
+}
+
+fn has_bound_access_list_cells(meta_type_hash: &[u8; 32], source: Source) -> Result<bool, Error> {
+    let mut index = 0;
+
+    loop {
+        match load_cell_type(index, source) {
+            Ok(Some(script)) if is_access_list_script(&script, meta_type_hash) => return Ok(true),
+            Ok(_) => index += 1,
+            Err(SysError::IndexOutOfBound) => return Ok(false),
+            Err(error) => return Err(error.into()),
+        }
+    }
 }
 
 fn has_full_domain_access_list_cells(
@@ -44,7 +63,7 @@ fn has_full_domain_access_list_cells(
 }
 
 fn is_access_list_script(type_script: &Script, meta_type_hash: &[u8; 32]) -> bool {
-    is_token_script(type_script, meta_type_hash, &ACCESS_LIST_CODE_HASH)
+    matches_bound_type_script(type_script, meta_type_hash, &ACCESS_LIST_CODE_HASH)
 }
 
 fn parse_access_list_range(data: &[u8]) -> Result<([u8; 32], [u8; 32]), Error> {

@@ -1,8 +1,4 @@
-use crate::{
-    constants::SUDT_CODE_HASH,
-    error::Error,
-    state::{CONFIG_SUPPLY_TRACKED, is_supply_tracked},
-};
+use crate::{constants::SUDT_CODE_HASH, error::Error, state::is_supply_tracked};
 use standard_udt_script_utils::{
     authority::AuthorityVerifier, error::ScriptError, supply::apply_supply_delta,
     token::transaction_token_delta,
@@ -14,7 +10,7 @@ pub fn validate_update(
     output: &SudtMeta,
     meta_type_hash: &[u8; 32],
 ) -> Result<(), Error> {
-    if input.config_flags & CONFIG_SUPPLY_TRACKED != output.config_flags & CONFIG_SUPPLY_TRACKED {
+    if supply_mode_changed(input.config_flags, output.config_flags) {
         return Err(Error::ImmutableSupplyMode);
     }
 
@@ -33,36 +29,18 @@ pub fn validate_update(
     }
 
     let mut verifier = AuthorityVerifier::new();
+    verifier
+        .require_with_fallback(
+            input.metadata_authority.as_ref(),
+            input.mint_authority.as_ref(),
+        )
+        .map_err(map_script_error)?;
 
     let supply_or_mint_authority_changed = input.current_supply != output.current_supply
         || input.mint_authority != output.mint_authority;
     if supply_or_mint_authority_changed {
         verifier
             .require(input.mint_authority.as_ref())
-            .map_err(map_script_error)?;
-    }
-
-    let metadata_changed = input.decimals != output.decimals
-        || input.name != output.name
-        || input.symbol != output.symbol
-        || input.uri != output.uri
-        || input.extra_data != output.extra_data
-        || input.metadata_authority != output.metadata_authority;
-    if metadata_changed {
-        verifier
-            .require_with_fallback(
-                input.metadata_authority.as_ref(),
-                input.mint_authority.as_ref(),
-            )
-            .map_err(map_script_error)?;
-    }
-
-    if !supply_or_mint_authority_changed && !metadata_changed {
-        verifier
-            .require_with_fallback(
-                input.metadata_authority.as_ref(),
-                input.mint_authority.as_ref(),
-            )
             .map_err(map_script_error)?;
     }
 
@@ -101,4 +79,8 @@ fn map_token_error(error: ScriptError) -> Error {
         ScriptError::SyscallUnknown => Error::SyscallUnknown,
         _ => Error::SyscallUnknown,
     }
+}
+
+fn supply_mode_changed(input_flags: u8, output_flags: u8) -> bool {
+    is_supply_tracked(input_flags) != is_supply_tracked(output_flags)
 }

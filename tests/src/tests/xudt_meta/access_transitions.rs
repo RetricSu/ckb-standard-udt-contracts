@@ -382,3 +382,23 @@ fn xudt_meta_destroy_accepts_active_access_with_full_domain_inputs() {
 
     expect_tx_pass(&case.context, &case.tx);
 }
+
+#[test]
+fn xudt_meta_destroy_rejects_access_list_outputs() {
+    let case = destroy_meta_tx_with_extra_cells(
+        CONFIG_SUPPLY_TRACKED | CONFIG_ACCESS_ENABLED,
+        0,
+        true,
+        |context, lock, meta| {
+            let access_list = access_list_script(context, meta.script_hash);
+            vec![ExtraCell::Output {
+                lock: lock.script.clone(),
+                type_script: access_list.script.clone(),
+                data: full_domain_shard(),
+                cell_dep: access_list,
+            }]
+        },
+    );
+
+    expect_tx_fail(&case.context, &case.tx);
+}

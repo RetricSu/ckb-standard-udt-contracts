@@ -11,7 +11,7 @@ use crate::{
     supply::{classify_supply_delta, SupplyDelta},
 };
 
-pub fn is_token_script(
+pub fn matches_bound_type_script(
     type_script: &Script,
     meta_type_hash: &[u8; 32],
     code_hash: &[u8; 32],
@@ -46,7 +46,7 @@ pub fn sum_token_amount(
             Err(_) => return Err(ScriptError::SyscallUnknown),
         };
 
-        if is_token_script(&type_script, meta_type_hash, code_hash) {
+        if matches_bound_type_script(&type_script, meta_type_hash, code_hash) {
             let data = load_cell_data(index, source).map_err(|_| ScriptError::SyscallUnknown)?;
             let amount = decode_amount(&data)?;
             total = total
@@ -85,7 +85,7 @@ mod tests {
     }
 
     #[test]
-    fn token_script_matches_only_data2_meta_args_and_code_hash() {
+    fn bound_type_script_matches_only_data2_meta_args_and_code_hash() {
         let meta_type_hash = [1u8; 32];
         let code_hash = [2u8; 32];
 
@@ -94,17 +94,25 @@ mod tests {
         let wrong_code_hash = token_script(ScriptHashType::Data2, [3u8; 32], meta_type_hash);
         let wrong_args = token_script(ScriptHashType::Data2, code_hash, [4u8; 32]);
 
-        assert!(is_token_script(&matching, &meta_type_hash, &code_hash));
-        assert!(!is_token_script(
+        assert!(matches_bound_type_script(
+            &matching,
+            &meta_type_hash,
+            &code_hash
+        ));
+        assert!(!matches_bound_type_script(
             &data_hash_type,
             &meta_type_hash,
             &code_hash
         ));
-        assert!(!is_token_script(
+        assert!(!matches_bound_type_script(
             &wrong_code_hash,
             &meta_type_hash,
             &code_hash
         ));
-        assert!(!is_token_script(&wrong_args, &meta_type_hash, &code_hash));
+        assert!(!matches_bound_type_script(
+            &wrong_args,
+            &meta_type_hash,
+            &code_hash
+        ));
     }
 }

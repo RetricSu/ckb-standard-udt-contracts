@@ -2,9 +2,9 @@ use crate::{
     constants::XUDT_CODE_HASH,
     error::Error,
     state::{
-        CONFIG_SUPPLY_TRACKED, access_enabled, has_full_domain_access_list_inputs,
-        has_full_domain_access_list_outputs, has_same_token_cells, is_supply_tracked, paused,
-        whitelist_mode,
+        access_enabled, has_bound_access_list_outputs, has_bound_xudt_cells,
+        has_full_domain_access_list_inputs, has_full_domain_access_list_outputs, is_supply_tracked,
+        paused, whitelist_mode,
     },
 };
 use standard_udt_script_utils::{
@@ -18,7 +18,7 @@ pub fn validate_update(
     output: &XudtMeta,
     meta_type_hash: &[u8; 32],
 ) -> Result<(), Error> {
-    if input.config_flags & CONFIG_SUPPLY_TRACKED != output.config_flags & CONFIG_SUPPLY_TRACKED {
+    if supply_mode_changed(input.config_flags, output.config_flags) {
         return Err(Error::ImmutableSupplyMode);
     }
 
@@ -31,6 +31,13 @@ pub fn validate_update(
     }
 
     let mut verifier = AuthorityVerifier::new();
+    verifier
+        .require_any(&[
+            input.metadata_authority.as_ref(),
+            input.access_authority.as_ref(),
+            input.mint_authority.as_ref(),
+        ])
+        .map_err(map_script_error)?;
 
     let access_state_changed = access_enabled(input.config_flags)
         != access_enabled(output.config_flags)
@@ -77,20 +84,6 @@ pub fn validate_update(
 
     validate_access_mode_transition(input.config_flags, output.config_flags, meta_type_hash)?;
 
-    if !access_state_changed
-        && input.extensions == output.extensions
-        && !metadata_changed
-        && !supply_or_mint_authority_changed
-    {
-        verifier
-            .require_any(&[
-                input.metadata_authority.as_ref(),
-                input.access_authority.as_ref(),
-                input.mint_authority.as_ref(),
-            ])
-            .map_err(map_script_error)?;
-    }
-
     Ok(())
 }
 
@@ -99,8 +92,14 @@ pub fn validate_destroy(input: &XudtMeta, meta_type_hash: &[u8; 32]) -> Result<(
         return Err(Error::InvalidSupply);
     }
 
-    if access_enabled(input.config_flags) && !has_full_domain_access_list_inputs(meta_type_hash)? {
-        return Err(Error::AccessListRequired);
+    if access_enabled(input.config_flags) {
+        if !has_full_domain_access_list_inputs(meta_type_hash)? {
+            return Err(Error::AccessListRequired);
+        }
+
+        if has_bound_access_list_outputs(meta_type_hash)? {
+            return Err(Error::AccessListRequired);
+        }
     }
 
     let mut verifier = AuthorityVerifier::new();
@@ -149,7 +148,7 @@ fn validate_access_mode_transition(
         return Ok(());
     }
 
-    if has_same_token_cells(meta_type_hash)? {
+    if has_bound_xudt_cells(meta_type_hash)? {
         return Err(Error::AccessModeTokenCells);
     }
 
@@ -192,4 +191,8 @@ fn map_script_error(error: ScriptError) -> Error {
         ScriptError::SyscallUnknown => Error::SyscallUnknown,
         _ => Error::SyscallUnknown,
     }
+}
+
+fn supply_mode_changed(input_flags: u8, output_flags: u8) -> bool {
+    is_supply_tracked(input_flags) != is_supply_tracked(output_flags)
 }
