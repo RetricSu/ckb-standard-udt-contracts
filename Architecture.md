@@ -66,6 +66,13 @@ Token type scripts own:
 - access checks for xUDT;
 - extension execution for xUDT.
 
+When token scripts or metadata scripts need to identify cells bound to a
+metadata cell, they match the candidate type script by all binding fields:
+
+- `hash_type = Data2`;
+- type args equal to the metadata type hash;
+- code hash equal to the expected token or AccessList script code hash.
+
 ### Metadata Cells
 
 Metadata cells are typed by `sudt-meta` or `xudt-meta`.
@@ -98,7 +105,7 @@ The AccessList type script owns:
 - sorted and unique entries;
 - entry range containment;
 - non-overlapping ordered shards;
-- create, update, split, merge, and destroy rules;
+- create, update, split, merge, and destroy lifecycle rules;
 - output shard lock restrictions;
 - full-domain requirements for global access-mode changes.
 
@@ -238,6 +245,13 @@ User destruction is intentionally different from protocol burn. It allows a
 holder to destroy their own token cells without mint authority. User destruction
 does not reduce tracked `current_supply`; only protocol burn does.
 
+Metadata cells themselves can be destroyed only in supply-tracked mode when
+`current_supply == 0`, and only with `mint_authority`. This is a state-cell
+cleanup path for reclaiming occupied CKB, not a token burn. For xUDT metadata,
+if access mode is still enabled, the same transaction must consume full-domain
+AccessList inputs and must leave no AccessList outputs bound to the destroyed
+metadata cell.
+
 ## Mint Flow
 
 Mint creates additional token amount.
@@ -331,6 +345,8 @@ Rules:
   outputs because the interpretation is inverted;
 - active-mode transitions cannot be mixed with same-token xUDT cells;
 - ordinary AccessList updates do not require full-domain consumption.
+- destroying active xUDT metadata requires full-domain AccessList inputs and no
+  bound AccessList outputs.
 
 The full-domain checks in `xudt-meta` confirm that the transaction presents a
 global AccessList replacement or removal when the access-mode semantics change.
@@ -346,13 +362,16 @@ The `access-list` script supports:
 
 - create;
 - insert/delete within a range;
-- split;
-- merge;
+- split or merge of the same covered range;
+- simultaneous entry changes and split/merge inside the same covered range;
 - destroy.
 
 Local updates can consume only the affected shard nodes. This is enough because
-the type script validates local continuity, range boundaries, sorted entries,
-and non-overlap for the consumed and produced group cells.
+the type script validates that input shards and output shards cover the same
+continuous range, and that each side is ordered, non-overlapping, and locally
+continuous. Entries may change freely inside that covered range. Per-shard entry
+validity is guaranteed by the parsed `AccessListShard` type: entries must be
+inside the shard range, sorted, and unique.
 
 Full-domain consumption is reserved for global state changes:
 
@@ -375,6 +394,12 @@ Authority kinds:
 
 Contracts decide when an authority is required.
 
+Authority checks are performed through the shared `AuthorityVerifier`. A
+contract builds one verifier for a validation path and asks it for the
+authorities required by the fields that changed. The verifier caches repeated
+checks, so a fallback or multi-field update does not re-scan or re-execute the
+same authority descriptor unnecessarily.
+
 `mint_authority` is the strongest authority. It controls:
 
 - mint;
@@ -386,6 +411,12 @@ Contracts decide when an authority is required.
 It also acts as a fallback authority for metadata and access-state updates.
 This keeps a token administrator from being locked out when narrower metadata or
 access authorities are absent or fail to authorize.
+
+Consuming an existing metadata or AccessList state cell requires an applicable
+authority even if the transaction is a no-op update. For metadata updates this
+base unlock check happens before field-specific checks; field-specific checks
+then add stronger requirements such as mint authority for supply changes,
+mint-authority changes, or extension-list changes.
 
 ## Extension Architecture
 
