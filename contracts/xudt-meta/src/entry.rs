@@ -12,6 +12,7 @@ pub fn main() -> Result<(), Error> {
         (Some(input), Some(output)) => {
             crate::update::validate_update(input, output, &group.meta_type_hash)
         }
+        (Some(input), None) => crate::update::validate_destroy(input, &group.meta_type_hash),
         _ => Err(Error::InvalidArgs),
     }
 }

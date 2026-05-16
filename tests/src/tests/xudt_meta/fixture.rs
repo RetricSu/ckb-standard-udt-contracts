@@ -338,6 +338,80 @@ pub(super) fn access_mode_transition_tx(
     })
 }
 
+pub(super) fn destroy_meta_tx(
+    input_flags: u8,
+    input_supply: u128,
+    include_full_access_list_input: bool,
+) -> UpdateCase {
+    destroy_meta_tx_with_authorities(
+        input_flags,
+        input_supply,
+        include_full_access_list_input,
+        |lock_hash| (Some(input_lock_authority(lock_hash)), None, None),
+    )
+}
+
+pub(super) fn destroy_meta_tx_with_authorities<F>(
+    input_flags: u8,
+    input_supply: u128,
+    include_full_access_list_input: bool,
+    build_authorities: F,
+) -> UpdateCase
+where
+    F: FnOnce([u8; 32]) -> (Option<Authority>, Option<Authority>, Option<Authority>),
+{
+    let mut context = Context::default();
+    let lock = always_success_lock(&mut context);
+    let meta = meta_script(&mut context);
+    let (mint_authority, metadata_authority, access_authority) =
+        build_authorities(lock.script_hash);
+    let input_meta_data = xudt_meta_data(
+        input_flags,
+        input_supply,
+        mint_authority,
+        metadata_authority,
+        access_authority,
+        Vec::new(),
+    );
+    let input_out_point = create_typed_cell(
+        &mut context,
+        &lock.script,
+        &meta.script,
+        100_000_000_000,
+        input_meta_data,
+    );
+
+    let mut builder = TransactionBuilder::default()
+        .input(
+            CellInput::new_builder()
+                .previous_output(input_out_point)
+                .build(),
+        )
+        .cell_dep(cell_dep_for_script(&lock))
+        .cell_dep(cell_dep_for_script(&meta));
+
+    if include_full_access_list_input {
+        let access_list = access_list_script(&mut context, meta.script_hash);
+        let access_out_point = create_typed_cell(
+            &mut context,
+            &lock.script,
+            &access_list.script,
+            100_000_000_000,
+            full_domain_shard(),
+        );
+        builder = builder
+            .input(
+                CellInput::new_builder()
+                    .previous_output(access_out_point)
+                    .build(),
+            )
+            .cell_dep(cell_dep_for_script(&access_list));
+    }
+
+    let tx = context.complete_tx(builder.build());
+    UpdateCase { context, tx }
+}
+
 pub(super) fn update_meta_tx_with_udt_delta(
     input_supply: u128,
     output_supply: u128,

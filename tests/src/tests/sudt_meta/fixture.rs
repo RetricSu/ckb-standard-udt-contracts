@@ -215,6 +215,35 @@ where
     (context, tx)
 }
 
+pub(super) fn destroy_meta_tx_with_data<F>(build_data: F) -> (Context, TransactionView)
+where
+    F: FnOnce([u8; 32]) -> Bytes,
+{
+    let mut context = Context::default();
+    let lock = always_success_lock(&mut context);
+    let input_meta_data = build_data(lock.script_hash);
+    let meta = meta_script(&mut context, Bytes::from(vec![2u8; 32]));
+    let input_out_point = create_typed_cell(
+        &mut context,
+        &lock.script,
+        &meta.script,
+        100_000_000_000,
+        input_meta_data,
+    );
+
+    let tx = TransactionBuilder::default()
+        .input(
+            CellInput::new_builder()
+                .previous_output(input_out_point)
+                .build(),
+        )
+        .cell_dep(cell_dep_for_script(&lock))
+        .cell_dep(cell_dep_for_script(&meta))
+        .build();
+    let tx = context.complete_tx(tx);
+    (context, tx)
+}
+
 pub(super) fn update_meta_tx_with_udt_delta(
     input_supply: u128,
     output_supply: u128,

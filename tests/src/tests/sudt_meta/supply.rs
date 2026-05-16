@@ -43,6 +43,70 @@ fn sudt_meta_rejects_supply_delta_mismatch() {
 }
 
 #[test]
+fn sudt_meta_destroy_accepts_tracked_zero_supply() {
+    let (context, tx) = destroy_meta_tx_with_data(|lock_hash| {
+        sudt_meta_data(
+            CONFIG_SUPPLY_TRACKED,
+            0,
+            Some(input_lock_authority(lock_hash)),
+            None,
+            Vec::new(),
+            Vec::new(),
+        )
+    });
+
+    expect_tx_pass(&context, &tx);
+}
+
+#[test]
+fn sudt_meta_destroy_rejects_metadata_authority_without_mint_authority() {
+    let (context, tx) = destroy_meta_tx_with_data(|lock_hash| {
+        sudt_meta_data(
+            CONFIG_SUPPLY_TRACKED,
+            0,
+            None,
+            Some(input_lock_authority(lock_hash)),
+            Vec::new(),
+            Vec::new(),
+        )
+    });
+
+    expect_tx_fail_with_code(&context, &tx, "error code 50");
+}
+
+#[test]
+fn sudt_meta_destroy_rejects_tracked_nonzero_supply() {
+    let (context, tx) = destroy_meta_tx_with_data(|lock_hash| {
+        sudt_meta_data(
+            CONFIG_SUPPLY_TRACKED,
+            1,
+            Some(input_lock_authority(lock_hash)),
+            None,
+            Vec::new(),
+            Vec::new(),
+        )
+    });
+
+    expect_tx_fail_with_code(&context, &tx, "error code 31");
+}
+
+#[test]
+fn sudt_meta_destroy_rejects_untracked_zero_supply() {
+    let (context, tx) = destroy_meta_tx_with_data(|lock_hash| {
+        sudt_meta_data(
+            0,
+            0,
+            Some(input_lock_authority(lock_hash)),
+            None,
+            Vec::new(),
+            Vec::new(),
+        )
+    });
+
+    expect_tx_fail_with_code(&context, &tx, "error code 31");
+}
+
+#[test]
 fn sudt_meta_update_rejects_mint_authority_recreation() {
     let (context, tx) = update_meta_tx_with_data(|lock_hash, _| {
         (

@@ -26,7 +26,7 @@ use ckb_testtool::{
     context::Context,
 };
 use standard_udt_types::metadata::{
-    CONFIG_ACCESS_ENABLED, CONFIG_ACCESS_WHITELIST, CONFIG_PAUSED, CONFIG_SUPPLY_TRACKED,
+    Authority, CONFIG_ACCESS_ENABLED, CONFIG_ACCESS_WHITELIST, CONFIG_PAUSED, CONFIG_SUPPLY_TRACKED,
 };
 
 mod fixture;

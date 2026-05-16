@@ -62,6 +62,14 @@ pub fn validate_update(
     Ok(())
 }
 
+pub fn validate_destroy(input: &SudtMeta) -> Result<(), Error> {
+    if !is_supply_tracked(input.config_flags) || input.current_supply != 0 {
+        return Err(Error::InvalidSupply);
+    }
+
+    require_authority(input.mint_authority.as_ref())
+}
+
 fn require_authority(authority: Option<&Authority>) -> Result<(), Error> {
     let authority = authority.ok_or(Error::AuthorityMissing)?;
     match check_authority(authority) {

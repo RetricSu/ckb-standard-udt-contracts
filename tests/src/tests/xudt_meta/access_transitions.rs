@@ -336,3 +336,49 @@ fn xudt_meta_mint_authority_can_update_access_state() {
 
     expect_tx_pass(&case.context, &case.tx);
 }
+
+#[test]
+fn xudt_meta_destroy_accepts_tracked_zero_supply_when_access_disabled() {
+    let case = destroy_meta_tx(CONFIG_SUPPLY_TRACKED, 0, false);
+
+    expect_tx_pass(&case.context, &case.tx);
+}
+
+#[test]
+fn xudt_meta_destroy_rejects_metadata_authority_without_mint_authority() {
+    let case = destroy_meta_tx_with_authorities(CONFIG_SUPPLY_TRACKED, 0, false, |lock_hash| {
+        (None, Some(input_lock_authority(lock_hash)), None)
+    });
+
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 50");
+}
+
+#[test]
+fn xudt_meta_destroy_rejects_access_authority_without_mint_authority() {
+    let case = destroy_meta_tx_with_authorities(CONFIG_SUPPLY_TRACKED, 0, false, |lock_hash| {
+        (None, None, Some(input_lock_authority(lock_hash)))
+    });
+
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 50");
+}
+
+#[test]
+fn xudt_meta_destroy_rejects_tracked_nonzero_supply() {
+    let case = destroy_meta_tx(CONFIG_SUPPLY_TRACKED, 1, false);
+
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 31");
+}
+
+#[test]
+fn xudt_meta_destroy_rejects_active_access_without_full_domain_inputs() {
+    let case = destroy_meta_tx(CONFIG_SUPPLY_TRACKED | CONFIG_ACCESS_ENABLED, 0, false);
+
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 60");
+}
+
+#[test]
+fn xudt_meta_destroy_accepts_active_access_with_full_domain_inputs() {
+    let case = destroy_meta_tx(CONFIG_SUPPLY_TRACKED | CONFIG_ACCESS_ENABLED, 0, true);
+
+    expect_tx_pass(&case.context, &case.tx);
+}

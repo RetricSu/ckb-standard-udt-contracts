@@ -82,6 +82,18 @@ pub fn validate_update(
     Ok(())
 }
 
+pub fn validate_destroy(input: &XudtMeta, meta_type_hash: &[u8; 32]) -> Result<(), Error> {
+    if !is_supply_tracked(input.config_flags) || input.current_supply != 0 {
+        return Err(Error::InvalidSupply);
+    }
+
+    if access_enabled(input.config_flags) && !has_full_domain_access_list_inputs(meta_type_hash)? {
+        return Err(Error::AccessListRequired);
+    }
+
+    require_authority(input.mint_authority.as_ref())
+}
+
 fn validate_supply_delta(
     input_supply: u128,
     output_supply: u128,
