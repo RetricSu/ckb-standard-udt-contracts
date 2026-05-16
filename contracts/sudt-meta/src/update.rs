@@ -1,3 +1,5 @@
+use alloc::vec::Vec;
+
 use crate::{
     constants::SUDT_CODE_HASH,
     error::Error,
@@ -33,10 +35,12 @@ pub fn validate_update(
         }
     }
 
+    let mut verifier = AuthorityVerifier::new();
+
     let supply_or_mint_authority_changed = input.current_supply != output.current_supply
         || input.mint_authority != output.mint_authority;
     if supply_or_mint_authority_changed {
-        require_authority(input.mint_authority.as_ref())?;
+        verifier.require(input.mint_authority.as_ref())?;
     }
 
     let metadata_changed = input.decimals != output.decimals
@@ -46,14 +50,14 @@ pub fn validate_update(
         || input.extra_data != output.extra_data
         || input.metadata_authority != output.metadata_authority;
     if metadata_changed {
-        require_authority_with_mint_fallback(
+        verifier.require_with_fallback(
             input.metadata_authority.as_ref(),
             input.mint_authority.as_ref(),
         )?;
     }
 
     if !supply_or_mint_authority_changed && !metadata_changed {
-        require_authority_with_mint_fallback(
+        verifier.require_with_fallback(
             input.metadata_authority.as_ref(),
             input.mint_authority.as_ref(),
         )?;
@@ -67,34 +71,62 @@ pub fn validate_destroy(input: &SudtMeta) -> Result<(), Error> {
         return Err(Error::InvalidSupply);
     }
 
-    require_authority(input.mint_authority.as_ref())
+    let mut verifier = AuthorityVerifier::new();
+    verifier.require(input.mint_authority.as_ref())
 }
 
-fn require_authority(authority: Option<&Authority>) -> Result<(), Error> {
-    let authority = authority.ok_or(Error::AuthorityMissing)?;
-    match check_authority(authority) {
-        Ok(true) => Ok(()),
-        Ok(false) => Err(Error::AuthorityFailed),
-        Err(error) => Err(error),
-    }
+struct AuthorityVerifier {
+    checked: Vec<(Authority, bool)>,
 }
 
-fn require_authority_with_mint_fallback(
-    authority: Option<&Authority>,
-    mint_authority: Option<&Authority>,
-) -> Result<(), Error> {
-    if let Some(authority) = authority {
-        match check_authority(authority) {
-            Ok(true) => return Ok(()),
-            Ok(false) | Err(Error::AuthorityFailed) => {
-                if mint_authority.is_none() {
-                    return Err(Error::AuthorityFailed);
-                }
-            }
-            Err(error) => return Err(error),
+impl AuthorityVerifier {
+    fn new() -> Self {
+        Self {
+            checked: Vec::new(),
         }
     }
-    require_authority(mint_authority)
+
+    fn require(&mut self, authority: Option<&Authority>) -> Result<(), Error> {
+        let authority = authority.ok_or(Error::AuthorityMissing)?;
+        match self.check(authority) {
+            Ok(true) => Ok(()),
+            Ok(false) => Err(Error::AuthorityFailed),
+            Err(error) => Err(error),
+        }
+    }
+
+    fn require_with_fallback(
+        &mut self,
+        authority: Option<&Authority>,
+        mint_authority: Option<&Authority>,
+    ) -> Result<(), Error> {
+        if let Some(authority) = authority {
+            match self.check(authority) {
+                Ok(true) => return Ok(()),
+                Ok(false) | Err(Error::AuthorityFailed) => {
+                    if mint_authority.is_none() {
+                        return Err(Error::AuthorityFailed);
+                    }
+                }
+                Err(error) => return Err(error),
+            }
+        }
+        self.require(mint_authority)
+    }
+
+    fn check(&mut self, authority: &Authority) -> Result<bool, Error> {
+        if let Some((_, result)) = self
+            .checked
+            .iter()
+            .find(|(checked_authority, _)| checked_authority == authority)
+        {
+            return Ok(*result);
+        }
+
+        let result = check_authority(authority)?;
+        self.checked.push((authority.clone(), result));
+        Ok(result)
+    }
 }
 
 fn check_authority(authority: &Authority) -> Result<bool, Error> {

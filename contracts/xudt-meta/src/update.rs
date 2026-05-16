@@ -1,3 +1,5 @@
+use alloc::vec::Vec;
+
 use crate::{
     constants::XUDT_CODE_HASH,
     error::Error,
@@ -30,20 +32,22 @@ pub fn validate_update(
         validate_supply_delta(input.current_supply, output.current_supply, meta_type_hash)?;
     }
 
+    let mut verifier = AuthorityVerifier::new();
+
     let access_state_changed = access_enabled(input.config_flags)
         != access_enabled(output.config_flags)
         || whitelist_mode(input.config_flags) != whitelist_mode(output.config_flags)
         || paused(input.config_flags) != paused(output.config_flags)
         || input.access_authority != output.access_authority;
     if access_state_changed {
-        require_authority_with_mint_fallback(
+        verifier.require_with_fallback(
             input.access_authority.as_ref(),
             input.mint_authority.as_ref(),
         )?;
     }
 
     if input.extensions != output.extensions {
-        require_authority(input.mint_authority.as_ref())?;
+        verifier.require(input.mint_authority.as_ref())?;
     }
 
     let metadata_changed = input.decimals != output.decimals
@@ -53,7 +57,7 @@ pub fn validate_update(
         || input.extra_data != output.extra_data
         || input.metadata_authority != output.metadata_authority;
     if metadata_changed {
-        require_authority_with_mint_fallback(
+        verifier.require_with_fallback(
             input.metadata_authority.as_ref(),
             input.mint_authority.as_ref(),
         )?;
@@ -62,7 +66,7 @@ pub fn validate_update(
     let supply_or_mint_authority_changed = input.current_supply != output.current_supply
         || input.mint_authority != output.mint_authority;
     if supply_or_mint_authority_changed {
-        require_authority(input.mint_authority.as_ref())?;
+        verifier.require(input.mint_authority.as_ref())?;
     }
 
     validate_access_mode_transition(input.config_flags, output.config_flags, meta_type_hash)?;
@@ -72,7 +76,7 @@ pub fn validate_update(
         && !metadata_changed
         && !supply_or_mint_authority_changed
     {
-        require_any_authority(&[
+        verifier.require_any(&[
             input.metadata_authority.as_ref(),
             input.access_authority.as_ref(),
             input.mint_authority.as_ref(),
@@ -91,7 +95,8 @@ pub fn validate_destroy(input: &XudtMeta, meta_type_hash: &[u8; 32]) -> Result<(
         return Err(Error::AccessListRequired);
     }
 
-    require_authority(input.mint_authority.as_ref())
+    let mut verifier = AuthorityVerifier::new();
+    verifier.require(input.mint_authority.as_ref())
 }
 
 fn validate_supply_delta(
@@ -167,48 +172,75 @@ fn validate_access_mode_transition(
     Ok(())
 }
 
-fn require_authority(authority: Option<&Authority>) -> Result<(), Error> {
-    let authority = authority.ok_or(Error::AuthorityMissing)?;
-    match check_authority(authority) {
-        Ok(true) => Ok(()),
-        Ok(false) => Err(Error::AuthorityFailed),
-        Err(error) => Err(error),
-    }
+struct AuthorityVerifier {
+    checked: Vec<(Authority, bool)>,
 }
 
-fn require_authority_with_mint_fallback(
-    authority: Option<&Authority>,
-    mint_authority: Option<&Authority>,
-) -> Result<(), Error> {
-    if let Some(authority) = authority {
-        match check_authority(authority) {
-            Ok(true) => return Ok(()),
-            Ok(false) | Err(Error::AuthorityFailed) => {
-                if mint_authority.is_none() {
-                    return Err(Error::AuthorityFailed);
+impl AuthorityVerifier {
+    fn new() -> Self {
+        Self {
+            checked: Vec::new(),
+        }
+    }
+
+    fn require(&mut self, authority: Option<&Authority>) -> Result<(), Error> {
+        let authority = authority.ok_or(Error::AuthorityMissing)?;
+        match self.check(authority) {
+            Ok(true) => Ok(()),
+            Ok(false) => Err(Error::AuthorityFailed),
+            Err(error) => Err(error),
+        }
+    }
+
+    fn require_with_fallback(
+        &mut self,
+        authority: Option<&Authority>,
+        mint_authority: Option<&Authority>,
+    ) -> Result<(), Error> {
+        if let Some(authority) = authority {
+            match self.check(authority) {
+                Ok(true) => return Ok(()),
+                Ok(false) | Err(Error::AuthorityFailed) => {
+                    if mint_authority.is_none() {
+                        return Err(Error::AuthorityFailed);
+                    }
                 }
+                Err(error) => return Err(error),
             }
-            Err(error) => return Err(error),
         }
-    }
-    require_authority(mint_authority)
-}
-
-fn require_any_authority(authorities: &[Option<&Authority>]) -> Result<(), Error> {
-    let mut has_authority = false;
-    for authority in authorities.iter().filter_map(|authority| *authority) {
-        has_authority = true;
-        match check_authority(authority) {
-            Ok(true) => return Ok(()),
-            Ok(false) | Err(Error::AuthorityFailed) => {}
-            Err(error) => return Err(error),
-        }
+        self.require(mint_authority)
     }
 
-    if has_authority {
-        Err(Error::AuthorityFailed)
-    } else {
-        Err(Error::AuthorityMissing)
+    fn require_any(&mut self, authorities: &[Option<&Authority>]) -> Result<(), Error> {
+        let mut has_authority = false;
+        for authority in authorities.iter().filter_map(|authority| *authority) {
+            has_authority = true;
+            match self.check(authority) {
+                Ok(true) => return Ok(()),
+                Ok(false) | Err(Error::AuthorityFailed) => {}
+                Err(error) => return Err(error),
+            }
+        }
+
+        if has_authority {
+            Err(Error::AuthorityFailed)
+        } else {
+            Err(Error::AuthorityMissing)
+        }
+    }
+
+    fn check(&mut self, authority: &Authority) -> Result<bool, Error> {
+        if let Some((_, result)) = self
+            .checked
+            .iter()
+            .find(|(checked_authority, _)| checked_authority == authority)
+        {
+            return Ok(*result);
+        }
+
+        let result = check_authority(authority)?;
+        self.checked.push((authority.clone(), result));
+        Ok(result)
     }
 }
 
