@@ -36,7 +36,7 @@ pub fn main() -> Result<(), Error> {
             .ok_or(Error::AmountOverflow)?;
         match meta::find_unique_visible_meta(&meta_type_hash)? {
             Some(current_meta) => validate_mint(&meta_type_hash, &current_meta, delta),
-            None => validate_initial_create_mint(&meta_type_hash),
+            None => require_initial_mint_output_meta(&meta_type_hash),
         }
     } else {
         let delta = input_amount
@@ -74,11 +74,7 @@ fn validate_mint(
     extensions::run_extensions(Operation::Mint, &current_meta.extensions, Some(true))
 }
 
-fn validate_initial_create_mint(meta_type_hash: &[u8; 32]) -> Result<(), Error> {
-    if meta::find_meta_in_source(meta_type_hash, Source::Input)?.is_some() {
-        return Err(Error::MetaNotUnique);
-    }
-
+fn require_initial_mint_output_meta(meta_type_hash: &[u8; 32]) -> Result<(), Error> {
     meta::find_meta_in_source(meta_type_hash, Source::Output)?.ok_or(Error::MetaMissing)?;
     Ok(())
 }
@@ -116,8 +112,7 @@ fn validate_supply_delta(meta_type_hash: &[u8; 32], delta: u128, mint: bool) -> 
                 .checked_sub(delta)
                 .ok_or(Error::SupplyUnderflow)?
         };
-        if output_meta.current_supply != expected
-            || output_meta.config_flags != input_meta.config_flags
+        if output_meta.current_supply != expected || supply_mode_changed(&input_meta, &output_meta)
         {
             return Err(Error::MetaStateMismatch);
         }
@@ -126,4 +121,8 @@ fn validate_supply_delta(meta_type_hash: &[u8; 32], delta: u128, mint: bool) -> 
     }
 
     Ok(())
+}
+
+fn supply_mode_changed(input_meta: &XudtMeta, output_meta: &XudtMeta) -> bool {
+    meta::is_supply_tracked(input_meta) != meta::is_supply_tracked(output_meta)
 }

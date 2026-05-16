@@ -11,7 +11,7 @@ use crate::{
 
 pub fn validate_mint(meta_type_hash: &[u8; 32], delta: u128) -> Result<(), Error> {
     let Some(visible_meta) = find_unique_visible_meta(meta_type_hash)? else {
-        return validate_initial_create_mint(meta_type_hash, delta);
+        return require_initial_mint_output_meta(meta_type_hash);
     };
     require_authority(visible_meta.mint_authority.as_ref())?;
 
@@ -25,7 +25,7 @@ pub fn validate_mint(meta_type_hash: &[u8; 32], delta: u128) -> Result<(), Error
             .checked_add(delta)
             .ok_or(Error::SupplyOverflow)?;
         if output_meta.current_supply != expected
-            || output_meta.config_flags != input_meta.config_flags
+            || supply_mode_changed(input_meta.config_flags, output_meta.config_flags)
         {
             return Err(Error::MetaStateMismatch);
         }
@@ -36,11 +36,7 @@ pub fn validate_mint(meta_type_hash: &[u8; 32], delta: u128) -> Result<(), Error
     Ok(())
 }
 
-fn validate_initial_create_mint(meta_type_hash: &[u8; 32], _delta: u128) -> Result<(), Error> {
-    if find_meta_in_source(meta_type_hash, Source::Input)?.is_some() {
-        return Err(Error::MetaNotUnique);
-    }
-
+fn require_initial_mint_output_meta(meta_type_hash: &[u8; 32]) -> Result<(), Error> {
     let _output_meta =
         find_meta_in_source(meta_type_hash, Source::Output)?.ok_or(Error::MetaMissing)?;
 
@@ -62,7 +58,7 @@ pub fn validate_burn_or_destruction(meta_type_hash: &[u8; 32], delta: u128) -> R
             .checked_sub(delta)
             .ok_or(Error::SupplyUnderflow)?;
         if output_meta.current_supply != expected
-            || output_meta.config_flags != input_meta.config_flags
+            || supply_mode_changed(input_meta.config_flags, output_meta.config_flags)
         {
             return Err(Error::MetaStateMismatch);
         }
@@ -71,4 +67,8 @@ pub fn validate_burn_or_destruction(meta_type_hash: &[u8; 32], delta: u128) -> R
     }
 
     Ok(())
+}
+
+fn supply_mode_changed(input_flags: u8, output_flags: u8) -> bool {
+    is_supply_tracked(input_flags) != is_supply_tracked(output_flags)
 }
