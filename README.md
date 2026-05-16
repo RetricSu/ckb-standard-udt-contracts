@@ -54,6 +54,7 @@ It validates:
 - immutable supply-tracking mode;
 - initial tracked supply on creation;
 - supply delta consistency on update;
+- zero-supply metadata destruction in tracked-supply mode;
 - mint authority changes;
 - metadata field changes;
 - metadata authority checks, with `mint_authority` as a fallback authority.
@@ -78,6 +79,10 @@ is stored in the metadata cell. When tracked supply changes, `sudt` and
 authority, while the metadata type script validates that the metadata supply
 matches the transaction token delta.
 
+An sUDT metadata cell can be destroyed to reclaim CKB only when supply tracking
+is enabled, `current_supply` is zero, and `mint_authority` authorizes the
+transaction.
+
 ### `xudt-meta`
 
 `xudt-meta` owns xUDT metadata, access-mode configuration, pause state, and
@@ -92,6 +97,7 @@ It validates:
 - immutable supply-tracking mode;
 - initial tracked supply on creation;
 - supply delta consistency on update;
+- zero-supply metadata destruction in tracked-supply mode;
 - access mode transitions;
 - pause-state changes;
 - access authority changes;
@@ -99,6 +105,8 @@ It validates:
 - mint authority and metadata authority checks;
 - full-domain AccessList requirements when enabling, disabling, or replacing
   access mode.
+- full-domain AccessList input and empty bound AccessList output requirements
+  when destroying active-access metadata.
 
 It does not validate individual transfer access proofs. Those are handled by
 `xudt` and `access-list`.
@@ -125,6 +133,12 @@ transaction consumes the token's metadata input cell; without a metadata input
 cell, the negative delta is user destruction. Protocol burns, minting, and
 supply-changing metadata updates still require the proper authority path.
 
+An xUDT metadata cell can be destroyed to reclaim CKB only when supply tracking
+is enabled, `current_supply` is zero, and `mint_authority` authorizes the
+transaction. If access mode is enabled, the transaction must also consume
+full-domain AccessList inputs and leave no AccessList outputs bound to the
+destroyed metadata cell.
+
 ### `access-list`
 
 `access-list` owns AccessList shard structure and shard lifecycle.
@@ -135,8 +149,8 @@ It validates:
 - shard range validity and nibble alignment;
 - sorted and unique entries;
 - entries staying inside the shard range;
-- create, update, split, merge, and destroy operations;
-- local consistency for partial updates;
+- create, update, split, merge, and destroy lifecycle operations;
+- same-contiguous-coverage consistency for partial updates;
 - full-domain requirements for AccessList creation, mode replacement, and
   active-mode destruction;
 - access authority checks, with `mint_authority` as a fallback authority.
@@ -144,6 +158,12 @@ It validates:
 The token and metadata scripts use AccessList cells, but they do not own the
 linked-list/shard invariants. Those invariants belong to the `access-list` type
 script.
+
+For ordinary AccessList updates, input shards and output shards must cover the
+same continuous range. Within that range, entries may be inserted or removed
+while shards are split or merged in the same transaction. The parsed
+`AccessListShard` type still enforces that every shard's entries are inside the
+range, sorted, and unique.
 
 ## Metadata Model
 
@@ -210,6 +230,8 @@ For tracked supply:
 - mint increases supply and requires `mint_authority`;
 - protocol burn decreases supply and requires `mint_authority`;
 - user destruction does not reduce `current_supply`;
+- metadata destruction requires tracked supply, zero `current_supply`, and
+  `mint_authority`;
 - changing `current_supply` directly without matching UDT cell deltas is
   rejected by the metadata script.
 
@@ -243,8 +265,10 @@ only in how `xudt` interprets membership:
 Creating an active access mode, destroying an active mode, and switching between
 whitelist and blacklist require full-domain AccessList coverage where relevant.
 Ordinary AccessList updates can touch only the shard nodes being updated; the
-`access-list` type script validates local shard consistency and prevents
-overlap or ordering violations.
+`access-list` type script validates that the consumed and produced shard sets
+cover the same continuous range and prevents overlap or ordering violations.
+Destroying xUDT metadata while access mode is enabled additionally requires
+full-domain AccessList inputs and forbids bound AccessList outputs.
 
 ## Authorities
 
@@ -263,6 +287,12 @@ Supported authority types:
 `mint_authority` is the strongest metadata authority. It can authorize supply
 changes and also acts as a fallback for metadata/access authority controlled
 updates when the narrower authority is absent or does not authorize.
+
+Contracts use the shared `AuthorityVerifier` from `lib/script-utils` to perform
+authority checks. A validation path reuses one verifier so repeated authority
+requirements are cached instead of re-scanning cells or re-running executable
+authority code. Consuming a metadata or AccessList state cell requires an
+applicable authority even for a no-op update.
 
 ## Build Prerequisites
 
