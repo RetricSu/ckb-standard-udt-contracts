@@ -1,11 +1,11 @@
 use crate::{
     fixtures::{
-        cell_dep_for_script, create_funding_input, create_typed_cell, deploy_script_with_args,
-        expect_tx_fail, expect_tx_pass, typed_output,
+        cell_dep, cell_dep_for_script, create_funding_input, create_typed_cell,
+        deploy_script_with_args, expect_tx_fail_with_code, expect_tx_pass, typed_output,
     },
     metadata_builders::{input_lock_authority, udt_amount_bytes, DeployedScript},
     test_helpers::{
-        always_success_lock_empty as always_success_lock,
+        always_success_lock, always_success_lock_empty,
         deploy_data_script as dynamic_library_script, xudt_meta_data,
         xudt_meta_script as meta_script, xudt_script,
     },
@@ -32,6 +32,17 @@ fn extension_attr(extension_type: ExtensionType, deployed: &DeployedScript) -> E
     }
 }
 
+fn extension_from_script(extension_type: ExtensionType, script: &MetadataScript) -> Extension {
+    Extension {
+        extension_type,
+        script: script.clone(),
+    }
+}
+
+fn metadata_script(script: &ckb_testtool::ckb_types::packed::Script) -> MetadataScript {
+    MetadataScript::from_slice(script.as_slice()).expect("convert script")
+}
+
 struct PluginFixture {
     context: Context,
     lock: DeployedScript,
@@ -42,7 +53,7 @@ struct PluginFixture {
 impl PluginFixture {
     fn new() -> Self {
         let mut context = Context::default();
-        let lock = always_success_lock(&mut context);
+        let lock = always_success_lock_empty(&mut context);
         let meta = meta_script(&mut context);
         let xudt = xudt_script(&mut context, meta.script_hash);
 
@@ -251,7 +262,162 @@ fn xudt_extension_deny_plugin_rejects() {
         .cell_dep(cell_dep_for_script(&plugin))
         .build();
 
-    expect_tx_fail(&fixture.context, &tx);
+    expect_tx_fail_with_code(&fixture.context, &tx, "error code 70");
+}
+
+#[test]
+fn xudt_input_lock_extension_requires_matching_input_lock() {
+    let mut fixture = PluginFixture::new();
+    let extension = extension_attr(ExtensionType::InputLock, &fixture.lock);
+    let meta_input = fixture.live_meta_input(0, 0, vec![extension]);
+    let udt_input = fixture.live_udt_input(100);
+    let tx = fixture.transfer_tx(meta_input, udt_input);
+
+    expect_tx_pass(&fixture.context, &tx);
+
+    let mut missing = PluginFixture::new();
+    let other_lock = always_success_lock(&mut missing.context, Bytes::from_static(b"other-lock"));
+    let extension = extension_attr(ExtensionType::InputLock, &other_lock);
+    let meta_input = missing.live_meta_input(0, 0, vec![extension]);
+    let udt_input = missing.live_udt_input(100);
+    let tx = missing.transfer_tx(meta_input, udt_input);
+
+    expect_tx_fail_with_code(&missing.context, &tx, "error code 70");
+}
+
+#[test]
+fn xudt_input_type_extension_requires_matching_input_type() {
+    let mut fixture = PluginFixture::new();
+    let xudt_script = metadata_script(&fixture.xudt.script);
+    let extension = extension_from_script(ExtensionType::InputType, &xudt_script);
+    let meta_input = fixture.live_meta_input(0, 0, vec![extension]);
+    let udt_input = fixture.live_udt_input(100);
+    let tx = fixture.transfer_tx(meta_input, udt_input);
+
+    expect_tx_pass(&fixture.context, &tx);
+
+    let mut missing = PluginFixture::new();
+    let other_lock = always_success_lock(&mut missing.context, Bytes::from_static(b"other-type"));
+    let extension = extension_attr(ExtensionType::InputType, &other_lock);
+    let meta_input = missing.live_meta_input(0, 0, vec![extension]);
+    let udt_input = missing.live_udt_input(100);
+    let tx = missing.transfer_tx(meta_input, udt_input);
+
+    expect_tx_fail_with_code(&missing.context, &tx, "error code 70");
+}
+
+#[test]
+fn xudt_output_type_extension_requires_matching_output_type() {
+    let mut fixture = PluginFixture::new();
+    let xudt_script = metadata_script(&fixture.xudt.script);
+    let extension = extension_from_script(ExtensionType::OutputType, &xudt_script);
+    let meta_input = fixture.live_meta_input(0, 0, vec![extension]);
+    let udt_input = fixture.live_udt_input(100);
+    let tx = fixture.transfer_tx(meta_input, udt_input);
+
+    expect_tx_pass(&fixture.context, &tx);
+
+    let mut missing = PluginFixture::new();
+    let other_lock = always_success_lock(&mut missing.context, Bytes::from_static(b"other-type"));
+    let extension = extension_attr(ExtensionType::OutputType, &other_lock);
+    let meta_input = missing.live_meta_input(0, 0, vec![extension]);
+    let udt_input = missing.live_udt_input(100);
+    let tx = missing.transfer_tx(meta_input, udt_input);
+
+    expect_tx_fail_with_code(&missing.context, &tx, "error code 70");
+}
+
+#[test]
+fn xudt_presence_extensions_apply_to_mint() {
+    let mut fixture = PluginFixture::new();
+    let xudt_script = metadata_script(&fixture.xudt.script);
+    let extensions = vec![
+        extension_attr(ExtensionType::InputLock, &fixture.lock),
+        extension_from_script(
+            ExtensionType::InputType,
+            &metadata_script(&fixture.meta.script),
+        ),
+        extension_from_script(ExtensionType::OutputType, &xudt_script),
+    ];
+    let meta_input = fixture.live_meta_input(CONFIG_SUPPLY_TRACKED, 0, extensions.clone());
+    let tx = fixture.mint_tx(meta_input, extensions);
+
+    expect_tx_pass(&fixture.context, &tx);
+
+    let mut missing = PluginFixture::new();
+    let other_lock = always_success_lock(&mut missing.context, Bytes::from_static(b"other-lock"));
+    let extensions = vec![extension_attr(ExtensionType::InputLock, &other_lock)];
+    let meta_input = missing.live_meta_input(CONFIG_SUPPLY_TRACKED, 0, extensions.clone());
+    let tx = missing.mint_tx(meta_input, extensions);
+
+    expect_tx_fail_with_code(&missing.context, &tx, "error code 70");
+}
+
+#[test]
+fn xudt_presence_extensions_apply_to_protocol_burn() {
+    let mut fixture = PluginFixture::new();
+    let xudt_script = metadata_script(&fixture.xudt.script);
+    let extensions = vec![
+        extension_attr(ExtensionType::InputLock, &fixture.lock),
+        extension_from_script(ExtensionType::InputType, &xudt_script),
+        extension_from_script(ExtensionType::OutputType, &xudt_script),
+    ];
+    let meta_input = fixture.live_meta_input(CONFIG_SUPPLY_TRACKED, 100, extensions.clone());
+    let tx = fixture.protocol_burn_tx(meta_input, extensions);
+
+    expect_tx_pass(&fixture.context, &tx);
+
+    let mut missing = PluginFixture::new();
+    let other_lock = always_success_lock(&mut missing.context, Bytes::from_static(b"other-type"));
+    let extensions = vec![extension_attr(ExtensionType::OutputType, &other_lock)];
+    let meta_input = missing.live_meta_input(CONFIG_SUPPLY_TRACKED, 100, extensions.clone());
+    let tx = missing.protocol_burn_tx(meta_input, extensions);
+
+    expect_tx_fail_with_code(&missing.context, &tx, "error code 70");
+}
+
+#[test]
+fn xudt_user_destruction_skips_presence_extensions() {
+    let mut fixture = PluginFixture::new();
+    let other_lock = always_success_lock(&mut fixture.context, Bytes::from_static(b"other-lock"));
+    let meta_dep = fixture.live_meta_input(
+        0,
+        0,
+        vec![extension_attr(ExtensionType::InputLock, &other_lock)],
+    );
+    let udt_input = fixture.live_udt_input(100);
+
+    let tx = TransactionBuilder::default()
+        .input(udt_input)
+        .cell_dep(cell_dep(meta_dep.previous_output()))
+        .build();
+    let tx = fixture.complete(tx);
+
+    expect_tx_pass(&fixture.context, &tx);
+}
+
+#[test]
+fn xudt_executable_extension_index_counts_presence_extensions() {
+    let mut fixture = PluginFixture::new();
+    let plugin = dynamic_library_script(
+        &mut fixture.context,
+        "dl-shared-allow",
+        Bytes::from_static(b"require_index_1"),
+    );
+    let extensions = vec![
+        extension_attr(ExtensionType::InputLock, &fixture.lock),
+        extension_attr(ExtensionType::DynamicLinking, &plugin),
+    ];
+    let meta_input = fixture.live_meta_input(0, 0, extensions);
+    let udt_input = fixture.live_udt_input(100);
+
+    let tx = fixture
+        .transfer_tx(meta_input, udt_input)
+        .as_advanced_builder()
+        .cell_dep(cell_dep_for_script(&plugin))
+        .build();
+
+    expect_tx_pass(&fixture.context, &tx);
 }
 
 #[test]
@@ -268,7 +434,7 @@ fn xudt_executable_dynamic_linking_fixture_fails_closed() {
         .cell_dep(cell_dep_for_script(&plugin))
         .build();
 
-    expect_tx_fail(&fixture.context, &tx);
+    expect_tx_fail_with_code(&fixture.context, &tx, "error code 70");
 }
 
 #[test]
@@ -302,7 +468,7 @@ fn xudt_spawn_extension_deny_plugin_rejects() {
         .cell_dep(cell_dep_for_script(&plugin))
         .build();
 
-    expect_tx_fail(&fixture.context, &tx);
+    expect_tx_fail_with_code(&fixture.context, &tx, "error code 70");
 }
 
 #[test]
@@ -323,7 +489,7 @@ fn xudt_dynamic_linking_extension_rejects_wrong_operation() {
         .cell_dep(cell_dep_for_script(&plugin))
         .build();
 
-    expect_tx_fail(&fixture.context, &tx);
+    expect_tx_fail_with_code(&fixture.context, &tx, "error code 70");
 }
 
 #[test]
@@ -344,7 +510,7 @@ fn xudt_dynamic_linking_extension_checks_extension_index() {
         .cell_dep(cell_dep_for_script(&plugin))
         .build();
 
-    expect_tx_fail(&fixture.context, &tx);
+    expect_tx_fail_with_code(&fixture.context, &tx, "error code 70");
 }
 
 #[test]
@@ -403,7 +569,7 @@ fn xudt_spawn_extension_rejects_wrong_operation() {
         .cell_dep(cell_dep_for_script(&plugin))
         .build();
 
-    expect_tx_fail(&fixture.context, &tx);
+    expect_tx_fail_with_code(&fixture.context, &tx, "error code 70");
 }
 
 #[test]

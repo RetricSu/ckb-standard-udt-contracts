@@ -51,7 +51,7 @@ fn sudt_meta_rejects_noop_update_without_authority() {
         .build();
     let tx = context.complete_tx(tx);
 
-    expect_tx_fail(&context, &tx);
+    expect_tx_fail_with_code(&context, &tx, "error code 50");
 }
 
 #[test]
@@ -166,7 +166,7 @@ fn sudt_meta_rejects_non_whitelisted_output_lock() {
         )
     });
 
-    expect_tx_fail(&context, &tx);
+    expect_tx_fail_with_code(&context, &tx, "error code 20");
 }
 
 #[test]

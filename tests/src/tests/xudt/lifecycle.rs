@@ -16,7 +16,7 @@ fn xudt_transfer_requires_meta() {
         .build();
     let tx = fixture.complete(tx);
 
-    expect_tx_fail(&fixture.context, &tx);
+    expect_tx_fail_with_code(&fixture.context, &tx, "error code 41");
 }
 
 #[test]
@@ -64,7 +64,7 @@ fn xudt_paused_rejects_transfer_and_mint() {
         .output_data(udt_amount_bytes(100).pack())
         .build();
     let tx = transfer.complete(tx);
-    expect_tx_fail(&transfer.context, &tx);
+    expect_tx_fail_with_code(&transfer.context, &tx, "error code 45");
 
     let mut mint = XudtFixture::new();
     let meta_input = mint.live_meta_input(CONFIG_SUPPLY_TRACKED | CONFIG_PAUSED, 0, true);
@@ -94,7 +94,7 @@ fn xudt_paused_rejects_transfer_and_mint() {
         .output_data(udt_amount_bytes(50).pack())
         .build();
     let tx = mint.complete(tx);
-    expect_tx_fail(&mint.context, &tx);
+    expect_tx_fail_with_code(&mint.context, &tx, "error code 45");
 }
 
 #[test]

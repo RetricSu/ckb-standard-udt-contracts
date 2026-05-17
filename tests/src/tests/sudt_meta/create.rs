@@ -25,7 +25,7 @@ fn sudt_meta_create_ignores_fake_data2_udt_outputs() {
 fn sudt_meta_create_rejects_short_same_token_udt_data() {
     let (context, tx) = create_meta_tx_with_udt_output_data(0, vec![Bytes::from(vec![0u8; 15])]);
 
-    expect_tx_fail(&context, &tx);
+    expect_tx_fail_with_any_code(&context, &tx, &["error code 30", "error code 31"]);
 }
 
 #[test]
@@ -52,7 +52,7 @@ fn sudt_meta_rejects_supply_tracking_bit_change() {
         build_sudt_meta_bytes(0, 0, None, None),
     );
 
-    expect_tx_fail(&context, &tx);
+    expect_tx_fail_with_code(&context, &tx, "error code 32");
 }
 
 #[test]

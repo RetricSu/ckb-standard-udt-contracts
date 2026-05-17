@@ -11,7 +11,7 @@ fn access_list_rejects_unauthorized_update() {
         vec![full_domain_shard(vec![listed])],
     );
 
-    expect_tx_fail(&case.context, &case.tx);
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 51");
 }
 
 #[test]
@@ -146,7 +146,7 @@ fn access_list_rejects_noop_update_without_authority() {
         .build();
     let tx = context.complete_tx(tx);
 
-    expect_tx_fail(&context, &tx);
+    expect_tx_fail_with_code(&context, &tx, "error code 51");
 }
 
 #[test]
@@ -197,7 +197,7 @@ fn access_list_update_with_dynamic_linking_authority_denies() {
         vec![full_domain_shard(vec![entry(0x10)])],
     );
 
-    expect_tx_fail(&case.context, &case.tx);
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 51");
 }
 
 #[test]
@@ -219,5 +219,5 @@ fn access_list_update_with_spawn_authority_denies() {
         vec![full_domain_shard(vec![entry(0x10)])],
     );
 
-    expect_tx_fail(&case.context, &case.tx);
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 51");
 }

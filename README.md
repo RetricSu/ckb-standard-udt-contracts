@@ -203,6 +203,11 @@ The shared type parser enforces these limits:
 - extensions: 16 entries;
 - access-list shard entries: 4096 entries.
 
+The extension limit is intentionally small. Each xUDT extension is an
+additional script execution on every covered token operation, so token designs
+that need many independent checks should normally aggregate policy inside one
+extension script instead of appending many small extensions.
+
 ## Config Flags
 
 Config flags are defined in `lib/types/src/metadata/config.rs`.
@@ -216,6 +221,77 @@ Config flags are defined in `lib/types/src/metadata/config.rs`.
 
 sUDT only accepts `CONFIG_SUPPLY_TRACKED`. xUDT accepts all four flags. xUDT
 rejects whitelist mode unless access mode is enabled.
+
+## xUDT Extensions
+
+xUDT extensions are optional validation hooks stored in xUDT metadata. They are
+configured through `xudt-meta` and executed by `xudt` during token operations.
+
+The metadata extension list contains up to 16 entries. Each entry has:
+
+- an extension type, using the same ordering as authority locations:
+  - `0 = InputLock`;
+  - `1 = InputType`;
+  - `2 = OutputType`;
+  - `3 = DynamicLinking`;
+  - `4 = Spawn`;
+- a CKB script. For presence extensions, the script hash is the required
+input/output script hash. For executable extensions, the script locates and
+  configures the extension code, and its args are passed as extension data.
+
+The extension list must be sorted by `(extension_type, script_hash)` and must
+not contain duplicates. Changing the extension list requires mint authority.
+
+Presence extensions do not execute extra code. `xudt` only requires that the
+transaction contains the configured script hash in the matching source:
+
+- `InputLock`: input lock scripts;
+- `InputType`: input type scripts;
+- `OutputType`: output type scripts.
+
+The matching input or output script is then executed by normal CKB transaction
+validation. Cell dep scripts and output lock scripts are not presence extension
+types because they are not executed by CKB as part of the transaction's script
+groups.
+
+Executable extensions are `DynamicLinking` and `Spawn`. `xudt` executes all
+configured extensions in order for:
+
+- transfer: `operation = 0`, `mint_authority_checked = none`;
+- mint: `operation = 1`, `mint_authority_checked = checked`;
+- protocol burn: `operation = 2`, `mint_authority_checked = none`.
+
+Pure user destruction skips extension execution, matching the holder-owned
+destruction path.
+
+Dynamic-linking extensions must export:
+
+```c
+int udt_validate(
+    const unsigned char *script_hash,
+    unsigned char operation,
+    unsigned char extension_index,
+    const unsigned char *extension_data,
+    unsigned long extension_data_len,
+    unsigned char mint_authority_checked
+);
+```
+
+The return value must be `0` to accept the transaction. Any non-zero return
+value, missing extension code, load failure, spawn failure, or malformed
+extension metadata rejects the xUDT transaction.
+
+Spawn extensions receive four argv values:
+
+```text
+operation extension_index hex(extension_data) mint_authority_checked
+```
+
+`mint_authority_checked` is encoded as:
+
+- `1`: mint authority was checked for the current mint path;
+- `0`: reserved for an explicitly unchecked mint-authority context;
+- `2`: no mint-authority context is available.
 
 ## Supply Tracking
 

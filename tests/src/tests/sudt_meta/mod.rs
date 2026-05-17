@@ -1,6 +1,6 @@
 use crate::{
     fixtures::{
-        cell_dep_for_script, create_funding_input, create_typed_cell, expect_tx_fail,
+        cell_dep_for_script, create_funding_input, create_typed_cell, expect_tx_fail_with_any_code,
         expect_tx_fail_with_code, expect_tx_pass, typed_output,
     },
     metadata_builders::{

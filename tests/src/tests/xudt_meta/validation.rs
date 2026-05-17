@@ -81,5 +81,58 @@ fn xudt_meta_rejects_noop_update_without_authority() {
         .build();
     let tx = context.complete_tx(tx);
 
-    expect_tx_fail(&context, &tx);
+    expect_tx_fail_with_code(&context, &tx, "error code 50");
+}
+
+#[test]
+fn xudt_meta_extension_change_requires_mint_authority() {
+    let no_mint_authority = update_meta_tx(|_, lock, _| {
+        let metadata_authority = input_lock_authority(lock.script_hash);
+        let input = xudt_meta_data(
+            0,
+            0,
+            None,
+            Some(metadata_authority.clone()),
+            None,
+            Vec::new(),
+        );
+        let output = xudt_meta_data(
+            0,
+            0,
+            None,
+            Some(metadata_authority),
+            None,
+            vec![presence_extension(ExtensionType::InputLock, &lock.script)],
+        );
+        (input, output, Vec::new())
+    });
+
+    expect_tx_fail_with_code(
+        &no_mint_authority.context,
+        &no_mint_authority.tx,
+        "error code 50",
+    );
+
+    let with_mint_authority = update_meta_tx(|_, lock, _| {
+        let mint_authority = input_lock_authority(lock.script_hash);
+        let input = xudt_meta_data(0, 0, Some(mint_authority.clone()), None, None, Vec::new());
+        let output = xudt_meta_data(
+            0,
+            0,
+            Some(mint_authority),
+            None,
+            None,
+            vec![presence_extension(ExtensionType::InputLock, &lock.script)],
+        );
+        (input, output, Vec::new())
+    });
+
+    expect_tx_pass(&with_mint_authority.context, &with_mint_authority.tx);
+}
+
+fn presence_extension(extension_type: ExtensionType, script: &Script) -> Extension {
+    Extension {
+        extension_type,
+        script: MetadataScript::from_slice(script.as_slice()).expect("convert script"),
+    }
 }

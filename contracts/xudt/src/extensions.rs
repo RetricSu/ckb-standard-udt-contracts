@@ -7,9 +7,11 @@ use core::ffi::CStr;
 
 #[cfg(target_arch = "riscv64")]
 use ckb_std::{
+    ckb_constants::Source,
     ckb_types::{core::ScriptHashType, prelude::*},
     dynamic_loading_c_impl::{CKBDLContext, Symbol},
-    high_level::spawn_cell,
+    error::SysError,
+    high_level::{load_cell_lock_hash, load_cell_type_hash, spawn_cell},
     syscalls::wait,
 };
 
@@ -42,6 +44,15 @@ pub fn run_extensions(
 ) -> Result<(), Error> {
     for (index, extension) in extensions.iter().enumerate() {
         match meta::extension_kind(extension) {
+            ExtensionType::InputLock => {
+                require_input_lock_extension(extension)?;
+            }
+            ExtensionType::InputType => {
+                require_type_extension(extension, Source::Input)?;
+            }
+            ExtensionType::OutputType => {
+                require_type_extension(extension, Source::Output)?;
+            }
             ExtensionType::DynamicLinking => {
                 run_dynamic_linking_extension(operation, index, extension, mint_authority_context)?
             }
@@ -51,6 +62,40 @@ pub fn run_extensions(
         }
     }
     Ok(())
+}
+
+#[cfg(target_arch = "riscv64")]
+fn require_input_lock_extension(extension: &Extension) -> Result<(), Error> {
+    let script_hash: [u8; 32] = meta::extension_script(extension)
+        .calc_script_hash()
+        .unpack();
+    let mut index = 0;
+
+    loop {
+        match load_cell_lock_hash(index, Source::Input) {
+            Ok(candidate) if candidate == script_hash => return Ok(()),
+            Ok(_) => index += 1,
+            Err(SysError::IndexOutOfBound) => return Err(Error::ExtensionFailed),
+            Err(_) => return Err(Error::ExtensionFailed),
+        }
+    }
+}
+
+#[cfg(target_arch = "riscv64")]
+fn require_type_extension(extension: &Extension, source: Source) -> Result<(), Error> {
+    let script_hash: [u8; 32] = meta::extension_script(extension)
+        .calc_script_hash()
+        .unpack();
+    let mut index = 0;
+
+    loop {
+        match load_cell_type_hash(index, source) {
+            Ok(Some(candidate)) if candidate == script_hash => return Ok(()),
+            Ok(_) => index += 1,
+            Err(SysError::IndexOutOfBound) => return Err(Error::ExtensionFailed),
+            Err(_) => return Err(Error::ExtensionFailed),
+        }
+    }
 }
 
 #[cfg(not(target_arch = "riscv64"))]

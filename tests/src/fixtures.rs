@@ -80,13 +80,6 @@ pub fn expect_tx_pass(context: &Context, tx: &TransactionView) {
     verify_and_dump_failed_tx(context, tx, MAX_CYCLES).expect("tx should pass");
 }
 
-pub fn expect_tx_fail(context: &Context, tx: &TransactionView) {
-    assert!(
-        verify_and_dump_failed_tx(context, tx, MAX_CYCLES).is_err(),
-        "tx should fail"
-    );
-}
-
 pub fn expect_tx_fail_with_code(context: &Context, tx: &TransactionView, code_marker: &str) {
     match verify_and_dump_failed_tx(context, tx, MAX_CYCLES) {
         Ok(_) => panic!("tx should fail with code marker `{code_marker}`"),
@@ -95,6 +88,23 @@ pub fn expect_tx_fail_with_code(context: &Context, tx: &TransactionView, code_ma
             assert!(
                 err_msg.contains(code_marker),
                 "tx failed but missing code marker `{code_marker}` in error: {err_msg}"
+            );
+        }
+    }
+}
+
+pub fn expect_tx_fail_with_any_code(
+    context: &Context,
+    tx: &TransactionView,
+    code_markers: &[&str],
+) {
+    match verify_and_dump_failed_tx(context, tx, MAX_CYCLES) {
+        Ok(_) => panic!("tx should fail with one of code markers `{code_markers:?}`"),
+        Err(err) => {
+            let err_msg = err.to_string();
+            assert!(
+                code_markers.iter().any(|marker| err_msg.contains(marker)),
+                "tx failed but missing any code marker `{code_markers:?}` in error: {err_msg}"
             );
         }
     }

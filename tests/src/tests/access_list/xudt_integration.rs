@@ -9,5 +9,5 @@ fn access_list_whitelist_missing_coverage_is_fail_closed_for_xudt() {
         Vec::new(),
     );
 
-    expect_tx_fail(&case.context, &case.tx);
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 60");
 }

@@ -1,7 +1,7 @@
 use crate::{
     fixtures::{
-        cell_dep, cell_dep_for_script, create_funding_input, create_typed_cell, expect_tx_fail,
-        expect_tx_fail_with_code, expect_tx_pass, typed_output,
+        cell_dep, cell_dep_for_script, create_funding_input, create_typed_cell,
+        expect_tx_fail_with_any_code, expect_tx_fail_with_code, expect_tx_pass, typed_output,
     },
     metadata_builders::{
         build_access_list_shard_bytes, dynamic_linking_authority, input_lock_authority,
@@ -25,8 +25,10 @@ use ckb_testtool::{
     },
     context::Context,
 };
+use ckb_types::{packed::Script as MetadataScript, prelude::Entity as CkbEntity};
 use standard_udt_types::metadata::{
-    Authority, CONFIG_ACCESS_ENABLED, CONFIG_ACCESS_WHITELIST, CONFIG_PAUSED, CONFIG_SUPPLY_TRACKED,
+    Authority, Extension, ExtensionType, CONFIG_ACCESS_ENABLED, CONFIG_ACCESS_WHITELIST,
+    CONFIG_PAUSED, CONFIG_SUPPLY_TRACKED,
 };
 
 mod fixture;

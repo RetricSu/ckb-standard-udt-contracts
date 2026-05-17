@@ -50,7 +50,7 @@ fn sudt_protocol_burn_requires_mint_authority() {
         .build();
     let tx = fixture.complete(tx);
 
-    expect_tx_fail(&fixture.context, &tx);
+    expect_tx_fail_with_code(&fixture.context, &tx, "error code 50");
 }
 
 #[test]

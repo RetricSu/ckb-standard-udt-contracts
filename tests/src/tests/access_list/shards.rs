@@ -115,7 +115,7 @@ fn access_list_blacklist_requires_full_domain_coverage() {
         vec![shard(0x00, 0x7f, Vec::new())],
     );
 
-    expect_tx_fail(&case.context, &case.tx);
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 60");
 }
 
 #[test]
@@ -142,7 +142,7 @@ fn access_list_rejects_overlapping_shards() {
         vec![shard(0x00, 0x8f, Vec::new()), shard(0x80, 0xff, Vec::new())],
     );
 
-    expect_tx_fail(&case.context, &case.tx);
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 60");
 }
 
 #[test]

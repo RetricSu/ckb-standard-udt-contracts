@@ -4,7 +4,7 @@ use super::*;
 fn xudt_meta_create_rejects_short_same_token_udt_data() {
     let case = create_meta_tx_with_udt_output_data(0, vec![Bytes::from(vec![0u8; 15])]);
 
-    expect_tx_fail(&case.context, &case.tx);
+    expect_tx_fail_with_any_code(&case.context, &case.tx, &["error code 30", "error code 31"]);
 }
 
 #[test]

@@ -1,7 +1,7 @@
 use crate::{
     fixtures::{
-        cell_dep, cell_dep_for_script, create_typed_cell, expect_tx_fail, expect_tx_fail_with_code,
-        expect_tx_pass, typed_output,
+        cell_dep, cell_dep_for_script, create_typed_cell, expect_tx_fail_with_code, expect_tx_pass,
+        typed_output,
     },
     metadata_builders::{
         dynamic_linking_authority, input_lock_authority, spawn_authority, DeployedScript,

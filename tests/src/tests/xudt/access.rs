@@ -21,7 +21,7 @@ fn xudt_blacklist_rejects_listed_input_lock() {
         .build();
     let tx = fixture.complete(tx);
 
-    expect_tx_fail(&fixture.context, &tx);
+    expect_tx_fail_with_code(&fixture.context, &tx, "error code 61");
 }
 
 #[test]
@@ -116,7 +116,7 @@ fn xudt_whitelist_rejects_missing_input_lock() {
         .build();
     let tx = fixture.complete(tx);
 
-    expect_tx_fail(&fixture.context, &tx);
+    expect_tx_fail_with_code(&fixture.context, &tx, "error code 61");
 }
 
 #[test]
@@ -322,7 +322,7 @@ fn xudt_whitelist_rejects_input_access_list_as_transfer_proof() {
         .build();
     let tx = fixture.complete(tx);
 
-    expect_tx_fail(&fixture.context, &tx);
+    expect_tx_fail_with_code(&fixture.context, &tx, "error code 61");
 }
 
 #[test]
@@ -369,7 +369,7 @@ fn xudt_rejects_unordered_access_list_cell_dep_proofs() {
         .build();
     let tx = fixture.complete(tx);
 
-    expect_tx_fail(&fixture.context, &tx);
+    expect_tx_fail_with_code(&fixture.context, &tx, "error code 60");
 }
 
 #[test]
@@ -394,7 +394,7 @@ fn xudt_rejects_overlapping_access_list_cell_dep_proofs() {
         .build();
     let tx = fixture.complete(tx);
 
-    expect_tx_fail(&fixture.context, &tx);
+    expect_tx_fail_with_code(&fixture.context, &tx, "error code 60");
 }
 
 #[test]

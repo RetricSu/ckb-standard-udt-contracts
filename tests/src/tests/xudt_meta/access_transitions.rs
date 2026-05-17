@@ -8,7 +8,11 @@ fn xudt_meta_blacklist_to_whitelist_requires_full_domain_inputs_and_outputs() {
         false,
         true,
     );
-    expect_tx_fail(&missing_input.context, &missing_input.tx);
+    expect_tx_fail_with_any_code(
+        &missing_input.context,
+        &missing_input.tx,
+        &["error code 60", "error code 61"],
+    );
 
     let missing_output = access_mode_transition_tx(
         CONFIG_ACCESS_ENABLED,
@@ -16,7 +20,11 @@ fn xudt_meta_blacklist_to_whitelist_requires_full_domain_inputs_and_outputs() {
         true,
         false,
     );
-    expect_tx_fail(&missing_output.context, &missing_output.tx);
+    expect_tx_fail_with_any_code(
+        &missing_output.context,
+        &missing_output.tx,
+        &["error code 60", "error code 61"],
+    );
 
     let full_replace = access_mode_transition_tx(
         CONFIG_ACCESS_ENABLED,
@@ -35,7 +43,11 @@ fn xudt_meta_whitelist_to_blacklist_requires_full_domain_inputs_and_outputs() {
         false,
         true,
     );
-    expect_tx_fail(&missing_input.context, &missing_input.tx);
+    expect_tx_fail_with_any_code(
+        &missing_input.context,
+        &missing_input.tx,
+        &["error code 60", "error code 61"],
+    );
 
     let missing_output = access_mode_transition_tx(
         CONFIG_ACCESS_ENABLED | CONFIG_ACCESS_WHITELIST,
@@ -43,7 +55,11 @@ fn xudt_meta_whitelist_to_blacklist_requires_full_domain_inputs_and_outputs() {
         true,
         false,
     );
-    expect_tx_fail(&missing_output.context, &missing_output.tx);
+    expect_tx_fail_with_any_code(
+        &missing_output.context,
+        &missing_output.tx,
+        &["error code 60", "error code 61"],
+    );
 
     let full_replace = access_mode_transition_tx(
         CONFIG_ACCESS_ENABLED | CONFIG_ACCESS_WHITELIST,
@@ -268,7 +284,7 @@ fn xudt_meta_access_mode_switch_rejects_same_token_xudt_cells() {
         )
     });
 
-    expect_tx_fail(&case.context, &case.tx);
+    expect_tx_fail_with_any_code(&case.context, &case.tx, &["error code 60", "error code 61"]);
 }
 
 #[test]
@@ -416,5 +432,5 @@ fn xudt_meta_destroy_rejects_access_list_outputs() {
         },
     );
 
-    expect_tx_fail(&case.context, &case.tx);
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 61");
 }

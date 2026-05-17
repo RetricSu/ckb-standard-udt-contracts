@@ -12,6 +12,9 @@ use super::config::MAX_EXTENSIONS;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ExtensionType {
+    InputLock,
+    InputType,
+    OutputType,
     DynamicLinking,
     Spawn,
 }
@@ -21,8 +24,11 @@ impl TryFrom<u8> for ExtensionType {
 
     fn try_from(extension_type: u8) -> Result<Self, Self::Error> {
         match extension_type {
-            0 => Ok(Self::DynamicLinking),
-            1 => Ok(Self::Spawn),
+            0 => Ok(Self::InputLock),
+            1 => Ok(Self::InputType),
+            2 => Ok(Self::OutputType),
+            3 => Ok(Self::DynamicLinking),
+            4 => Ok(Self::Spawn),
             _ => Err(Error::InvalidScriptLocation),
         }
     }
@@ -31,8 +37,11 @@ impl TryFrom<u8> for ExtensionType {
 impl From<ExtensionType> for u8 {
     fn from(extension_type: ExtensionType) -> Self {
         match extension_type {
-            ExtensionType::DynamicLinking => 0,
-            ExtensionType::Spawn => 1,
+            ExtensionType::InputLock => 0,
+            ExtensionType::InputType => 1,
+            ExtensionType::OutputType => 2,
+            ExtensionType::DynamicLinking => 3,
+            ExtensionType::Spawn => 4,
         }
     }
 }

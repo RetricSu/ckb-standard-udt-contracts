@@ -22,7 +22,7 @@ fn xudt_protocol_burn_requires_mint_authority_and_updates_supply() {
         .output_data(udt_amount_bytes(40).pack())
         .build();
     let tx = unauthorized.complete(tx);
-    expect_tx_fail(&unauthorized.context, &tx);
+    expect_tx_fail_with_code(&unauthorized.context, &tx, "error code 50");
 
     let mut authorized = XudtFixture::new();
     let meta_input = authorized.live_meta_input(CONFIG_SUPPLY_TRACKED, 100, true);

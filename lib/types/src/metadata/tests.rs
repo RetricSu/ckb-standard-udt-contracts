@@ -160,6 +160,22 @@ fn authority_enforces_type_shape_and_hash() {
 }
 
 #[test]
+fn extension_type_encoding_matches_authority_order() {
+    let cases = [
+        (0, ExtensionType::InputLock),
+        (1, ExtensionType::InputType),
+        (2, ExtensionType::OutputType),
+        (3, ExtensionType::DynamicLinking),
+        (4, ExtensionType::Spawn),
+    ];
+
+    for (value, extension_type) in cases {
+        assert_eq!(ExtensionType::try_from(value), Ok(extension_type));
+        assert_eq!(u8::from(extension_type), value);
+    }
+}
+
+#[test]
 fn xudt_rejects_unsorted_and_duplicate_extensions() {
     let mut unsorted = empty_xudt(0, 0);
     unsorted.extensions = vec![
