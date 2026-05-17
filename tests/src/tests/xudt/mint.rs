@@ -36,6 +36,48 @@ fn xudt_tracked_mint_updates_supply() {
     expect_tx_pass(&fixture.context, &tx);
 }
 
+#[test]
+fn xudt_tracked_mint_updates_supply_with_many_outputs() {
+    let mut fixture = XudtFixture::new();
+    let output_count = 20u128;
+    let meta_input = fixture.live_meta_input(CONFIG_SUPPLY_TRACKED, 0, true);
+    let funding = create_funding_input(
+        &mut fixture.context,
+        &fixture.lock.script,
+        3_000_000_000_000,
+    );
+
+    let mut builder = TransactionBuilder::default()
+        .input(meta_input)
+        .input(funding)
+        .output(typed_output(
+            &fixture.lock.script,
+            &fixture.meta.script,
+            100_000_000_000,
+        ))
+        .output_data(
+            xudt_meta_data(
+                CONFIG_SUPPLY_TRACKED,
+                output_count,
+                Some(input_lock_authority(fixture.lock.script_hash)),
+                Vec::new(),
+            )
+            .pack(),
+        );
+    for _ in 0..output_count {
+        builder = builder
+            .output(typed_output(
+                &fixture.lock.script,
+                &fixture.xudt.script,
+                100_000_000_000,
+            ))
+            .output_data(udt_amount_bytes(1).pack());
+    }
+    let tx = fixture.complete(builder.build());
+
+    expect_tx_pass(&fixture.context, &tx);
+}
+
 fn xudt_mint_with_plugin_authority(plugin_name: &str, spawn: bool) -> bool {
     xudt_mint_with_plugin_authority_args(plugin_name, spawn, Bytes::from_static(b"allow"))
 }

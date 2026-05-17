@@ -105,3 +105,37 @@ fn sudt_tracked_mint_updates_supply() {
 
     expect_tx_pass(&fixture.context, &tx);
 }
+
+#[test]
+fn sudt_tracked_mint_updates_supply_with_many_outputs() {
+    let mut fixture = SudtFixture::new();
+    let output_count = 20u128;
+    let meta_input = fixture.live_meta_input(0, true);
+    let funding = create_funding_input(
+        &mut fixture.context,
+        &fixture.lock.script,
+        3_000_000_000_000,
+    );
+
+    let mut builder = TransactionBuilder::default()
+        .input(meta_input)
+        .input(funding)
+        .output(typed_output(
+            &fixture.lock.script,
+            &fixture.meta.script,
+            100_000_000_000,
+        ))
+        .output_data(tracked_meta_data(output_count, Some(fixture.lock.script_hash)).pack());
+    for _ in 0..output_count {
+        builder = builder
+            .output(typed_output(
+                &fixture.lock.script,
+                &fixture.udt.script,
+                100_000_000_000,
+            ))
+            .output_data(udt_amount_bytes(1).pack());
+    }
+    let tx = fixture.complete(builder.build());
+
+    expect_tx_pass(&fixture.context, &tx);
+}

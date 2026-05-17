@@ -1,4 +1,4 @@
-use ckb_std::{ckb_constants::Source, error::SysError, high_level::load_cell_data};
+use ckb_std::{ckb_constants::Source, error::SysError, syscalls};
 
 use crate::error::ScriptError;
 
@@ -14,21 +14,40 @@ pub fn decode_amount(data: &[u8]) -> Result<u128, ScriptError> {
     Ok(u128::from_le_bytes(raw))
 }
 
+pub fn load_cell_amount(index: usize, source: Source) -> Result<Option<u128>, ScriptError> {
+    let mut raw = [0u8; UDT_AMOUNT_LEN];
+    decode_loaded_amount(syscalls::load_cell_data(&mut raw, 0, index, source), &raw)
+}
+
+fn decode_loaded_amount(
+    result: Result<usize, SysError>,
+    raw: &[u8; UDT_AMOUNT_LEN],
+) -> Result<Option<u128>, ScriptError> {
+    match result {
+        Ok(len) if len < UDT_AMOUNT_LEN => Err(ScriptError::AmountEncoding),
+        Ok(_) => Ok(Some(u128::from_le_bytes(*raw))),
+        Err(SysError::LengthNotEnough(len)) if len >= UDT_AMOUNT_LEN => {
+            Ok(Some(u128::from_le_bytes(*raw)))
+        }
+        Err(SysError::LengthNotEnough(_)) => Err(ScriptError::AmountEncoding),
+        Err(SysError::IndexOutOfBound) => Ok(None),
+        Err(_) => Err(ScriptError::SyscallUnknown),
+    }
+}
+
 pub fn collect_group_amount(source: Source) -> Result<u128, ScriptError> {
     let mut total = 0u128;
     let mut index = 0;
 
     loop {
-        match load_cell_data(index, source) {
-            Ok(data) => {
-                let amount = decode_amount(&data)?;
+        match load_cell_amount(index, source)? {
+            Some(amount) => {
                 total = total
                     .checked_add(amount)
                     .ok_or(ScriptError::AmountOverflow)?;
                 index += 1;
             }
-            Err(SysError::IndexOutOfBound) => return Ok(total),
-            Err(_) => return Err(ScriptError::SyscallUnknown),
+            None => return Ok(total),
         }
     }
 }
@@ -56,5 +75,20 @@ mod tests {
         data.extend_from_slice(&[0xff; 8]);
 
         assert_eq!(decode_amount(&data), Ok(amount));
+    }
+
+    #[test]
+    fn maps_length_not_enough_to_amount_prefix() {
+        let amount = 0x1122_3344_5566_7788_99aa_bbcc_ddee_ff00u128;
+        let raw = amount.to_le_bytes();
+
+        assert_eq!(
+            decode_loaded_amount(Err(SysError::LengthNotEnough(24)), &raw),
+            Ok(Some(amount))
+        );
+        assert_eq!(
+            decode_loaded_amount(Err(SysError::LengthNotEnough(15)), &raw),
+            Err(ScriptError::AmountEncoding)
+        );
     }
 }

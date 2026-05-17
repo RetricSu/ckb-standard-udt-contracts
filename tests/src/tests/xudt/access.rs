@@ -548,6 +548,40 @@ fn xudt_whitelist_accepts_many_output_locks_in_batches() {
 }
 
 #[test]
+fn xudt_whitelist_accepts_sixty_five_checked_locks() {
+    let mut fixture = XudtFixture::new();
+    let output_count = 64u128;
+    let meta_dep = fixture.live_meta_dep(CONFIG_ACCESS_ENABLED | CONFIG_ACCESS_WHITELIST, 0, false);
+    let udt_input = fixture.live_udt_input(output_count);
+    let mut output_locks = Vec::new();
+    let mut entries = vec![fixture.lock.script_hash];
+    for index in 0..output_count {
+        let lock = always_success_lock(&mut fixture.context, Bytes::from(vec![index as u8 + 90]));
+        entries.push(lock.script_hash);
+        output_locks.push(lock);
+    }
+    entries.sort();
+    let proof = fixture.live_access_list_input(full_domain_shard(entries));
+
+    let mut builder = TransactionBuilder::default()
+        .input(udt_input)
+        .cell_dep(cell_dep(meta_dep.previous_output()))
+        .cell_dep(cell_dep(proof.previous_output()));
+    for lock in &output_locks {
+        builder = builder
+            .output(typed_output(
+                &lock.script,
+                &fixture.xudt.script,
+                100_000_000_000,
+            ))
+            .output_data(udt_amount_bytes(1).pack());
+    }
+    let tx = fixture.complete(builder.build());
+
+    expect_tx_pass(&fixture.context, &tx);
+}
+
+#[test]
 fn xudt_blacklist_accepts_many_unlisted_output_locks_in_batches() {
     let mut fixture = XudtFixture::new();
     let output_count = 70u128;

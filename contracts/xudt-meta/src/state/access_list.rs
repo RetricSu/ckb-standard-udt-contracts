@@ -1,14 +1,12 @@
 use ckb_std::{
     ckb_constants::Source,
-    ckb_types::packed::Script,
     error::SysError,
-    high_level::{load_cell_data, load_cell_type},
+    high_level::{load_cell_data, load_cell_type_hash},
 };
 use standard_udt_types::metadata::AccessListShard;
 
-use crate::{
-    constants::ACCESS_LIST_CODE_HASH, error::Error, state::token::matches_bound_type_script,
-};
+use crate::{constants::ACCESS_LIST_CODE_HASH, error::Error};
+use standard_udt_script_utils::cells::bound_type_hash;
 
 const FULL_START: [u8; 32] = [0u8; 32];
 const FULL_END: [u8; 32] = [0xffu8; 32];
@@ -26,11 +24,12 @@ pub fn has_bound_access_list_outputs(meta_type_hash: &[u8; 32]) -> Result<bool, 
 }
 
 fn has_bound_access_list_cells(meta_type_hash: &[u8; 32], source: Source) -> Result<bool, Error> {
+    let expected_type_hash = bound_type_hash(meta_type_hash, &ACCESS_LIST_CODE_HASH);
     let mut index = 0;
 
     loop {
-        match load_cell_type(index, source) {
-            Ok(Some(script)) if is_access_list_script(&script, meta_type_hash) => return Ok(true),
+        match load_cell_type_hash(index, source) {
+            Ok(Some(type_hash)) if type_hash == expected_type_hash => return Ok(true),
             Ok(_) => index += 1,
             Err(SysError::IndexOutOfBound) => return Ok(false),
             Err(error) => return Err(error.into()),
@@ -43,11 +42,12 @@ fn has_full_domain_access_list_cells(
     source: Source,
 ) -> Result<bool, Error> {
     let mut ranges = alloc::vec::Vec::new();
+    let expected_type_hash = bound_type_hash(meta_type_hash, &ACCESS_LIST_CODE_HASH);
     let mut index = 0;
 
     loop {
-        match load_cell_type(index, source) {
-            Ok(Some(script)) if is_access_list_script(&script, meta_type_hash) => {
+        match load_cell_type_hash(index, source) {
+            Ok(Some(type_hash)) if type_hash == expected_type_hash => {
                 let data = load_cell_data(index, source)?;
                 ranges.push(parse_access_list_range(&data)?);
                 index += 1;
@@ -60,10 +60,6 @@ fn has_full_domain_access_list_cells(
 
     ranges.sort_by(|left, right| left.0.cmp(&right.0).then(left.1.cmp(&right.1)));
     Ok(covers_full_domain(&ranges))
-}
-
-fn is_access_list_script(type_script: &Script, meta_type_hash: &[u8; 32]) -> bool {
-    matches_bound_type_script(type_script, meta_type_hash, &ACCESS_LIST_CODE_HASH)
 }
 
 fn parse_access_list_range(data: &[u8]) -> Result<([u8; 32], [u8; 32]), Error> {

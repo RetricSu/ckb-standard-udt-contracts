@@ -2,11 +2,12 @@ use ckb_std::{
     ckb_constants::Source,
     ckb_types::{core::ScriptHashType, packed::Script, prelude::*},
     error::SysError,
-    high_level::{load_cell_data, load_cell_type},
+    high_level::load_cell_type_hash,
 };
 
 use crate::{
-    amount::decode_amount,
+    amount::load_cell_amount,
+    cells::bound_type_hash,
     error::ScriptError,
     supply::{classify_supply_delta, SupplyDelta},
 };
@@ -32,23 +33,36 @@ pub fn sum_token_amount(
     meta_type_hash: &[u8; 32],
     code_hash: &[u8; 32],
 ) -> Result<u128, ScriptError> {
+    let expected_type_hash = bound_type_hash(meta_type_hash, code_hash);
+    sum_amount_by_type_hash(source, &expected_type_hash)
+}
+
+pub fn transaction_token_delta(
+    meta_type_hash: &[u8; 32],
+    code_hash: &[u8; 32],
+) -> Result<SupplyDelta, ScriptError> {
+    let expected_type_hash = bound_type_hash(meta_type_hash, code_hash);
+    let input = sum_amount_by_type_hash(Source::Input, &expected_type_hash)?;
+    let output = sum_amount_by_type_hash(Source::Output, &expected_type_hash)?;
+    classify_supply_delta(input, output)
+}
+
+fn sum_amount_by_type_hash(
+    source: Source,
+    expected_type_hash: &[u8; 32],
+) -> Result<u128, ScriptError> {
     let mut total = 0u128;
     let mut index = 0;
 
     loop {
-        let type_script = match load_cell_type(index, source) {
-            Ok(Some(script)) => script,
-            Ok(None) => {
-                index += 1;
-                continue;
-            }
+        let type_hash = match load_cell_type_hash(index, source) {
+            Ok(type_hash) => type_hash,
             Err(SysError::IndexOutOfBound) => return Ok(total),
             Err(_) => return Err(ScriptError::SyscallUnknown),
         };
 
-        if matches_bound_type_script(&type_script, meta_type_hash, code_hash) {
-            let data = load_cell_data(index, source).map_err(|_| ScriptError::SyscallUnknown)?;
-            let amount = decode_amount(&data)?;
+        if type_hash.as_ref() == Some(expected_type_hash) {
+            let amount = load_cell_amount(index, source)?.ok_or(ScriptError::SyscallUnknown)?;
             total = total
                 .checked_add(amount)
                 .ok_or(ScriptError::AmountOverflow)?;
@@ -56,15 +70,6 @@ pub fn sum_token_amount(
 
         index += 1;
     }
-}
-
-pub fn transaction_token_delta(
-    meta_type_hash: &[u8; 32],
-    code_hash: &[u8; 32],
-) -> Result<SupplyDelta, ScriptError> {
-    let input = sum_token_amount(Source::Input, meta_type_hash, code_hash)?;
-    let output = sum_token_amount(Source::Output, meta_type_hash, code_hash)?;
-    classify_supply_delta(input, output)
 }
 
 #[cfg(test)]

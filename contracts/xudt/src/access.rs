@@ -2,16 +2,15 @@ use alloc::vec::Vec;
 
 use ckb_std::{
     ckb_constants::Source,
-    ckb_types::{core::ScriptHashType, prelude::*},
     error::SysError,
-    high_level::{load_cell_data, load_cell_lock_hash, load_cell_type},
+    high_level::{load_cell_data, load_cell_lock_hash, load_cell_type_hash},
     syscalls,
 };
 
 use crate::{config::ACCESS_LIST_CODE_HASH, error::Error, meta};
+use standard_udt_script_utils::cells::bound_type_hash;
 use standard_udt_types::metadata::{AccessListShard, XudtMeta};
 
-const SINGLE_BATCH_LOCK_LIMIT: usize = 64;
 const LOCK_BATCH_SIZE: usize = 64;
 const ACCESS_LIST_HEADER_SIZE: usize = 12;
 const ACCESS_LIST_RANGE_SIZE: usize = 64;
@@ -79,60 +78,11 @@ impl AccessVerifier {
     }
 
     fn validate(&mut self) -> Result<(), Error> {
-        if self.count_checked_locks()? <= SINGLE_BATCH_LOCK_LIMIT {
-            self.validate_single_batch()
-        } else {
-            self.validate_batched()
-        }
-    }
-
-    fn count_checked_locks(&self) -> Result<usize, Error> {
-        let mut count = 0;
-        for source in self.checked_sources().iter().copied() {
-            let mut index = 0;
-            loop {
-                match load_cell_lock_hash(index, source) {
-                    Ok(_) => {
-                        count += 1;
-                        index += 1;
-                    }
-                    Err(SysError::IndexOutOfBound) => break,
-                    Err(error) => return Err(error.into()),
-                }
-            }
-        }
-
-        Ok(count)
-    }
-
-    fn validate_single_batch(&mut self) -> Result<(), Error> {
-        for source in self.checked_sources().iter().copied() {
-            self.collect_all_from_source(source)?;
-        }
-
-        self.flush_batch()
-    }
-
-    fn validate_batched(&mut self) -> Result<(), Error> {
         for source in self.checked_sources().iter().copied() {
             self.collect_batched_from_source(source)?;
         }
 
         self.flush_batch()
-    }
-
-    fn collect_all_from_source(&mut self, source: Source) -> Result<(), Error> {
-        let mut index = 0;
-        loop {
-            match load_cell_lock_hash(index, source) {
-                Ok(lock_hash) => {
-                    self.locks.push(lock_hash);
-                    index += 1;
-                }
-                Err(SysError::IndexOutOfBound) => return Ok(()),
-                Err(error) => return Err(error.into()),
-            }
-        }
     }
 
     fn collect_batched_from_source(&mut self, source: Source) -> Result<(), Error> {
@@ -261,16 +211,17 @@ fn shard_covers_index(shard: &ShardIndex, lock_hash: &[u8; 32]) -> bool {
 fn build_shard_index(meta_type_hash: &[u8; 32]) -> Result<Vec<ShardIndex>, Error> {
     let mut indexes = Vec::new();
     let mut previous_end = None;
+    let expected_type_hash = bound_type_hash(meta_type_hash, &ACCESS_LIST_CODE_HASH);
     let mut index = 0;
 
     loop {
-        match load_cell_type(index, Source::CellDep) {
-            Ok(Some(type_script)) if is_access_list_script(&type_script, meta_type_hash) => {
+        match load_cell_type_hash(index, Source::CellDep) {
+            Ok(Some(type_hash)) if type_hash == expected_type_hash => {
                 let (start, end) = load_access_list_range(index)?;
-                if let Some(previous) = previous_end {
-                    if start <= previous {
-                        return Err(Error::InvalidShardData);
-                    }
+                if let Some(previous) = previous_end
+                    && start <= previous
+                {
+                    return Err(Error::InvalidShardData);
                 }
                 previous_end = Some(end);
                 indexes.push(ShardIndex {
@@ -285,16 +236,6 @@ fn build_shard_index(meta_type_hash: &[u8; 32]) -> Result<Vec<ShardIndex>, Error
             Err(error) => return Err(error.into()),
         }
     }
-}
-
-fn is_access_list_script(
-    type_script: &ckb_std::ckb_types::packed::Script,
-    meta_type_hash: &[u8; 32],
-) -> bool {
-    let code_hash: [u8; 32] = type_script.code_hash().unpack();
-    type_script.hash_type() == ScriptHashType::Data2.into()
-        && type_script.args().raw_data().as_ref() == meta_type_hash
-        && code_hash == ACCESS_LIST_CODE_HASH
 }
 
 fn parse_access_list_shard(data: &[u8]) -> Result<AccessListShard, Error> {

@@ -1,6 +1,8 @@
 use ckb_std::{ckb_constants::Source, error::SysError, high_level::load_cell_type};
-pub(crate) use standard_udt_script_utils::token::matches_bound_type_script;
-use standard_udt_script_utils::{error::ScriptError, token::sum_token_amount};
+use standard_udt_script_utils::{
+    error::ScriptError,
+    token::{matches_bound_type_script, sum_token_amount},
+};
 
 use crate::{constants::XUDT_CODE_HASH, error::Error};
 use standard_udt_types::metadata::{XudtMeta, access_enabled, is_supply_tracked};
@@ -28,10 +30,18 @@ pub fn validate_create(output_meta: &XudtMeta, meta_type_hash: &[u8; 32]) -> Res
 }
 
 pub fn has_bound_xudt_cells(meta_type_hash: &[u8; 32]) -> Result<bool, Error> {
-    for source in [Source::Input, Source::Output] {
+    has_bound_xudt_in_sources(meta_type_hash, &[Source::Input, Source::Output])
+}
+
+pub fn has_bound_xudt_outputs(meta_type_hash: &[u8; 32]) -> Result<bool, Error> {
+    has_bound_xudt_in_sources(meta_type_hash, &[Source::Output])
+}
+
+fn has_bound_xudt_in_sources(meta_type_hash: &[u8; 32], sources: &[Source]) -> Result<bool, Error> {
+    for source in sources {
         let mut index = 0;
         loop {
-            match load_cell_type(index, source) {
+            match load_cell_type(index, *source) {
                 Ok(Some(script))
                     if matches_bound_type_script(&script, meta_type_hash, &XUDT_CODE_HASH) =>
                 {
@@ -44,22 +54,6 @@ pub fn has_bound_xudt_cells(meta_type_hash: &[u8; 32]) -> Result<bool, Error> {
         }
     }
     Ok(false)
-}
-
-pub fn has_bound_xudt_outputs(meta_type_hash: &[u8; 32]) -> Result<bool, Error> {
-    let mut index = 0;
-    loop {
-        match load_cell_type(index, Source::Output) {
-            Ok(Some(script))
-                if matches_bound_type_script(&script, meta_type_hash, &XUDT_CODE_HASH) =>
-            {
-                return Ok(true);
-            }
-            Ok(_) => index += 1,
-            Err(SysError::IndexOutOfBound) => return Ok(false),
-            Err(error) => return Err(error.into()),
-        }
-    }
 }
 
 fn map_supply_error(error: ScriptError) -> Error {
