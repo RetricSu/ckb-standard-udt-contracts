@@ -12,6 +12,21 @@ fn sudt_user_destruction_without_meta_passes() {
 }
 
 #[test]
+fn sudt_user_destruction_allows_capacity_output() {
+    let mut fixture = SudtFixture::new();
+    let udt_input = fixture.live_udt_input(100);
+
+    let tx = TransactionBuilder::default()
+        .input(udt_input)
+        .output(normal_output(&fixture.lock.script, 100_000_000_000))
+        .output_data(Bytes::new().pack())
+        .build();
+    let tx = fixture.complete(tx);
+
+    expect_tx_pass(&fixture.context, &tx);
+}
+
+#[test]
 fn sudt_protocol_burn_requires_mint_authority() {
     let mut fixture = SudtFixture::new();
     let meta_input = fixture.live_meta_input(100, false);
