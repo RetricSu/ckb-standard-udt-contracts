@@ -20,6 +20,7 @@ CARGO_ARGS ?=
 # Tweak this to change the clang version to use for building C code. By default
 # we use a bash script with somes heuristics to find clang in current system.
 CLANG := $(shell $(TOP)/scripts/find_clang)
+OBJCOPY ?= $(subst clang,llvm-objcopy,$(CLANG))
 # When this is set, a single contract will be built instead of all contracts
 CONTRACT :=
 # Simulator build mode:
@@ -47,6 +48,7 @@ export TOP
 export CARGO_ARGS
 export MODE
 export CLANG
+export OBJCOPY
 export BUILD_DIR
 
 default: build test
@@ -233,7 +235,8 @@ prepare:
 
 # Generate checksum info for reproducible build
 CHECKSUM_FILE := build/checksums-$(MODE).txt
+CHECKSUM_ARTIFACTS := $(addprefix build/$(MODE)/,$(CONTRACTS))
 checksum: build
-	shasum -a 256 build/$(MODE)/* > $(CHECKSUM_FILE)
+	shasum -a 256 $(CHECKSUM_ARTIFACTS) > $(CHECKSUM_FILE)
 
 .PHONY: build test check clippy fmt cargo clean prepare checksum

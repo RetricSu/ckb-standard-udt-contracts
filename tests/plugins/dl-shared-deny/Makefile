@@ -3,8 +3,8 @@ REPO_ROOT := $(abspath $(cur_dir)/../../..)
 
 MODE := release
 BUILD_DIR :=
-CLANG := clang-17
-OBJCOPY := llvm-objcopy-17
+CLANG ?= $(shell $(REPO_ROOT)/scripts/find_clang)
+OBJCOPY ?= $(subst clang,llvm-objcopy,$(CLANG))
 RUST_SYSROOT := $(shell rustc --print sysroot)
 RUST_HOST := $(shell rustc -vV | sed -n 's/^host: //p')
 LLD := $(RUST_SYSROOT)/lib/rustlib/$(RUST_HOST)/bin/gcc-ld/ld.lld

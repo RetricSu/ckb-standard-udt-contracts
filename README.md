@@ -402,9 +402,9 @@ make clippy
 make fmt
 ```
 
-## Checksums
+## Reproducible Builds And Checksums
 
-Generate SHA-256 checksums for the selected build mode:
+Generate native SHA-256 checksums for the selected build mode:
 
 ```bash
 make checksum MODE=release
@@ -417,6 +417,29 @@ build/checksums-release.txt
 ```
 
 Use `MODE=debug` to generate debug checksums instead.
+
+For release verification in a pinned Docker environment, use:
+
+```bash
+./scripts/reproducible_build_docker --update
+./scripts/reproducible_build_docker
+```
+
+The first command rebuilds release artifacts in the pinned
+`cryptape/llvm-n-rust` image and updates the root `checksums.txt`. The second
+command rebuilds in the same environment and verifies `checksums.txt`.
+
+The Docker image is pinned by digest in `scripts/reproducible_build_docker`, so
+LLVM tools such as `clang`, `llvm-ar`, and `llvm-objcopy` come from an
+immutable image. Rust toolchain components and Cargo dependencies are still
+resolved by `rustup` and Cargo inside the container, using `rust-toolchain.toml`
+and `Cargo.lock`; this is a reproducible Docker build path, not a fully
+hermetic offline build.
+
+The reproducible build runs the same top-level checksum target. The build still
+compiles test plugin fixtures for integration-test compatibility, but
+`checksums.txt` records only release contract binaries. `CLANG` and `OBJCOPY`
+can be overridden when the local LLVM tools use different names.
 
 ## Development Notes
 
