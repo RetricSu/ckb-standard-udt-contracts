@@ -169,6 +169,60 @@ fn xudt_whitelist_accepts_covering_membership_proof() {
 }
 
 #[test]
+fn xudt_whitelist_accepts_membership_proofs_across_multiple_shards() {
+    let mut fixture = XudtFixture::new();
+    let meta_dep = fixture.live_meta_dep(CONFIG_ACCESS_ENABLED | CONFIG_ACCESS_WHITELIST, 0, false);
+    let udt_input = fixture.live_udt_input(100);
+    let input_lock_hash = fixture.lock.script_hash;
+    let input_shard_start = input_lock_hash[0] & 0xf0;
+    let mut output_lock = None;
+
+    for index in 0..32 {
+        let lock = always_success_lock(&mut fixture.context, Bytes::from(vec![index as u8 + 30]));
+        if lock.script_hash[0] & 0xf0 != input_shard_start {
+            output_lock = Some(lock);
+            break;
+        }
+    }
+
+    let output_lock = output_lock.expect("distinct shard output lock");
+    let input_proof =
+        fixture.live_access_list_input(exact_shard(input_lock_hash, vec![input_lock_hash]));
+    let output_proof = fixture.live_access_list_input(exact_shard(
+        output_lock.script_hash,
+        vec![output_lock.script_hash],
+    ));
+    let mut proof_deps = vec![
+        input_proof.previous_output(),
+        output_proof.previous_output(),
+    ];
+    proof_deps.sort_by_key(|out_point| {
+        let lock_hash = if out_point == &input_proof.previous_output() {
+            input_lock_hash
+        } else {
+            output_lock.script_hash
+        };
+        lock_hash[0] & 0xf0
+    });
+
+    let tx = TransactionBuilder::default()
+        .input(udt_input)
+        .cell_dep(cell_dep(meta_dep.previous_output()))
+        .cell_dep(cell_dep(proof_deps[0].clone()))
+        .cell_dep(cell_dep(proof_deps[1].clone()))
+        .output(typed_output(
+            &output_lock.script,
+            &fixture.xudt.script,
+            100_000_000_000,
+        ))
+        .output_data(udt_amount_bytes(100).pack())
+        .build();
+    let tx = fixture.complete(tx);
+
+    expect_tx_pass(&fixture.context, &tx);
+}
+
+#[test]
 fn xudt_blacklist_mint_rejects_blacklisted_output_lock() {
     let mut fixture = XudtFixture::new();
     let meta_dep = fixture.live_meta_dep(CONFIG_ACCESS_ENABLED, 0, true);

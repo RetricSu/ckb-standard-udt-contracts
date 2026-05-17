@@ -5,6 +5,7 @@ use ckb_std::{
     ckb_types::{core::ScriptHashType, prelude::*},
     error::SysError,
     high_level::{load_cell_data, load_cell_lock_hash, load_cell_type},
+    syscalls,
 };
 
 use crate::{config::ACCESS_LIST_CODE_HASH, error::Error, meta};
@@ -12,6 +13,9 @@ use standard_udt_types::metadata::{AccessListShard, XudtMeta};
 
 const SINGLE_BATCH_LOCK_LIMIT: usize = 64;
 const LOCK_BATCH_SIZE: usize = 64;
+const ACCESS_LIST_HEADER_SIZE: usize = 12;
+const ACCESS_LIST_RANGE_SIZE: usize = 64;
+const ACCESS_LIST_RANGE_PREFIX_SIZE: usize = ACCESS_LIST_HEADER_SIZE + ACCESS_LIST_RANGE_SIZE;
 
 #[derive(Clone, Copy)]
 pub enum CheckedLocks {
@@ -43,141 +47,211 @@ fn validate_checked_locks(
     whitelist: bool,
     checked_locks: CheckedLocks,
 ) -> Result<(), Error> {
-    let shard_index = build_shard_index(meta_type_hash)?;
-    let lock_count = count_checked_locks(checked_locks)?;
-    if lock_count <= SINGLE_BATCH_LOCK_LIMIT {
-        let mut locks = Vec::new();
-        collect_checked_locks(checked_locks, &mut locks)?;
-        return validate_lock_batch(whitelist, &mut locks, &shard_index);
-    }
-
-    let mut locks = Vec::new();
-    collect_checked_locks_batched(checked_locks, whitelist, &shard_index, &mut locks)
+    AccessVerifier::new(meta_type_hash, whitelist, checked_locks)?.validate()
 }
 
-fn count_checked_locks(checked_locks: CheckedLocks) -> Result<usize, Error> {
-    let mut count = 0;
-    for source in checked_sources(checked_locks).iter().copied() {
-        let mut index = 0;
-        loop {
-            match load_cell_lock_hash(index, source) {
-                Ok(_) => {
-                    count += 1;
-                    index += 1;
-                }
-                Err(SysError::IndexOutOfBound) => break,
-                Err(error) => return Err(error.into()),
-            }
+struct AccessVerifier {
+    whitelist: bool,
+    checked_locks: CheckedLocks,
+    shard_index: Vec<ShardIndex>,
+    locks: Vec<[u8; 32]>,
+    cached_shards: [Option<CachedShard>; 2],
+}
+
+struct CachedShard {
+    dep_index: usize,
+    shard: AccessListShard,
+}
+
+impl AccessVerifier {
+    fn new(
+        meta_type_hash: &[u8; 32],
+        whitelist: bool,
+        checked_locks: CheckedLocks,
+    ) -> Result<Self, Error> {
+        Ok(Self {
+            whitelist,
+            checked_locks,
+            shard_index: build_shard_index(meta_type_hash)?,
+            locks: Vec::new(),
+            cached_shards: [None, None],
+        })
+    }
+
+    fn validate(&mut self) -> Result<(), Error> {
+        if self.count_checked_locks()? <= SINGLE_BATCH_LOCK_LIMIT {
+            self.validate_single_batch()
+        } else {
+            self.validate_batched()
         }
     }
 
-    Ok(count)
-}
+    fn count_checked_locks(&self) -> Result<usize, Error> {
+        let mut count = 0;
+        for source in self.checked_sources().iter().copied() {
+            let mut index = 0;
+            loop {
+                match load_cell_lock_hash(index, source) {
+                    Ok(_) => {
+                        count += 1;
+                        index += 1;
+                    }
+                    Err(SysError::IndexOutOfBound) => break,
+                    Err(error) => return Err(error.into()),
+                }
+            }
+        }
 
-fn collect_checked_locks(
-    checked_locks: CheckedLocks,
-    locks: &mut Vec<[u8; 32]>,
-) -> Result<(), Error> {
-    for source in checked_sources(checked_locks).iter().copied() {
-        collect_locks_from_source(source, locks)?;
+        Ok(count)
     }
 
-    Ok(())
-}
+    fn validate_single_batch(&mut self) -> Result<(), Error> {
+        for source in self.checked_sources().iter().copied() {
+            self.collect_all_from_source(source)?;
+        }
 
-fn collect_checked_locks_batched(
-    checked_locks: CheckedLocks,
-    whitelist: bool,
-    shard_index: &[ShardIndex],
-    locks: &mut Vec<[u8; 32]>,
-) -> Result<(), Error> {
-    for source in checked_sources(checked_locks).iter().copied() {
+        self.flush_batch()
+    }
+
+    fn validate_batched(&mut self) -> Result<(), Error> {
+        for source in self.checked_sources().iter().copied() {
+            self.collect_batched_from_source(source)?;
+        }
+
+        self.flush_batch()
+    }
+
+    fn collect_all_from_source(&mut self, source: Source) -> Result<(), Error> {
         let mut index = 0;
         loop {
             match load_cell_lock_hash(index, source) {
                 Ok(lock_hash) => {
-                    locks.push(lock_hash);
-                    if locks.len() == LOCK_BATCH_SIZE {
-                        validate_lock_batch(whitelist, locks, shard_index)?;
-                        locks.clear();
-                    }
+                    self.locks.push(lock_hash);
                     index += 1;
                 }
-                Err(SysError::IndexOutOfBound) => break,
+                Err(SysError::IndexOutOfBound) => return Ok(()),
                 Err(error) => return Err(error.into()),
             }
         }
     }
 
-    validate_lock_batch(whitelist, locks, shard_index)
-}
-
-fn checked_sources(checked_locks: CheckedLocks) -> &'static [Source] {
-    match checked_locks {
-        CheckedLocks::Outputs => &[Source::GroupOutput],
-        CheckedLocks::InputsAndOutputs => &[Source::GroupInput, Source::GroupOutput],
-    }
-}
-
-fn collect_locks_from_source(source: Source, locks: &mut Vec<[u8; 32]>) -> Result<(), Error> {
-    let mut index = 0;
-    loop {
-        match load_cell_lock_hash(index, source) {
-            Ok(lock_hash) => {
-                locks.push(lock_hash);
-                index += 1;
+    fn collect_batched_from_source(&mut self, source: Source) -> Result<(), Error> {
+        let mut index = 0;
+        loop {
+            match load_cell_lock_hash(index, source) {
+                Ok(lock_hash) => {
+                    self.locks.push(lock_hash);
+                    if self.locks.len() == LOCK_BATCH_SIZE {
+                        self.flush_batch()?;
+                    }
+                    index += 1;
+                }
+                Err(SysError::IndexOutOfBound) => return Ok(()),
+                Err(error) => return Err(error.into()),
             }
-            Err(SysError::IndexOutOfBound) => return Ok(()),
-            Err(error) => return Err(error.into()),
         }
     }
-}
 
-fn validate_lock_batch(
-    whitelist: bool,
-    locks: &mut Vec<[u8; 32]>,
-    shard_index: &[ShardIndex],
-) -> Result<(), Error> {
-    if locks.is_empty() {
-        return Ok(());
+    fn flush_batch(&mut self) -> Result<(), Error> {
+        self.validate_lock_batch()?;
+        self.locks.clear();
+        Ok(())
     }
 
-    locks.sort();
-    locks.dedup();
+    fn checked_sources(&self) -> &'static [Source] {
+        match self.checked_locks {
+            CheckedLocks::Outputs => &[Source::GroupOutput],
+            CheckedLocks::InputsAndOutputs => &[Source::GroupInput, Source::GroupOutput],
+        }
+    }
 
-    let mut lock_index = 0;
-    let mut shard_cursor = 0;
-
-    while lock_index < locks.len() {
-        let lock_hash = locks[lock_index];
-        while shard_cursor < shard_index.len() && shard_index[shard_cursor].end < lock_hash {
-            shard_cursor += 1;
+    fn validate_lock_batch(&mut self) -> Result<(), Error> {
+        if self.locks.is_empty() {
+            return Ok(());
         }
 
-        if shard_cursor >= shard_index.len() || lock_hash < shard_index[shard_cursor].start {
-            return if whitelist {
-                Err(Error::AccessDenied)
-            } else {
-                Err(Error::InvalidShardData)
-            };
+        self.locks.sort();
+        self.locks.dedup();
+
+        let mut lock_index = 0;
+        let mut shard_cursor = 0;
+
+        while lock_index < self.locks.len() {
+            let lock_hash = self.locks[lock_index];
+            while shard_cursor < self.shard_index.len()
+                && self.shard_index[shard_cursor].end < lock_hash
+            {
+                shard_cursor += 1;
+            }
+
+            if shard_cursor >= self.shard_index.len()
+                || lock_hash < self.shard_index[shard_cursor].start
+            {
+                return if self.whitelist {
+                    Err(Error::AccessDenied)
+                } else {
+                    Err(Error::InvalidShardData)
+                };
+            }
+
+            let current = self.shard_index[shard_cursor];
+            while lock_index < self.locks.len()
+                && shard_covers_index(&current, &self.locks[lock_index])
+            {
+                let lock_hash = self.locks[lock_index];
+                let member = self.shard_contains(current.dep_index, &lock_hash)?;
+                if self.whitelist && !member {
+                    return Err(Error::AccessDenied);
+                }
+                if !self.whitelist && member {
+                    return Err(Error::AccessDenied);
+                }
+                lock_index += 1;
+            }
         }
 
-        let current = shard_index[shard_cursor];
-        let data = load_cell_data(current.dep_index, Source::CellDep).map_err(Error::from)?;
+        Ok(())
+    }
+
+    fn shard_contains(&mut self, dep_index: usize, lock_hash: &[u8; 32]) -> Result<bool, Error> {
+        if self.cached_shards[0]
+            .as_ref()
+            .is_some_and(|cached| cached.dep_index == dep_index)
+        {
+            return Ok(self.cached_shards[0]
+                .as_ref()
+                .unwrap()
+                .shard
+                .entries
+                .binary_search(lock_hash)
+                .is_ok());
+        }
+        if self.cached_shards[1]
+            .as_ref()
+            .is_some_and(|cached| cached.dep_index == dep_index)
+        {
+            self.cached_shards.swap(0, 1);
+            return Ok(self.cached_shards[0]
+                .as_ref()
+                .unwrap()
+                .shard
+                .entries
+                .binary_search(lock_hash)
+                .is_ok());
+        }
+
+        let data = load_cell_data(dep_index, Source::CellDep).map_err(Error::from)?;
         let shard = parse_access_list_shard(&data)?;
-        while lock_index < locks.len() && shard_covers_index(&current, &locks[lock_index]) {
-            let member = shard.entries.binary_search(&locks[lock_index]).is_ok();
-            if whitelist && !member {
-                return Err(Error::AccessDenied);
-            }
-            if !whitelist && member {
-                return Err(Error::AccessDenied);
-            }
-            lock_index += 1;
-        }
+        self.cached_shards[1] = self.cached_shards[0].take();
+        self.cached_shards[0] = Some(CachedShard { dep_index, shard });
+        Ok(self.cached_shards[0]
+            .as_ref()
+            .unwrap()
+            .shard
+            .entries
+            .binary_search(lock_hash)
+            .is_ok())
     }
-
-    Ok(())
 }
 
 fn shard_covers_index(shard: &ShardIndex, lock_hash: &[u8; 32]) -> bool {
@@ -192,8 +266,7 @@ fn build_shard_index(meta_type_hash: &[u8; 32]) -> Result<Vec<ShardIndex>, Error
     loop {
         match load_cell_type(index, Source::CellDep) {
             Ok(Some(type_script)) if is_access_list_script(&type_script, meta_type_hash) => {
-                let data = load_cell_data(index, Source::CellDep).map_err(Error::from)?;
-                let (start, end) = parse_access_list_range(&data)?;
+                let (start, end) = load_access_list_range(index)?;
                 if let Some(previous) = previous_end {
                     if start <= previous {
                         return Err(Error::InvalidShardData);
@@ -228,32 +301,46 @@ fn parse_access_list_shard(data: &[u8]) -> Result<AccessListShard, Error> {
     AccessListShard::from_slice(data).map_err(|_| Error::InvalidShardData)
 }
 
-fn parse_access_list_range(data: &[u8]) -> Result<([u8; 32], [u8; 32]), Error> {
-    if data.len() < 76 {
-        return Err(Error::InvalidShardData);
-    }
+fn load_access_list_range(index: usize) -> Result<([u8; 32], [u8; 32]), Error> {
+    let mut prefix = [0u8; ACCESS_LIST_RANGE_PREFIX_SIZE];
+    let data_len = load_access_list_range_prefix(index, &mut prefix)?;
 
-    let total_size = read_u32(data, 0)? as usize;
-    let range_offset = read_u32(data, 4)? as usize;
-    let entries_offset = read_u32(data, 8)? as usize;
-    if total_size != data.len()
-        || range_offset < 12
+    let total_size = read_u32(&prefix, 0)? as usize;
+    let range_offset = read_u32(&prefix, 4)? as usize;
+    let entries_offset = read_u32(&prefix, 8)? as usize;
+    if total_size != data_len
+        || range_offset < ACCESS_LIST_HEADER_SIZE
         || entries_offset < range_offset
-        || entries_offset - range_offset != 64
-        || entries_offset > data.len()
+        || entries_offset - range_offset != ACCESS_LIST_RANGE_SIZE
+        || entries_offset > data_len
+        || entries_offset > prefix.len()
     {
         return Err(Error::InvalidShardData);
     }
 
+    let range = &prefix[range_offset..entries_offset];
+
     let mut start = [0u8; 32];
-    start.copy_from_slice(&data[range_offset..range_offset + 32]);
+    start.copy_from_slice(&range[..32]);
     let mut end = [0u8; 32];
-    end.copy_from_slice(&data[range_offset + 32..range_offset + 64]);
+    end.copy_from_slice(&range[32..]);
     if start > end {
         return Err(Error::InvalidShardData);
     }
 
     Ok((start, end))
+}
+
+fn load_access_list_range_prefix(index: usize, buf: &mut [u8]) -> Result<usize, Error> {
+    match syscalls::load_cell_data(buf, 0, index, Source::CellDep) {
+        Ok(len) if len == buf.len() => Ok(len),
+        Ok(_) => Err(Error::InvalidShardData),
+        Err(SysError::LengthNotEnough(remaining_len)) if remaining_len >= buf.len() => {
+            Ok(remaining_len)
+        }
+        Err(SysError::LengthNotEnough(_)) => Err(Error::InvalidShardData),
+        Err(error) => Err(error.into()),
+    }
 }
 
 fn read_u32(data: &[u8], offset: usize) -> Result<u32, Error> {
