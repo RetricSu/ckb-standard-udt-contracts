@@ -46,6 +46,22 @@ pub fn has_bound_xudt_cells(meta_type_hash: &[u8; 32]) -> Result<bool, Error> {
     Ok(false)
 }
 
+pub fn has_bound_xudt_outputs(meta_type_hash: &[u8; 32]) -> Result<bool, Error> {
+    let mut index = 0;
+    loop {
+        match load_cell_type(index, Source::Output) {
+            Ok(Some(script))
+                if matches_bound_type_script(&script, meta_type_hash, &XUDT_CODE_HASH) =>
+            {
+                return Ok(true);
+            }
+            Ok(_) => index += 1,
+            Err(SysError::IndexOutOfBound) => return Ok(false),
+            Err(error) => return Err(error.into()),
+        }
+    }
+}
+
 fn map_supply_error(error: ScriptError) -> Error {
     match error {
         ScriptError::AmountEncoding | ScriptError::AmountOverflow => Error::InvalidSupply,

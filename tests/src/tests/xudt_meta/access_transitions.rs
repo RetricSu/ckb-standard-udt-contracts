@@ -345,6 +345,22 @@ fn xudt_meta_destroy_accepts_tracked_zero_supply_when_access_disabled() {
 }
 
 #[test]
+fn xudt_meta_destroy_rejects_same_token_xudt_outputs() {
+    let case =
+        destroy_meta_tx_with_extra_cells(CONFIG_SUPPLY_TRACKED, 0, false, |context, lock, meta| {
+            let xudt = xudt_script(context, meta.script_hash);
+            vec![ExtraCell::Output {
+                lock: lock.script.clone(),
+                type_script: xudt.script.clone(),
+                data: udt_amount_bytes(1),
+                cell_dep: xudt,
+            }]
+        });
+
+    expect_tx_fail_with_code(&case.context, &case.tx, "error code 31");
+}
+
+#[test]
 fn xudt_meta_destroy_rejects_metadata_authority_without_mint_authority() {
     let case = destroy_meta_tx_with_authorities(CONFIG_SUPPLY_TRACKED, 0, false, |lock_hash| {
         (None, Some(input_lock_authority(lock_hash)), None)

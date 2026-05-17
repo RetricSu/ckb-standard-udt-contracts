@@ -109,51 +109,7 @@ fn xudt_user_destruction_skips_access_and_extensions() {
 }
 
 #[test]
-fn xudt_protocol_burn_with_meta_dep_requires_mint_authority() {
-    let mut fixture = XudtFixture::new_with_always_success_meta();
-    let meta_input = fixture.live_meta_input(CONFIG_SUPPLY_TRACKED, 100, false);
-    let udt_input = fixture.live_udt_input(100);
-
-    let tx = TransactionBuilder::default()
-        .input(meta_input.clone())
-        .input(udt_input)
-        .cell_dep(cell_dep(meta_input.previous_output()))
-        .output(typed_output(
-            &fixture.lock.script,
-            &fixture.meta.script,
-            100_000_000_000,
-        ))
-        .output_data(xudt_meta_data(CONFIG_SUPPLY_TRACKED, 100, None, Vec::new()).pack())
-        .build();
-    let tx = fixture.complete(tx);
-
-    expect_tx_fail_with_code(&fixture.context, &tx, "error code 50");
-}
-
-#[test]
-fn xudt_negative_delta_with_input_meta_requires_protocol_burn_authority() {
-    let mut fixture = XudtFixture::new_with_always_success_meta();
-    let meta_input = fixture.live_meta_input(CONFIG_SUPPLY_TRACKED, 100, false);
-    let udt_input = fixture.live_udt_input(100);
-
-    let tx = TransactionBuilder::default()
-        .input(meta_input.clone())
-        .input(udt_input)
-        .cell_dep(cell_dep(meta_input.previous_output()))
-        .output(typed_output(
-            &fixture.lock.script,
-            &fixture.meta.script,
-            100_000_000_000,
-        ))
-        .output_data(xudt_meta_data(CONFIG_SUPPLY_TRACKED, 100, None, Vec::new()).pack())
-        .build();
-    let tx = fixture.complete(tx);
-
-    expect_tx_fail_with_code(&fixture.context, &tx, "error code 50");
-}
-
-#[test]
-fn xudt_protocol_burn_access_mode_switch_still_requires_mint_authority() {
+fn xudt_untracked_negative_delta_access_mode_switch_still_checks_access() {
     let mut fixture = XudtFixture::new_with_always_success_meta();
     let meta_input = fixture.live_meta_input_with_authority(CONFIG_ACCESS_ENABLED, 0, None);
     let udt_input = fixture.live_udt_input(100);
@@ -180,7 +136,7 @@ fn xudt_protocol_burn_access_mode_switch_still_requires_mint_authority() {
         .build();
     let tx = fixture.complete(tx);
 
-    expect_tx_fail_with_code(&fixture.context, &tx, "error code 50");
+    expect_tx_fail_with_code(&fixture.context, &tx, "error code 60");
 }
 
 #[test]
@@ -220,4 +176,43 @@ fn xudt_protocol_burn_access_mode_switch_does_not_skip_access_checks() {
     let tx = fixture.complete(tx);
 
     expect_tx_fail_with_code(&fixture.context, &tx, "error code 61");
+}
+
+#[test]
+fn xudt_untracked_burn_with_meta_input_does_not_require_mint_authority() {
+    let mut fixture = XudtFixture::new();
+    let metadata_authority = input_lock_authority(fixture.lock.script_hash);
+    let meta_data =
+        xudt_meta_data_with_authorities(0, 0, None, Some(metadata_authority), None, Vec::new());
+    let meta_out_point = create_typed_cell(
+        &mut fixture.context,
+        &fixture.lock.script,
+        &fixture.meta.script,
+        100_000_000_000,
+        meta_data.clone(),
+    );
+    let meta_input = CellInput::new_builder()
+        .previous_output(meta_out_point)
+        .build();
+    let udt_input = fixture.live_udt_input(100);
+
+    let tx = TransactionBuilder::default()
+        .input(meta_input)
+        .input(udt_input)
+        .output(typed_output(
+            &fixture.lock.script,
+            &fixture.meta.script,
+            100_000_000_000,
+        ))
+        .output(typed_output(
+            &fixture.lock.script,
+            &fixture.xudt.script,
+            100_000_000_000,
+        ))
+        .output_data(meta_data.pack())
+        .output_data(udt_amount_bytes(40).pack())
+        .build();
+    let tx = fixture.complete(tx);
+
+    expect_tx_pass(&fixture.context, &tx);
 }

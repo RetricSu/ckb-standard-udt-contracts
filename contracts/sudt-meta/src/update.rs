@@ -1,4 +1,8 @@
-use crate::{constants::SUDT_CODE_HASH, error::Error, state::is_supply_tracked};
+use crate::{
+    constants::SUDT_CODE_HASH,
+    error::Error,
+    state::{has_bound_sudt_outputs, is_supply_tracked},
+};
 use standard_udt_script_utils::{
     authority::AuthorityVerifier, error::ScriptError, supply::apply_supply_delta,
     token::transaction_token_delta,
@@ -47,8 +51,12 @@ pub fn validate_update(
     Ok(())
 }
 
-pub fn validate_destroy(input: &SudtMeta) -> Result<(), Error> {
+pub fn validate_destroy(input: &SudtMeta, meta_type_hash: &[u8; 32]) -> Result<(), Error> {
     if !is_supply_tracked(input.config_flags) || input.current_supply != 0 {
+        return Err(Error::InvalidSupply);
+    }
+
+    if has_bound_sudt_outputs(meta_type_hash)? {
         return Err(Error::InvalidSupply);
     }
 

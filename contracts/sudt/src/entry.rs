@@ -12,14 +12,8 @@ pub fn main() -> Result<(), Error> {
     }
 
     if output_amount > input_amount {
-        let delta = output_amount
-            .checked_sub(input_amount)
-            .ok_or(Error::AmountOverflow)?;
-        return meta::validate_mint(&meta_type_hash, delta);
+        return meta::validate_mint(&meta_type_hash);
     }
 
-    let delta = input_amount
-        .checked_sub(output_amount)
-        .ok_or(Error::AmountOverflow)?;
-    meta::validate_burn_or_destruction(&meta_type_hash, delta)
+    meta::validate_burn_or_destruction(&meta_type_hash)
 }

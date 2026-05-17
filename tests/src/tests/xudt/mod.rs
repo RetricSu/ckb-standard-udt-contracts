@@ -10,7 +10,8 @@ use crate::{
     test_helpers::{
         access_list_script, always_success_lock, calculate_type_id, custom_shard,
         deploy_data2_script, deploy_data_script, exact_shard, full_domain_shard,
-        non_whitelisted_lock, xudt_meta_data, xudt_meta_script as meta_script, xudt_script,
+        non_whitelisted_lock, xudt_meta_data, xudt_meta_data_with_authorities,
+        xudt_meta_script as meta_script, xudt_script,
     },
     Loader,
 };

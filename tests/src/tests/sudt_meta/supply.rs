@@ -59,6 +59,25 @@ fn sudt_meta_destroy_accepts_tracked_zero_supply() {
 }
 
 #[test]
+fn sudt_meta_destroy_rejects_same_token_udt_outputs() {
+    let (context, tx) = destroy_meta_tx_with_udt_output(
+        |lock_hash| {
+            sudt_meta_data(
+                CONFIG_SUPPLY_TRACKED,
+                0,
+                Some(input_lock_authority(lock_hash)),
+                None,
+                Vec::new(),
+                Vec::new(),
+            )
+        },
+        1,
+    );
+
+    expect_tx_fail_with_code(&context, &tx, "error code 31");
+}
+
+#[test]
 fn sudt_meta_destroy_rejects_metadata_authority_without_mint_authority() {
     let (context, tx) = destroy_meta_tx_with_data(|lock_hash| {
         sudt_meta_data(

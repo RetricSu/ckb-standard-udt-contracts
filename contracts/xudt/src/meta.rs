@@ -18,6 +18,11 @@ use standard_udt_types::metadata::{Extension, ExtensionType};
 
 use crate::error::Error;
 
+pub struct CurrentMeta {
+    pub meta: XudtMeta,
+    pub source: Source,
+}
+
 pub fn is_supply_tracked(meta: &XudtMeta) -> bool {
     types_is_supply_tracked(meta.config_flags)
 }
@@ -50,17 +55,19 @@ pub fn collect_group_amount(source: Source) -> Result<u128, Error> {
     amount::collect_group_amount(source).map_err(map_amount_error)
 }
 
-pub fn find_unique_visible_meta(meta_type_hash: &[u8; 32]) -> Result<Option<XudtMeta>, Error> {
-    let mut found = None;
-    for source in [Source::CellDep, Source::Input] {
-        if let Some(meta) = find_meta_in_source(meta_type_hash, source)? {
-            if found.is_some() {
-                return Err(Error::MetaNotUnique);
-            }
-            found = Some(meta);
-        }
+pub fn find_current_meta(meta_type_hash: &[u8; 32]) -> Result<Option<CurrentMeta>, Error> {
+    if let Some(meta) = find_meta_in_source(meta_type_hash, Source::CellDep)? {
+        return Ok(Some(CurrentMeta {
+            meta,
+            source: Source::CellDep,
+        }));
     }
-    Ok(found)
+    Ok(
+        find_meta_in_source(meta_type_hash, Source::Input)?.map(|meta| CurrentMeta {
+            meta,
+            source: Source::Input,
+        }),
+    )
 }
 
 pub fn find_meta_in_source(

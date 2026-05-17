@@ -31,27 +31,25 @@ pub fn main() -> Result<(), Error> {
     let output_amount = meta::collect_group_amount(Source::GroupOutput)?;
 
     if input_amount == output_amount {
-        let current_meta =
-            meta::find_unique_visible_meta(&meta_type_hash)?.ok_or(Error::MetaMissing)?;
-        validate_transfer(&meta_type_hash, &current_meta)
+        let current_meta = meta::find_current_meta(&meta_type_hash)?.ok_or(Error::MetaMissing)?;
+        validate_transfer(&meta_type_hash, &current_meta.meta)
     } else if output_amount > input_amount {
-        let delta = output_amount
-            .checked_sub(input_amount)
-            .ok_or(Error::AmountOverflow)?;
-        match meta::find_unique_visible_meta(&meta_type_hash)? {
-            Some(current_meta) => validate_mint(&meta_type_hash, &current_meta, delta),
+        match meta::find_current_meta(&meta_type_hash)? {
+            Some(current_meta) => validate_mint(&meta_type_hash, &current_meta),
             None => require_initial_mint_output_meta(&meta_type_hash),
         }
     } else {
-        let delta = input_amount
-            .checked_sub(output_amount)
-            .ok_or(Error::AmountOverflow)?;
         match meta::find_meta_in_source(&meta_type_hash, Source::Input)? {
-            Some(input_meta) => validate_protocol_burn(&meta_type_hash, &input_meta, delta),
+            Some(input_meta) if meta::is_supply_tracked(&input_meta) => {
+                validate_protocol_burn(&meta_type_hash, &input_meta)
+            }
+            Some(input_meta) if input_meta.current_supply != 0 => Err(Error::MetaStateMismatch),
+            Some(input_meta) if output_amount == 0 => Ok(()),
+            Some(input_meta) => validate_transfer(&meta_type_hash, &input_meta),
             None if output_amount == 0 => Ok(()),
             None => {
-                let current_meta =
-                    meta::find_unique_visible_meta(&meta_type_hash)?.ok_or(Error::MetaMissing)?;
+                let current_meta = meta::find_meta_in_source(&meta_type_hash, Source::CellDep)?
+                    .ok_or(Error::MetaMissing)?;
                 validate_transfer(&meta_type_hash, &current_meta)
             }
         }
@@ -66,22 +64,23 @@ fn validate_transfer(meta_type_hash: &[u8; 32], current_meta: &XudtMeta) -> Resu
     extensions::run_extensions(Operation::Transfer, &current_meta.extensions, None)
 }
 
-fn validate_mint(
-    meta_type_hash: &[u8; 32],
-    current_meta: &XudtMeta,
-    delta: u128,
-) -> Result<(), Error> {
-    if meta::is_paused(current_meta) {
+fn validate_mint(meta_type_hash: &[u8; 32], current_meta: &meta::CurrentMeta) -> Result<(), Error> {
+    let current_meta_data = &current_meta.meta;
+    if meta::is_paused(current_meta_data) {
         return Err(Error::MetaStateMismatch);
     }
-    meta::require_authority(current_meta.mint_authority.as_ref())?;
-    if meta::is_supply_tracked(current_meta) {
-        validate_supply_delta(meta_type_hash, delta, true)?;
-    } else if current_meta.current_supply != 0 {
-        return Err(Error::MetaStateMismatch);
+    if meta::is_supply_tracked(current_meta_data) {
+        if current_meta.source != Source::Input {
+            return Err(Error::MetaInputMissing);
+        }
+    } else {
+        meta::require_authority(current_meta_data.mint_authority.as_ref())?;
+        if current_meta_data.current_supply != 0 {
+            return Err(Error::MetaStateMismatch);
+        }
     }
-    access::validate_if_enabled(meta_type_hash, current_meta, CheckedLocks::Outputs)?;
-    extensions::run_extensions(Operation::Mint, &current_meta.extensions, Some(true))
+    access::validate_if_enabled(meta_type_hash, current_meta_data, CheckedLocks::Outputs)?;
+    extensions::run_extensions(Operation::Mint, &current_meta_data.extensions, Some(true))
 }
 
 fn require_initial_mint_output_meta(meta_type_hash: &[u8; 32]) -> Result<(), Error> {
@@ -89,50 +88,7 @@ fn require_initial_mint_output_meta(meta_type_hash: &[u8; 32]) -> Result<(), Err
     Ok(())
 }
 
-fn validate_protocol_burn(
-    meta_type_hash: &[u8; 32],
-    input_meta: &XudtMeta,
-    delta: u128,
-) -> Result<(), Error> {
-    meta::require_authority(input_meta.mint_authority.as_ref())?;
-    if meta::is_supply_tracked(input_meta) {
-        validate_supply_delta(meta_type_hash, delta, false)?;
-    } else if input_meta.current_supply != 0 {
-        return Err(Error::MetaStateMismatch);
-    }
+fn validate_protocol_burn(meta_type_hash: &[u8; 32], input_meta: &XudtMeta) -> Result<(), Error> {
     access::validate_if_enabled(meta_type_hash, input_meta, CheckedLocks::InputsAndOutputs)?;
     extensions::run_extensions(Operation::ProtocolBurn, &input_meta.extensions, None)
-}
-
-fn validate_supply_delta(meta_type_hash: &[u8; 32], delta: u128, mint: bool) -> Result<(), Error> {
-    let input_meta =
-        meta::find_meta_in_source(meta_type_hash, Source::Input)?.ok_or(Error::MetaInputMissing)?;
-    let output_meta = meta::find_meta_in_source(meta_type_hash, Source::Output)?
-        .ok_or(Error::MetaOutputMissing)?;
-
-    if meta::is_supply_tracked(&input_meta) {
-        let expected = if mint {
-            input_meta
-                .current_supply
-                .checked_add(delta)
-                .ok_or(Error::SupplyOverflow)?
-        } else {
-            input_meta
-                .current_supply
-                .checked_sub(delta)
-                .ok_or(Error::SupplyUnderflow)?
-        };
-        if output_meta.current_supply != expected || supply_mode_changed(&input_meta, &output_meta)
-        {
-            return Err(Error::MetaStateMismatch);
-        }
-    } else if input_meta.current_supply != 0 || output_meta.current_supply != 0 {
-        return Err(Error::MetaStateMismatch);
-    }
-
-    Ok(())
-}
-
-fn supply_mode_changed(input_meta: &XudtMeta, output_meta: &XudtMeta) -> bool {
-    meta::is_supply_tracked(input_meta) != meta::is_supply_tracked(output_meta)
 }

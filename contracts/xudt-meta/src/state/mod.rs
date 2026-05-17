@@ -10,4 +10,4 @@ pub use access_list::{
 #[allow(unused_imports)]
 pub use cells::{MetaGroup, load_meta_group, validate_create_type_id, validate_type_args};
 pub use standard_udt_types::metadata::{access_enabled, is_supply_tracked, paused, whitelist_mode};
-pub use token::{has_bound_xudt_cells, validate_create};
+pub use token::{has_bound_xudt_cells, has_bound_xudt_outputs, validate_create};

@@ -2,10 +2,13 @@ use ckb_std::{
     ckb_constants::Source,
     ckb_types::{core::ScriptHashType, prelude::*},
     error::SysError,
-    high_level::{load_cell_data, load_cell_lock, load_script, load_script_hash},
+    high_level::{load_cell_data, load_cell_lock, load_cell_type, load_script, load_script_hash},
     type_id::check_type_id,
 };
-use standard_udt_script_utils::{error::ScriptError, token::sum_token_amount};
+use standard_udt_script_utils::{
+    error::ScriptError,
+    token::{matches_bound_type_script, sum_token_amount},
+};
 use standard_udt_types::metadata::{SudtMeta, is_supply_tracked as types_is_supply_tracked};
 
 use crate::{constants::SUDT_CODE_HASH, error::Error};
@@ -75,6 +78,22 @@ pub fn validate_create(output_meta: &SudtMeta, meta_type_hash: &[u8; 32]) -> Res
     }
 
     Ok(())
+}
+
+pub fn has_bound_sudt_outputs(meta_type_hash: &[u8; 32]) -> Result<bool, Error> {
+    let mut index = 0;
+    loop {
+        match load_cell_type(index, Source::Output) {
+            Ok(Some(script))
+                if matches_bound_type_script(&script, meta_type_hash, &SUDT_CODE_HASH) =>
+            {
+                return Ok(true);
+            }
+            Ok(_) => index += 1,
+            Err(SysError::IndexOutOfBound) => return Ok(false),
+            Err(error) => return Err(error.into()),
+        }
+    }
 }
 
 fn load_group_meta(source: Source) -> Result<Option<SudtMeta>, Error> {

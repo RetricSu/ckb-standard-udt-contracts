@@ -244,6 +244,42 @@ where
     (context, tx)
 }
 
+pub(super) fn destroy_meta_tx_with_udt_output<F>(
+    build_data: F,
+    output_amount: u128,
+) -> (Context, TransactionView)
+where
+    F: FnOnce([u8; 32]) -> Bytes,
+{
+    let mut context = Context::default();
+    let lock = always_success_lock(&mut context);
+    let input_meta_data = build_data(lock.script_hash);
+    let meta = meta_script(&mut context, Bytes::from(vec![2u8; 32]));
+    let udt = udt_script(&mut context, meta.script_hash);
+    let input_out_point = create_typed_cell(
+        &mut context,
+        &lock.script,
+        &meta.script,
+        100_000_000_000,
+        input_meta_data,
+    );
+
+    let tx = TransactionBuilder::default()
+        .input(
+            CellInput::new_builder()
+                .previous_output(input_out_point)
+                .build(),
+        )
+        .output(typed_output(&lock.script, &udt.script, 100_000_000_000))
+        .output_data(udt_amount_bytes(output_amount).pack())
+        .cell_dep(cell_dep_for_script(&lock))
+        .cell_dep(cell_dep_for_script(&meta))
+        .cell_dep(cell_dep_for_script(&udt))
+        .build();
+    let tx = context.complete_tx(tx);
+    (context, tx)
+}
+
 pub(super) fn update_meta_tx_with_udt_delta(
     input_supply: u128,
     output_supply: u128,

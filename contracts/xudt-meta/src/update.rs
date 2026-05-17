@@ -3,8 +3,8 @@ use crate::{
     error::Error,
     state::{
         access_enabled, has_bound_access_list_outputs, has_bound_xudt_cells,
-        has_full_domain_access_list_inputs, has_full_domain_access_list_outputs, is_supply_tracked,
-        paused, whitelist_mode,
+        has_bound_xudt_outputs, has_full_domain_access_list_inputs,
+        has_full_domain_access_list_outputs, is_supply_tracked, paused, whitelist_mode,
     },
 };
 use standard_udt_script_utils::{
@@ -89,6 +89,10 @@ pub fn validate_update(
 
 pub fn validate_destroy(input: &XudtMeta, meta_type_hash: &[u8; 32]) -> Result<(), Error> {
     if !is_supply_tracked(input.config_flags) || input.current_supply != 0 {
+        return Err(Error::InvalidSupply);
+    }
+
+    if has_bound_xudt_outputs(meta_type_hash)? {
         return Err(Error::InvalidSupply);
     }
 
