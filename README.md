@@ -68,16 +68,17 @@ It does not validate transfers or token ownership. Those are handled by `sudt`.
 It validates:
 
 - ordinary transfers;
-- authorized mint;
-- authorized protocol burn;
+- mint classification and untracked-supply mint authority;
+- protocol-burn classification;
 - user destruction;
 - tracked supply coordination with current metadata context.
 
 Supply is changed by token cell deltas, but the tracked `current_supply` value
 is stored in the metadata cell. When tracked supply changes, `sudt` and
-`sudt-meta` cooperate: the token type script validates token movement and mint
-authority, while the metadata type script validates that the metadata supply
-matches the transaction token delta.
+`sudt-meta` cooperate: the token type script validates token movement and
+requires the tracked metadata input context, while the metadata type script
+validates that the metadata supply matches the transaction token delta and that
+`mint_authority` authorizes the supply change.
 
 An sUDT metadata cell can be destroyed to reclaim CKB only when supply tracking
 is enabled, `current_supply` is zero, and `mint_authority` authorizes the
@@ -118,8 +119,8 @@ It does not validate individual transfer access proofs. Those are handled by
 It validates:
 
 - ordinary transfers;
-- authorized mint;
-- authorized protocol burn;
+- mint classification and untracked-supply mint authority;
+- protocol-burn classification;
 - user destruction;
 - paused mode;
 - whitelist and blacklist checks;
@@ -227,8 +228,10 @@ Supply tracking is optional and fixed at token creation time.
 
 For tracked supply:
 
-- mint increases supply and requires `mint_authority`;
-- protocol burn decreases supply and requires `mint_authority`;
+- mint increases supply and requires `mint_authority` through the matching
+  metadata update;
+- protocol burn decreases supply and requires `mint_authority` through the
+  matching metadata update;
 - user destruction does not reduce `current_supply`;
 - metadata destruction requires tracked supply, zero `current_supply`, and
   `mint_authority`;

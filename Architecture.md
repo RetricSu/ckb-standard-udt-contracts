@@ -62,7 +62,8 @@ Token type scripts own:
 - mint detection;
 - protocol burn detection;
 - user destruction detection;
-- authority requirements for mint and protocol burn;
+- untracked-supply mint authority checks;
+- tracked-supply metadata participation checks for mint and protocol burn;
 - access checks for xUDT;
 - extension execution for xUDT.
 
@@ -201,8 +202,8 @@ remains available without holder access.
 | Responsibility | Owner | Consumers |
 | --- | --- | --- |
 | Token amount conservation | `sudt`, `xudt` | metadata scripts observe deltas |
-| Mint authority for token creation | `sudt`, `xudt` | metadata scripts validate matching supply |
-| Protocol burn authority | `sudt`, `xudt` | metadata scripts validate matching supply |
+| Mint authority for untracked token creation | `sudt`, `xudt` | metadata scripts validate matching supply when tracked |
+| Mint/protocol-burn authority for tracked supply changes | `sudt-meta`, `xudt-meta` | token scripts require metadata participation |
 | User destruction classification | `sudt`, `xudt` | metadata scripts are not involved unless metadata is updated |
 | Metadata creation type-id | `sudt-meta`, `xudt-meta` | token scripts may consume output metadata facts |
 | Metadata uniqueness in group | `sudt-meta`, `xudt-meta` | token scripts look for current metadata context |
@@ -237,8 +238,11 @@ The metadata type script sees metadata cells and validates `current_supply`.
 For tracked supply updates, both sides must agree:
 
 1. The token type script validates that the token delta is allowed.
-2. The metadata type script calculates the same transaction token delta.
-3. The metadata output `current_supply` must equal input supply plus that delta.
+2. For tracked mint or protocol burn, the token type script requires the
+   metadata input context so the metadata script participates.
+3. The metadata type script calculates the same transaction token delta.
+4. The metadata output `current_supply` must equal input supply plus that delta,
+   and `mint_authority` must authorize the supply change.
 
 This prevents a metadata-only transaction from changing tracked supply without
 matching token cell movement. It also prevents token mint or protocol burn from
@@ -274,8 +278,10 @@ transaction
 Validation split:
 
 - `sudt` or `xudt` detects the positive token delta;
-- the token script requires `mint_authority`;
-- if supply is tracked, the metadata output must increase by the same delta;
+- for untracked supply, the token script requires `mint_authority`;
+- for tracked supply, the token script requires metadata input participation;
+- if supply is tracked, the metadata output must increase by the same delta and
+  the metadata script requires `mint_authority`;
 - the metadata script independently verifies the delta and authority-sensitive
   metadata changes.
 
@@ -304,8 +310,9 @@ transaction
 Validation split:
 
 - the token script detects the negative token delta;
-- the token script requires `mint_authority`;
-- the metadata script verifies `current_supply` decreases by the same amount.
+- the token script requires metadata input participation;
+- the metadata script verifies `current_supply` decreases by the same amount
+  and requires `mint_authority`.
 
 If the negative token delta is user destruction rather than protocol burn, no
 metadata input cell is consumed and metadata supply is not reduced.
