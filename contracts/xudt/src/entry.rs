@@ -1,6 +1,10 @@
 use ckb_std::ckb_constants::Source;
 
-use crate::{access, error::Error, extensions, meta};
+use crate::{
+    access::{self, CheckedLocks},
+    error::Error,
+    extensions, meta,
+};
 use standard_udt_types::metadata::XudtMeta;
 
 #[derive(Clone, Copy)]
@@ -43,7 +47,7 @@ pub fn main() -> Result<(), Error> {
             .checked_sub(output_amount)
             .ok_or(Error::AmountOverflow)?;
         let Some(input_meta) = meta::find_meta_in_source(&meta_type_hash, Source::Input)? else {
-            return Ok(());
+            return validate_user_destruction(&meta_type_hash, output_amount);
         };
         validate_protocol_burn(&meta_type_hash, &input_meta, delta)
     }
@@ -53,7 +57,7 @@ fn validate_transfer(meta_type_hash: &[u8; 32], current_meta: &XudtMeta) -> Resu
     if meta::is_paused(current_meta) {
         return Err(Error::MetaStateMismatch);
     }
-    access::validate_if_enabled(meta_type_hash, current_meta)?;
+    access::validate_if_enabled(meta_type_hash, current_meta, CheckedLocks::InputsAndOutputs)?;
     extensions::run_extensions(Operation::Transfer, &current_meta.extensions, None)
 }
 
@@ -71,6 +75,7 @@ fn validate_mint(
     } else if current_meta.current_supply != 0 {
         return Err(Error::MetaStateMismatch);
     }
+    access::validate_if_enabled(meta_type_hash, current_meta, CheckedLocks::Outputs)?;
     extensions::run_extensions(Operation::Mint, &current_meta.extensions, Some(true))
 }
 
@@ -90,8 +95,26 @@ fn validate_protocol_burn(
     } else if input_meta.current_supply != 0 {
         return Err(Error::MetaStateMismatch);
     }
-    access::validate_if_enabled(meta_type_hash, input_meta)?;
+    access::validate_if_enabled(meta_type_hash, input_meta, CheckedLocks::InputsAndOutputs)?;
     extensions::run_extensions(Operation::ProtocolBurn, &input_meta.extensions, None)
+}
+
+fn validate_user_destruction(meta_type_hash: &[u8; 32], output_amount: u128) -> Result<(), Error> {
+    if output_amount == 0 {
+        access::reject_same_meta_access_list_state_cells(meta_type_hash)?;
+        return Ok(());
+    }
+
+    let current_meta = meta::find_unique_visible_meta(meta_type_hash)?.ok_or(Error::MetaMissing)?;
+    if meta::is_paused(&current_meta) {
+        return Err(Error::MetaStateMismatch);
+    }
+    access::validate_if_enabled(
+        meta_type_hash,
+        &current_meta,
+        CheckedLocks::InputsAndOutputs,
+    )?;
+    extensions::run_extensions(Operation::Transfer, &current_meta.extensions, None)
 }
 
 fn validate_supply_delta(meta_type_hash: &[u8; 32], delta: u128, mint: bool) -> Result<(), Error> {

@@ -257,10 +257,15 @@ Supported states:
 - whitelist: access enabled, whitelist bit set.
 
 Whitelist and blacklist use the same AccessList shard structure. They differ
-only in how `xudt` interprets membership:
+only in how `xudt` interprets holder membership:
 
-- whitelist: input locks must be included in the AccessList;
-- blacklist: input locks must not be included in the AccessList.
+- whitelist: checked holder locks must be included in the AccessList;
+- blacklist: checked holder locks must not be included in the AccessList.
+
+xUDT access control is holder-based. Transfers and protocol burns check both
+input and output xUDT holder locks; mint checks output holder locks. Pure user
+destruction with no xUDT outputs remains available even if the input lock is not
+currently allowed, so users can reclaim CKB from their own token cells.
 
 Creating an active access mode, destroying an active mode, and switching between
 whitelist and blacklist require full-domain AccessList coverage where relevant.
@@ -269,6 +274,12 @@ Ordinary AccessList updates can touch only the shard nodes being updated; the
 cover the same continuous range and prevents overlap or ordering violations.
 Destroying xUDT metadata while access mode is enabled additionally requires
 full-domain AccessList inputs and forbids bound AccessList outputs.
+
+xUDT token movement reads AccessList proofs from CellDeps only and rejects
+same-meta AccessList inputs or outputs. Matching CellDep proof shards must be
+ordered by range and non-overlapping. The xUDT script indexes proof shards by
+`start`, `end`, and `dep_index`, then loads full shard entries only for shards
+that cover checked holder locks.
 
 ## Authorities
 

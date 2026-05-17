@@ -188,8 +188,13 @@ whitelist  access_enabled = true, whitelist = true
 Whitelist and blacklist use the same AccessList data structure. Only the
 interpretation differs:
 
-- whitelist requires membership proof;
-- blacklist requires non-membership proof.
+- whitelist requires membership proof for each checked holder lock;
+- blacklist requires non-membership proof for each checked holder lock.
+
+xUDT access control is holder-based. For token movement, xUDT checks the
+relevant xUDT input and output holder locks: transfers and protocol burns check
+both sides, mint checks outputs, and pure user destruction with no xUDT outputs
+remains available without holder access.
 
 ## Script Responsibility Matrix
 
@@ -319,7 +324,8 @@ For xUDT:
 - `xudt` checks amount conservation;
 - `xudt` loads current metadata context;
 - if paused, transfer is rejected;
-- if access mode is enabled, `xudt` requires the appropriate AccessList proof;
+- if access mode is enabled, `xudt` requires ordered CellDep AccessList proofs
+  for input and output holder locks;
 - configured extensions are executed for the transfer operation.
 
 ## Access Mode Transitions
@@ -347,6 +353,13 @@ Rules:
 - ordinary AccessList updates do not require full-domain consumption.
 - destroying active xUDT metadata requires full-domain AccessList inputs and no
   bound AccessList outputs.
+
+xUDT token movement uses AccessList proof shards from CellDeps only. It rejects
+same-meta AccessList inputs or outputs, so AccessList state updates and xUDT
+token movement are not mixed in one transaction. Matching CellDep proof shards
+must be ordered by range and non-overlapping; xUDT builds a lightweight
+`{start, end, dep_index}` index and loads full shard entries only for shards
+covering checked holder locks.
 
 The full-domain checks in `xudt-meta` confirm that the transaction presents a
 global AccessList replacement or removal when the access-mode semantics change.

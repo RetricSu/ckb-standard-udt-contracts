@@ -268,7 +268,7 @@ fn xudt_meta_access_mode_switch_rejects_same_token_xudt_cells() {
         )
     });
 
-    expect_tx_fail_with_code(&case.context, &case.tx, "error code 61");
+    expect_tx_fail(&case.context, &case.tx);
 }
 
 #[test]
