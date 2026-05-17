@@ -46,10 +46,15 @@ pub fn main() -> Result<(), Error> {
         let delta = input_amount
             .checked_sub(output_amount)
             .ok_or(Error::AmountOverflow)?;
-        let Some(input_meta) = meta::find_meta_in_source(&meta_type_hash, Source::Input)? else {
-            return validate_user_destruction(&meta_type_hash, output_amount);
-        };
-        validate_protocol_burn(&meta_type_hash, &input_meta, delta)
+        match meta::find_meta_in_source(&meta_type_hash, Source::Input)? {
+            Some(input_meta) => validate_protocol_burn(&meta_type_hash, &input_meta, delta),
+            None if output_amount == 0 => Ok(()),
+            None => {
+                let current_meta =
+                    meta::find_unique_visible_meta(&meta_type_hash)?.ok_or(Error::MetaMissing)?;
+                validate_transfer(&meta_type_hash, &current_meta)
+            }
+        }
     }
 }
 
@@ -97,23 +102,6 @@ fn validate_protocol_burn(
     }
     access::validate_if_enabled(meta_type_hash, input_meta, CheckedLocks::InputsAndOutputs)?;
     extensions::run_extensions(Operation::ProtocolBurn, &input_meta.extensions, None)
-}
-
-fn validate_user_destruction(meta_type_hash: &[u8; 32], output_amount: u128) -> Result<(), Error> {
-    if output_amount == 0 {
-        return Ok(());
-    }
-
-    let current_meta = meta::find_unique_visible_meta(meta_type_hash)?.ok_or(Error::MetaMissing)?;
-    if meta::is_paused(&current_meta) {
-        return Err(Error::MetaStateMismatch);
-    }
-    access::validate_if_enabled(
-        meta_type_hash,
-        &current_meta,
-        CheckedLocks::InputsAndOutputs,
-    )?;
-    extensions::run_extensions(Operation::Transfer, &current_meta.extensions, None)
 }
 
 fn validate_supply_delta(meta_type_hash: &[u8; 32], delta: u128, mint: bool) -> Result<(), Error> {
