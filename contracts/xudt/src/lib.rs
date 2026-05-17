@@ -16,6 +16,8 @@ pub mod error;
 pub mod extensions;
 #[cfg(feature = "library")]
 pub mod meta;
+#[cfg(feature = "library")]
+pub mod validation;
 
 #[cfg(feature = "library")]
 pub fn program_entry() -> i8 {

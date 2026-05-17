@@ -34,15 +34,3 @@ fn require_initial_mint_output_meta(meta_type_hash: &[u8; 32]) -> Result<(), Err
 
     Ok(())
 }
-
-pub fn validate_burn_or_destruction(meta_type_hash: &[u8; 32]) -> Result<(), Error> {
-    let Some(input_meta) = find_meta_in_source(meta_type_hash, Source::Input)? else {
-        return Ok(());
-    };
-
-    if !is_supply_tracked(input_meta.config_flags) && input_meta.current_supply != 0 {
-        return Err(Error::MetaStateMismatch);
-    }
-
-    Ok(())
-}

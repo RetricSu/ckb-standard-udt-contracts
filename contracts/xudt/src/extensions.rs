@@ -15,7 +15,7 @@ use ckb_std::{
 
 #[cfg(target_arch = "riscv64")]
 use crate::meta;
-use crate::{entry::Operation, error::Error};
+use crate::{error::Error, validation::Operation};
 use standard_udt_types::metadata::Extension;
 #[cfg(target_arch = "riscv64")]
 use standard_udt_types::metadata::ExtensionType;

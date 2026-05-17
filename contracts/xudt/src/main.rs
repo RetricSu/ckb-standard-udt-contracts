@@ -21,6 +21,7 @@ mod entry;
 mod error;
 mod extensions;
 mod meta;
+mod validation;
 
 pub fn program_entry() -> i8 {
     match entry::main() {

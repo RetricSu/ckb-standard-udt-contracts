@@ -7,13 +7,9 @@ pub fn main() -> Result<(), Error> {
     let input_amount = meta::collect_group_amount(Source::GroupInput)?;
     let output_amount = meta::collect_group_amount(Source::GroupOutput)?;
 
-    if input_amount == output_amount {
-        return Ok(());
-    }
-
     if output_amount > input_amount {
         return meta::validate_mint(&meta_type_hash);
     }
 
-    meta::validate_burn_or_destruction(&meta_type_hash)
+    Ok(())
 }
