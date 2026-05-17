@@ -275,11 +275,12 @@ cover the same continuous range and prevents overlap or ordering violations.
 Destroying xUDT metadata while access mode is enabled additionally requires
 full-domain AccessList inputs and forbids bound AccessList outputs.
 
-xUDT token movement reads AccessList proofs from CellDeps only and rejects
-same-meta AccessList inputs or outputs. Matching CellDep proof shards must be
-ordered by range and non-overlapping. The xUDT script indexes proof shards by
-`start`, `end`, and `dep_index`, then loads full shard entries only for shards
-that cover checked holder locks.
+xUDT token movement reads AccessList proofs from CellDeps only. Same-meta
+AccessList inputs or outputs are not proof sources; they may appear in the same
+transaction when their own AccessList state transition is valid. Matching
+CellDep proof shards must be ordered by range and non-overlapping. The xUDT
+script indexes proof shards by `start`, `end`, and `dep_index`, then loads full
+shard entries only for shards that cover checked holder locks.
 
 ## Authorities
 

@@ -354,12 +354,12 @@ Rules:
 - destroying active xUDT metadata requires full-domain AccessList inputs and no
   bound AccessList outputs.
 
-xUDT token movement uses AccessList proof shards from CellDeps only. It rejects
-same-meta AccessList inputs or outputs, so AccessList state updates and xUDT
-token movement are not mixed in one transaction. Matching CellDep proof shards
-must be ordered by range and non-overlapping; xUDT builds a lightweight
-`{start, end, dep_index}` index and loads full shard entries only for shards
-covering checked holder locks.
+xUDT token movement uses AccessList proof shards from CellDeps only. Same-meta
+AccessList inputs or outputs are not proof sources; they may appear in the same
+transaction when their own AccessList state transition is valid. Matching
+CellDep proof shards must be ordered by range and non-overlapping; xUDT builds
+a lightweight `{start, end, dep_index}` index and loads full shard entries only
+for shards covering checked holder locks.
 
 The full-domain checks in `xudt-meta` confirm that the transaction presents a
 global AccessList replacement or removal when the access-mode semantics change.

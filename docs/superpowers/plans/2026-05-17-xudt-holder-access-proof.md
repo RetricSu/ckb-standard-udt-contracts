@@ -4,7 +4,7 @@
 
 **Goal:** Make xUDT access control holder-based, CellDep-only, ordered, and memory-bounded.
 
-**Architecture:** xUDT will choose checked lock sources per operation, reject same-meta AccessList state updates in token movement transactions, build a lightweight ordered CellDep shard index, and validate lock hashes in bounded batches. AccessList entries remain owned by the AccessList type script; xUDT parses full shard data only for shards used as proof for checked locks.
+**Architecture:** xUDT will choose checked lock sources per operation, read AccessList proofs from ordered CellDeps only, build a lightweight ordered CellDep shard index, and validate lock hashes in bounded batches. AccessList entries remain owned by the AccessList type script; xUDT parses full shard data only for shards used as proof for checked locks.
 
 **Tech Stack:** Rust no-std CKB contracts, `ckb-std`, `standard_udt_types::metadata::AccessListShard`, `ckb-testtool` integration tests, `make build MODE=debug`, `MODE=debug make test`.
 
@@ -12,10 +12,10 @@
 
 ## File Map
 
-- Modify `contracts/xudt/src/access.rs`: replace full-shard collection with operation-aware source checking, CellDep-only proof indexing, ordered proof validation, lock batching, and same-meta AccessList input/output rejection helpers.
-- Modify `contracts/xudt/src/entry.rs`: call access validation with operation-specific checked sources, treat partial user destruction with remaining outputs as holder movement, and ensure pure user destruction rejects mixed AccessList state updates.
+- Modify `contracts/xudt/src/access.rs`: replace full-shard collection with operation-aware source checking, CellDep-only proof indexing, ordered proof validation, and lock batching.
+- Modify `contracts/xudt/src/entry.rs`: call access validation with operation-specific checked sources and treat partial user destruction with remaining outputs as holder movement.
 - Reuse existing `InvalidShardData` / `AccessDenied` errors; no new xUDT error is needed.
-- Modify `tests/src/tests/xudt/access.rs`: add access behavior tests for output holders, mint, ordered CellDep proofs, Input proof rejection, and mixed AccessList state update rejection.
+- Modify `tests/src/tests/xudt/access.rs`: add access behavior tests for output holders, mint, ordered CellDep proofs, Input proof rejection, and same-transaction AccessList state updates with explicit CellDep proofs.
 - Modify `tests/src/tests/xudt/mod.rs`: add fixtures for custom output locks, AccessList output cells, and ordered/unordered CellDep proof shards if missing.
 - Modify `Architecture.md` and `README.md`: document holder-based access semantics and CellDep-only ordered proofs after implementation.
 
@@ -128,19 +128,19 @@ Add `xudt_rejects_overlapping_access_list_cell_dep_proofs`.
 
 Provide two matching AccessList CellDeps where the second starts before or at the previous end. Expected: fail as invalid proof.
 
-- [x] **Step 4: Add mixed AccessList state update rejection tests**
+- [x] **Step 4: Add same-transaction AccessList state update tests**
 
 Add:
 
 ```rust
 #[test]
-fn xudt_transfer_rejects_same_meta_access_list_input() { /* AccessList input bound to meta */ }
+fn xudt_transfer_allows_same_meta_access_list_update_with_cell_dep_proof() { /* AccessList update plus explicit CellDep proof */ }
 
 #[test]
-fn xudt_transfer_rejects_same_meta_access_list_output() { /* AccessList output bound to meta */ }
+fn xudt_pure_user_destruction_allows_same_meta_access_list_update() { /* pure destruction plus valid AccessList update */ }
 ```
 
-Both tests should include otherwise sufficient CellDep proof and fail only because same-meta AccessList input/output is mixed into xUDT token movement.
+The transfer test should include otherwise sufficient CellDep proof and pass because AccessList input/output cells are not proof sources. The pure destruction test should pass because pure user destruction does not depend on holder access.
 
 - [x] **Step 5: Run tests and verify red**
 
@@ -150,7 +150,7 @@ Run:
 MODE=debug cargo test -p tests xudt_ -- --nocapture
 ```
 
-Expected: new tests fail under current implementation because `Source::Input` proofs are accepted, CellDep proofs are sorted in memory instead of requiring order, and mixed AccessList state updates are not rejected.
+Expected: new tests fail under current implementation because `Source::Input` proofs are accepted, CellDep proofs are sorted in memory instead of requiring order, and same-transaction AccessList state updates are still rejected by xUDT.
 
 ## Task 3: Refactor xUDT Access API By Operation
 
@@ -175,7 +175,6 @@ pub fn validate_if_enabled(
     meta_data: &XudtMeta,
     checked_locks: CheckedLocks,
 ) -> Result<(), Error> {
-    reject_same_meta_access_list_state_cells(meta_type_hash)?;
     if !meta::is_access_enabled(meta_data) || matches!(checked_locks, CheckedLocks::None) {
         return Ok(());
     }
@@ -191,8 +190,8 @@ In `contracts/xudt/src/entry.rs`:
 - mint calls `CheckedLocks::Outputs` after mint authority and supply validation;
 - protocol burn calls `CheckedLocks::InputsAndOutputs`;
 - negative delta without metadata input:
-  - if `output_amount == 0`, pure user destruction calls `access::reject_same_meta_access_list_state_cells(&meta_type_hash)?` and returns `Ok(())`;
-  - if `output_amount > 0`, partial user destruction plus transfer calls `access::validate_if_enabled(&meta_type_hash, &visible_meta, CheckedLocks::InputsAndOutputs)` using current visible metadata from input or cell dep, then runs the same mixed AccessList state-cell rejection.
+  - if `output_amount == 0`, pure user destruction returns `Ok(())`;
+  - if `output_amount > 0`, partial user destruction plus transfer calls `access::validate_if_enabled(&meta_type_hash, &visible_meta, CheckedLocks::InputsAndOutputs)` using current visible metadata from input or cell dep.
 
 - [x] **Step 3: Add partial user destruction access tests**
 
@@ -445,7 +444,7 @@ Document that xUDT access mode is holder-based and validates relevant input and 
 
 - [x] **Step 2: Update proof source text**
 
-Document that xUDT movement uses CellDep-only AccessList proofs, and AccessList state updates cannot be mixed with same-meta xUDT movement.
+Document that xUDT movement uses CellDep-only AccessList proofs. Same-meta AccessList inputs or outputs are not proof sources, but may appear when their own state transition is valid.
 
 - [x] **Step 3: Update performance text**
 
@@ -513,6 +512,6 @@ Expected: commit succeeds.
 
 ## Self-Review
 
-- Spec coverage: holder-based access, CellDep-only proofs, ordered proof shards, same-meta AccessList input/output rejection, range-only indexing, lock batching, and docs are all mapped to tasks.
+- Spec coverage: holder-based access, CellDep-only proofs, ordered proof shards, same-transaction AccessList update behavior, range-only indexing, lock batching, and docs are all mapped to tasks.
 - Placeholder scan: no intentional placeholders remain; tests are named explicitly and commands include expected outcomes.
 - Type consistency: `CheckedLocks`, `ShardIndex`, and batch helpers are introduced before use in later tasks.

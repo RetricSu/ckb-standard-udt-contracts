@@ -101,7 +101,6 @@ fn validate_protocol_burn(
 
 fn validate_user_destruction(meta_type_hash: &[u8; 32], output_amount: u128) -> Result<(), Error> {
     if output_amount == 0 {
-        access::reject_same_meta_access_list_state_cells(meta_type_hash)?;
         return Ok(());
     }
 

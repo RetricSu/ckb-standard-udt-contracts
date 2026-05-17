@@ -31,30 +31,11 @@ pub fn validate_if_enabled(
     meta_data: &XudtMeta,
     checked_locks: CheckedLocks,
 ) -> Result<(), Error> {
-    reject_same_meta_access_list_state_cells(meta_type_hash)?;
     if !meta::is_access_enabled(meta_data) {
         return Ok(());
     }
 
     validate_checked_locks(meta_type_hash, meta::is_whitelist(meta_data), checked_locks)
-}
-
-pub fn reject_same_meta_access_list_state_cells(meta_type_hash: &[u8; 32]) -> Result<(), Error> {
-    for source in [Source::Input, Source::Output] {
-        let mut index = 0;
-        loop {
-            match load_cell_type(index, source) {
-                Ok(Some(type_script)) if is_access_list_script(&type_script, meta_type_hash) => {
-                    return Err(Error::InvalidShardData);
-                }
-                Ok(_) => index += 1,
-                Err(SysError::IndexOutOfBound) => break,
-                Err(error) => return Err(error.into()),
-            }
-        }
-    }
-
-    Ok(())
 }
 
 fn validate_checked_locks(

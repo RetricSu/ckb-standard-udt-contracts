@@ -39,9 +39,7 @@ Operation-specific checked lock sources:
   - if `GroupOutput` total amount is zero, this is pure user destruction and
     holder access is not checked;
   - if any xUDT amount remains in `GroupOutput`, this is partial user
-    destruction plus transfer and must check `GroupInput` and `GroupOutput`;
-  - both cases must reject same-meta AccessList state updates mixed into xUDT
-    token movement.
+    destruction plus transfer and must check `GroupInput` and `GroupOutput`.
 
 ## Proof Source Rule
 
@@ -49,15 +47,10 @@ xUDT token movement must read AccessList proofs from `Source::CellDep` only.
 `Source::Input` AccessList cells are state-transition participants, not
 read-only transfer proofs.
 
-Transactions that move xUDT cells must not include same-meta AccessList cells in
-`Source::Input` or `Source::Output`. This explicitly disallows mixing AccessList
-state updates with xUDT token movement in one transaction.
-
-The same-meta check matches AccessList type scripts by:
-
-- `hash_type = Data2`;
-- args equal to the xUDT metadata type hash;
-- code hash equal to `ACCESS_LIST_CODE_HASH`.
+Same-meta AccessList cells in `Source::Input` or `Source::Output` do not act as
+xUDT proofs. They may appear in the same transaction when their own AccessList
+state transition is valid. xUDT validates holder access only against explicit
+matching CellDep proof shards.
 
 ## Ordered CellDep Proofs
 
@@ -132,9 +125,7 @@ error categories:
 
 - access denied for whitelist miss or blacklist hit;
 - invalid shard/proof data for malformed proof, unordered proof, overlapping
-  proof, or missing blacklist coverage;
-- access/proof error for same-meta AccessList input/output mixed into xUDT
-  token movement.
+  proof, or missing blacklist coverage.
 
 New error variants are allowed only if existing variants make tests ambiguous.
 
@@ -158,8 +149,8 @@ Add integration coverage for:
 - whitelist mint rejects non-whitelisted output lock;
 - blacklist mint rejects blacklisted output lock;
 - protocol burn checks remaining outputs as holders;
-- xUDT movement rejects same-meta AccessList inputs;
-- xUDT movement rejects same-meta AccessList outputs;
+- same-meta AccessList inputs/outputs are not treated as proof unless also
+  provided as matching CellDeps;
 - xUDT uses CellDep AccessList proof and ignores Input AccessList proof;
 - CellDep proof shards must be ordered and non-overlapping;
 - many-lock transfers can pass through the batch path.

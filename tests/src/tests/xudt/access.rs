@@ -344,7 +344,7 @@ fn xudt_rejects_overlapping_access_list_cell_dep_proofs() {
 }
 
 #[test]
-fn xudt_transfer_rejects_same_meta_access_list_input() {
+fn xudt_transfer_allows_same_meta_access_list_update_with_cell_dep_proof() {
     let mut fixture = XudtFixture::new();
     let meta_dep = fixture.live_meta_dep(CONFIG_ACCESS_ENABLED, 0, true);
     let udt_input = fixture.live_udt_input(100);
@@ -371,36 +371,31 @@ fn xudt_transfer_rejects_same_meta_access_list_input() {
         .build();
     let tx = fixture.complete(tx);
 
-    expect_tx_fail(&fixture.context, &tx);
+    expect_tx_pass(&fixture.context, &tx);
 }
 
 #[test]
-fn xudt_transfer_rejects_same_meta_access_list_output() {
+fn xudt_pure_user_destruction_allows_same_meta_access_list_update() {
     let mut fixture = XudtFixture::new();
-    let meta_dep = fixture.live_meta_dep(CONFIG_ACCESS_ENABLED, 0, false);
+    let meta_dep = fixture.live_meta_dep(CONFIG_ACCESS_ENABLED | CONFIG_ACCESS_WHITELIST, 0, true);
     let udt_input = fixture.live_udt_input(100);
-    let proof = fixture.live_access_list_input(full_domain_shard(Vec::new()));
+    let access_input =
+        fixture.live_access_list_input(full_domain_shard(vec![fixture.lock.script_hash]));
 
     let tx = TransactionBuilder::default()
         .input(udt_input)
+        .input(access_input)
         .cell_dep(cell_dep(meta_dep.previous_output()))
-        .cell_dep(cell_dep(proof.previous_output()))
-        .output(typed_output(
-            &fixture.lock.script,
-            &fixture.xudt.script,
-            100_000_000_000,
-        ))
         .output(typed_output(
             &fixture.lock.script,
             &fixture.access_list.script,
             100_000_000_000,
         ))
-        .output_data(udt_amount_bytes(100).pack())
-        .output_data(full_domain_shard(Vec::new()).pack())
+        .output_data(full_domain_shard(vec![fixture.lock.script_hash]).pack())
         .build();
     let tx = fixture.complete(tx);
 
-    expect_tx_fail(&fixture.context, &tx);
+    expect_tx_pass(&fixture.context, &tx);
 }
 
 #[test]
