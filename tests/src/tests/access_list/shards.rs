@@ -18,6 +18,23 @@ fn access_list_whitelist_allows_same_range_insert_delete() {
 }
 
 #[test]
+fn access_list_whitelist_allows_same_range_delete() {
+    let case = access_list_transition_tx(
+        CONFIG_ACCESS_ENABLED | CONFIG_ACCESS_WHITELIST,
+        CONFIG_ACCESS_ENABLED | CONFIG_ACCESS_WHITELIST,
+        true,
+        vec![custom_shard(
+            [0u8; 32],
+            prefix_end(0x0f),
+            vec![entry(0x10), entry(0x20)],
+        )],
+        vec![custom_shard([0u8; 32], prefix_end(0x0f), vec![entry(0x10)])],
+    );
+
+    expect_tx_pass(&case.context, &case.tx);
+}
+
+#[test]
 fn access_list_whitelist_allows_split() {
     let case = access_list_transition_tx(
         CONFIG_ACCESS_ENABLED | CONFIG_ACCESS_WHITELIST,
@@ -36,6 +53,30 @@ fn access_list_whitelist_allows_split() {
                 vec![prefix_entry(0x20)],
             ),
         ],
+    );
+
+    expect_tx_pass(&case.context, &case.tx);
+}
+
+#[test]
+fn access_list_whitelist_allows_merge() {
+    let case = access_list_transition_tx(
+        CONFIG_ACCESS_ENABLED | CONFIG_ACCESS_WHITELIST,
+        CONFIG_ACCESS_ENABLED | CONFIG_ACCESS_WHITELIST,
+        true,
+        vec![
+            custom_shard([0u8; 32], prefix_end(0x0f), vec![prefix_entry(0x08)]),
+            custom_shard(
+                prefix_start(0x10),
+                prefix_end(0x2f),
+                vec![prefix_entry(0x20)],
+            ),
+        ],
+        vec![custom_shard(
+            [0u8; 32],
+            prefix_end(0x2f),
+            vec![prefix_entry(0x08), prefix_entry(0x20)],
+        )],
     );
 
     expect_tx_pass(&case.context, &case.tx);
@@ -66,6 +107,37 @@ fn access_list_whitelist_allows_split_that_changes_entries() {
 }
 
 #[test]
+fn access_list_whitelist_allows_boundary_rewrite_with_entry_changes() {
+    let case = access_list_transition_tx(
+        CONFIG_ACCESS_ENABLED | CONFIG_ACCESS_WHITELIST,
+        CONFIG_ACCESS_ENABLED | CONFIG_ACCESS_WHITELIST,
+        true,
+        vec![
+            custom_shard([0u8; 32], prefix_end(0x0f), vec![prefix_entry(0x08)]),
+            custom_shard(
+                prefix_start(0x10),
+                prefix_end(0x2f),
+                vec![prefix_entry(0x20)],
+            ),
+        ],
+        vec![
+            custom_shard(
+                [0u8; 32],
+                prefix_end(0x1f),
+                vec![prefix_entry(0x08), prefix_entry(0x18)],
+            ),
+            custom_shard(
+                prefix_start(0x20),
+                prefix_end(0x2f),
+                vec![prefix_entry(0x20)],
+            ),
+        ],
+    );
+
+    expect_tx_pass(&case.context, &case.tx);
+}
+
+#[test]
 fn access_list_blacklist_allows_local_same_range_insert_delete() {
     let case = access_list_transition_tx(
         CONFIG_ACCESS_ENABLED,
@@ -77,6 +149,23 @@ fn access_list_blacklist_allows_local_same_range_insert_delete() {
             prefix_end(0x0f),
             vec![entry(0x10), entry(0x20)],
         )],
+    );
+
+    expect_tx_pass(&case.context, &case.tx);
+}
+
+#[test]
+fn access_list_blacklist_allows_local_same_range_delete() {
+    let case = access_list_transition_tx(
+        CONFIG_ACCESS_ENABLED,
+        CONFIG_ACCESS_ENABLED,
+        true,
+        vec![custom_shard(
+            [0u8; 32],
+            prefix_end(0x0f),
+            vec![entry(0x10), entry(0x20)],
+        )],
+        vec![custom_shard([0u8; 32], prefix_end(0x0f), vec![entry(0x10)])],
     );
 
     expect_tx_pass(&case.context, &case.tx);
@@ -101,6 +190,30 @@ fn access_list_blacklist_allows_local_split() {
                 vec![prefix_entry(0x20)],
             ),
         ],
+    );
+
+    expect_tx_pass(&case.context, &case.tx);
+}
+
+#[test]
+fn access_list_blacklist_allows_local_merge() {
+    let case = access_list_transition_tx(
+        CONFIG_ACCESS_ENABLED,
+        CONFIG_ACCESS_ENABLED,
+        true,
+        vec![
+            custom_shard([0u8; 32], prefix_end(0x0f), vec![prefix_entry(0x08)]),
+            custom_shard(
+                prefix_start(0x10),
+                prefix_end(0x2f),
+                vec![prefix_entry(0x20)],
+            ),
+        ],
+        vec![custom_shard(
+            [0u8; 32],
+            prefix_end(0x2f),
+            vec![prefix_entry(0x08), prefix_entry(0x20)],
+        )],
     );
 
     expect_tx_pass(&case.context, &case.tx);
@@ -158,6 +271,18 @@ fn access_list_blacklist_allows_same_range_insert_delete() {
 }
 
 #[test]
+fn access_list_blacklist_allows_same_range_delete() {
+    let case = access_list_update_tx(
+        CONFIG_ACCESS_ENABLED,
+        true,
+        vec![full_domain_shard(vec![entry(0x10), entry(0x20)])],
+        vec![full_domain_shard(vec![entry(0x10)])],
+    );
+
+    expect_tx_pass(&case.context, &case.tx);
+}
+
+#[test]
 fn access_list_blacklist_allows_split() {
     let case = access_list_update_tx(
         CONFIG_ACCESS_ENABLED,
@@ -170,6 +295,24 @@ fn access_list_blacklist_allows_split() {
             custom_shard([0u8; 32], prefix_end(0x0f), vec![prefix_entry(0x08)]),
             custom_shard(prefix_start(0x10), [0xffu8; 32], vec![prefix_entry(0x20)]),
         ],
+    );
+
+    expect_tx_pass(&case.context, &case.tx);
+}
+
+#[test]
+fn access_list_blacklist_allows_merge() {
+    let case = access_list_update_tx(
+        CONFIG_ACCESS_ENABLED,
+        true,
+        vec![
+            custom_shard([0u8; 32], prefix_end(0x0f), vec![prefix_entry(0x08)]),
+            custom_shard(prefix_start(0x10), [0xffu8; 32], vec![prefix_entry(0x20)]),
+        ],
+        vec![full_domain_shard(vec![
+            prefix_entry(0x08),
+            prefix_entry(0x20),
+        ])],
     );
 
     expect_tx_pass(&case.context, &case.tx);
