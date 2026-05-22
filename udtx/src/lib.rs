@@ -81,23 +81,46 @@ pub enum Commands {
 
 #[derive(Subcommand, Debug)]
 pub enum ChainCommands {
-    /// Show chain info
-    Info,
+    /// Start the devnet
+    Up {
+        /// Run in background (default: true)
+        #[arg(long, default_value = "true")]
+        background: bool,
+    },
+    /// Stop the devnet
+    Down,
+    /// Reset devnet data
+    Reset {
+        /// Skip confirmation prompt
+        #[arg(long)]
+        yes: bool,
+    },
     /// Show chain status
     Status,
 }
 
 #[derive(Subcommand, Debug)]
 pub enum TokenCommands {
-    /// Issue a new token
-    Issue,
+    Issue {
+        #[arg(short = 't', long, value_enum, default_value = "sudt")]
+        token_type: config::TokenKind,
+        #[arg(short, long)]
+        name: Option<String>,
+        #[arg(short, long)]
+        symbol: Option<String>,
+        #[arg(short, long)]
+        decimals: Option<u8>,
+        #[arg(short = 'S', long)]
+        supply: Option<String>,
+        #[arg(short, long)]
+        owner: Option<String>,
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// Transfer tokens
     Transfer,
-    /// Mint new supply
     Mint,
-    /// Burn supply
     Burn,
-    /// Show token info
     Info,
 }
 

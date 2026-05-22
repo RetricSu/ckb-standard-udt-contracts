@@ -75,7 +75,7 @@ pub struct TokenConfig {
     pub authorities: AuthoritiesConfig,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, clap::ValueEnum)]
 #[serde(rename_all = "lowercase")]
 pub enum TokenKind {
     Sudt,

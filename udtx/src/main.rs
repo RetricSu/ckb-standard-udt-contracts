@@ -44,12 +44,44 @@ async fn run() -> Result<(), TokenCliError> {
             }
         }
         Commands::Chain { command } => {
-            logger::debug!(?command, "Chain command");
-            println!("chain: {:?}", command);
+            match command {
+                udtx::ChainCommands::Up { background } => {
+                    udtx::commands::chain::chain_up(background).await?;
+                }
+                udtx::ChainCommands::Down => {
+                    udtx::commands::chain::chain_down().await?;
+                }
+                udtx::ChainCommands::Reset { yes } => {
+                    udtx::commands::chain::chain_reset(yes).await?;
+                }
+                udtx::ChainCommands::Status => {
+                    udtx::commands::chain::chain_status().await?;
+                }
+            }
         }
         Commands::Token { command } => {
-            logger::debug!(?command, "Token command");
-            println!("token: {:?}", command);
+            match command {
+                udtx::TokenCommands::Issue { token_type, name, symbol, decimals, supply, owner, dry_run } => {
+                    let (config, profile) = udtx::config::load_config_with_profile("udtx.yaml")?;
+                    let mut key_manager = udtx::keys::KeyManager::new();
+                    udtx::commands::token::create::create_token(
+                        token_type, name, symbol, decimals, supply, owner, dry_run,
+                        &config, &profile, &mut key_manager
+                    ).await?;
+                }
+                udtx::TokenCommands::Transfer => {
+                    println!("token: Transfer (not yet implemented)");
+                }
+                udtx::TokenCommands::Mint => {
+                    println!("token: Mint (not yet implemented)");
+                }
+                udtx::TokenCommands::Burn => {
+                    println!("token: Burn (not yet implemented)");
+                }
+                udtx::TokenCommands::Info => {
+                    println!("token: Info (not yet implemented)");
+                }
+            }
         }
         Commands::Access { command } => {
             logger::debug!(?command, "Access command");
