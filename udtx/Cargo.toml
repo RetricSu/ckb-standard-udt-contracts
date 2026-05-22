@@ -1,0 +1,26 @@
+[package]
+name = "udtx"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clap = { version = "4", features = ["derive"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "time"] }
+serde = { version = "1", features = ["derive"] }
+serde_yaml = "0.9"
+thiserror = "1"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "fmt"] }
+ckb-sdk = "5.1"
+ckb-types = "1.1"
+ckb-jsonrpc-types = "1.1"
+ckb-hash = "0.112"
+secp256k1 = { version = "0.29", features = ["recovery", "global-context"] }
+zeroize = { version = "1", features = ["derive"] }
+bech32 = "0.9"
+hex = "0.4"
+standard-udt-types = { path = "../lib/types", features = ["std"] }
+
+[[bin]]
+name = "udtx"
+path = "src/main.rs"

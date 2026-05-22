@@ -41,7 +41,7 @@ pub fn cell_dep_for_script(deployed: &DeployedScript) -> CellDep {
 
 pub fn typed_output(lock: &Script, type_script: &Script, capacity: u64) -> CellOutput {
     CellOutput::new_builder()
-        .capacity(capacity.pack())
+        .capacity(ckb_types::prelude::Pack::<Uint64>::pack(&capacity))
         .lock(lock.clone())
         .type_(Some(type_script.clone()).pack())
         .build()
@@ -49,7 +49,7 @@ pub fn typed_output(lock: &Script, type_script: &Script, capacity: u64) -> CellO
 
 pub fn normal_output(lock: &Script, capacity: u64) -> CellOutput {
     CellOutput::new_builder()
-        .capacity(capacity.pack())
+        .capacity(ckb_types::prelude::Pack::<Uint64>::pack(&capacity))
         .lock(lock.clone())
         .build()
 }
@@ -72,7 +72,7 @@ pub fn create_funding_input(context: &mut Context, lock: &Script, capacity: u64)
 pub fn cell_dep(out_point: OutPoint) -> CellDep {
     CellDep::new_builder()
         .out_point(out_point)
-        .dep_type(DepType::Code.into())
+        .dep_type(DepType::Code)
         .build()
 }
 
