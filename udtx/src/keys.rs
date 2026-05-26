@@ -82,9 +82,14 @@ impl KeyManager {
     }
 
     pub fn sign_by_id(&self, id: &[u8], message: &[u8]) -> Result<Vec<u8>, TokenCliError> {
+        if id.len() != 20 {
+            return Err(TokenCliError::AuthFailed {
+                role: format!("id length must be 20, got {}", id.len()),
+            });
+        }
         for (name, account) in &self.accounts {
-            let hash = blake2b_256(&account.lock_script.args().raw_data());
-            if hash[..20] == id[..] {
+            let args = account.lock_script.args().raw_data();
+            if args.len() >= 20 && args.as_ref()[..20] == id[..20] {
                 return self.sign(name, message);
             }
         }

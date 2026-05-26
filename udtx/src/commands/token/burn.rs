@@ -155,7 +155,7 @@ pub async fn burn_token(
     let mut unlockers = HashMap::new();
     unlockers.insert(ScriptId::new_type(
         ckb_types::H256::from_slice(
-            &hex::decode("9bd7e06f3ecf4be0f2fcd2188b23f1b9fcc88e5d4b65a8637b17723bbda3cce8").unwrap()
+            &hex::decode(SECP256K1_BLAKE160_CODE_HASH.trim_start_matches("0x")).unwrap()
         ).unwrap()
     ), unlocker);
 

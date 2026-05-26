@@ -1,4 +1,5 @@
 pub mod access;
+pub mod apply;
 pub mod authority;
 pub mod chain;
 pub mod doctor;

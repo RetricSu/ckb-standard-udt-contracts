@@ -21,7 +21,7 @@ pub async fn report(
 
     let client = RpcClient::new(&profile.rpc_url)?;
 
-    let balance = client.get_balance(&account.address).await.unwrap_or(0);
+    let balance = client.get_balance(&account.address).await?;
 
     let kind = &config.token.kind;
     let contract = profile.contracts.get(match kind {

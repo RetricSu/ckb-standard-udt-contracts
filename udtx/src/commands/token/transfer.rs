@@ -98,15 +98,6 @@ pub async fn transfer_token(
         .args(ckb_types::packed::Bytes::from(lock_script_hash.to_vec()))
         .build();
 
-    let script_id = ScriptId::new(
-        contract_code_hash.unpack(),
-        match contract.hash_type.as_str() {
-            "type" => ckb_jsonrpc_types::ScriptHashType::Type,
-            "data" | "data1" => ckb_jsonrpc_types::ScriptHashType::Data,
-            _ => ckb_jsonrpc_types::ScriptHashType::Data,
-        },
-    );
-
     let rpc_url = &profile.rpc_url;
     let mut cell_collector = DefaultCellCollector::new(rpc_url);
     cell_collector.check_ckb_chain().map_err(|e| TokenCliError::TxBuild {

@@ -2,6 +2,14 @@ use crate::config::{UdtxConfig, ProfileConfig, TokenKind};
 use crate::error::TokenCliError;
 use crate::keys::KeyManager;
 
+fn yaml_value_to_string(value: &serde_yaml::Value) -> Option<String> {
+    match value {
+        serde_yaml::Value::String(s) => Some(s.clone()),
+        serde_yaml::Value::Number(n) => Some(n.to_string()),
+        _ => None,
+    }
+}
+
 pub async fn apply(
     _config_path: Option<String>,
     yes: bool,
@@ -28,9 +36,8 @@ pub async fn apply(
         match step.action.as_str() {
             "issue" => {
                 let amount = step.params.get("amount")
-                    .and_then(|v| v.as_str())
-                    .unwrap_or("0")
-                    .to_string();
+                    .and_then(yaml_value_to_string)
+                    .unwrap_or_else(|| "0".to_string());
                 let token_type = step.params.get("token_type")
                     .and_then(|v| v.as_str())
                     .map(|s| match s {
@@ -61,9 +68,8 @@ pub async fn apply(
                     .ok_or_else(|| TokenCliError::TxBuild { message: "transfer step missing 'to'".into() })?
                     .to_string();
                 let amount = step.params.get("amount")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| TokenCliError::TxBuild { message: "transfer step missing 'amount'".into() })?
-                    .to_string();
+                    .and_then(yaml_value_to_string)
+                    .ok_or_else(|| TokenCliError::TxBuild { message: "transfer step missing 'amount'".into() })?;
                 let token_type = step.params.get("token_type")
                     .and_then(|v| v.as_str())
                     .map(|s| match s {
@@ -88,9 +94,8 @@ pub async fn apply(
             }
             "mint" => {
                 let amount = step.params.get("amount")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| TokenCliError::TxBuild { message: "mint step missing 'amount'".into() })?
-                    .to_string();
+                    .and_then(yaml_value_to_string)
+                    .ok_or_else(|| TokenCliError::TxBuild { message: "mint step missing 'amount'".into() })?;
                 let token_type = step.params.get("token_type")
                     .and_then(|v| v.as_str())
                     .map(|s| match s {
@@ -114,9 +119,8 @@ pub async fn apply(
             }
             "burn" => {
                 let amount = step.params.get("amount")
-                    .and_then(|v| v.as_str())
-                    .ok_or_else(|| TokenCliError::TxBuild { message: "burn step missing 'amount'".into() })?
-                    .to_string();
+                    .and_then(yaml_value_to_string)
+                    .ok_or_else(|| TokenCliError::TxBuild { message: "burn step missing 'amount'".into() })?;
                 let token_type = step.params.get("token_type")
                     .and_then(|v| v.as_str())
                     .map(|s| match s {

@@ -118,6 +118,8 @@ pub struct AuthoritiesConfig {
 pub struct AccessControlConfig {
     pub enabled: bool,
     pub mode: AccessMode,
+    #[serde(default)]
+    pub addresses: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
