@@ -34,6 +34,7 @@ lib/
 tests/
   plugins/         Dynamic-linking and spawn test fixtures
   src/             ckb-testtool integration tests and builders
+udtx/              UDT token operations CLI (issue, transfer, chain management)
 scripts/
   ckb-data-hash    Helper used by the Makefile to pass dependent code hashes
   find_clang       Helper used for C/RISC-V plugin builds
@@ -476,6 +477,88 @@ Run Cargo checks directly when you do not need on-chain binaries:
 make check
 make clippy
 make fmt
+```
+
+## UDTX CLI
+
+The workspace includes `udtx`, a CLI tool for token operations and local devnet management.
+
+### Build
+
+Build the CLI via Cargo:
+
+```bash
+cargo build --bin udtx
+```
+
+Or build the release binary:
+
+```bash
+cargo build --bin udtx --release
+```
+
+### Commands
+
+| Command | Description |
+| --- | --- |
+| `udtx init [ --name <name> ]` | Initialize a new UDTX project with `udtx.yaml` and profile files. |
+| `udtx doctor` | Check the environment, configuration, and dependencies. |
+| `udtx chain up [ --background ]` | Start a local offckb devnet (requires `@offckb/cli`). |
+| `udtx chain down` | Stop the local devnet. |
+| `udtx chain reset [ --yes ]` | Reset devnet data. |
+| `udtx chain status` | Show whether the devnet is running. |
+| `udtx token issue` | Issue a new sUDT or xUDT token. |
+| `udtx token transfer` | Transfer tokens (planned). |
+| `udtx token mint` | Mint additional tokens (planned). |
+| `udtx token burn` | Burn tokens (planned). |
+| `udtx token info` | Show token information (planned). |
+
+### Token Issue
+
+Issue a new token with optional CLI overrides:
+
+```bash
+udtx token issue \
+  --token-type sudt \
+  --name "My Token" \
+  --symbol "MTK" \
+  --decimals 8 \
+  --supply 1000000 \
+  --owner owner \
+  --dry-run
+```
+
+Parameters:
+
+- `--token-type`: `sudt` or `xudt` (default: `sudt`);
+- `--name`, `--symbol`, `--decimals`: token metadata;
+- `--supply`: initial supply as an integer;
+- `--owner`: account name from the config;
+- `--dry-run`: preview the transaction without submitting.
+
+### Configuration
+
+`udtx init` creates two files:
+
+- `udtx.yaml` — project-level settings (network profile, accounts, token defaults, contract sources);
+- `profiles/devnet.yaml` — devnet-specific RPC and contract references.
+
+Accounts can be defined as environment-variable-backed private keys or as plain addresses:
+
+```yaml
+accounts:
+  owner:
+    private_key_env: OWNER_PRIVATE_KEY
+  alice:
+    address: "ckt1..."
+```
+
+### Devnet Dependency
+
+Chain commands require `@offckb/cli` to be installed globally:
+
+```bash
+npm install -g @offckb/cli
 ```
 
 ## Reproducible Builds And Checksums
