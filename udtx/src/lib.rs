@@ -117,11 +117,63 @@ pub enum TokenCommands {
         #[arg(long)]
         dry_run: bool,
     },
-    /// Transfer tokens
-    Transfer,
-    Mint,
-    Burn,
-    Info,
+    /// Transfer tokens to a recipient
+    Transfer {
+        /// Recipient address
+        #[arg(short, long)]
+        to: String,
+        /// Amount to transfer
+        #[arg(short, long)]
+        amount: String,
+        /// Token type override
+        #[arg(short = 't', long, value_enum)]
+        token_type: Option<config::TokenKind>,
+        /// Owner account name
+        #[arg(short, long)]
+        owner: Option<String>,
+        /// Dry run - preview transaction without sending
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Mint new tokens
+    Mint {
+        /// Amount to mint
+        #[arg(short, long)]
+        amount: String,
+        /// Token type override
+        #[arg(short = 't', long, value_enum)]
+        token_type: Option<config::TokenKind>,
+        /// Owner account name
+        #[arg(short, long)]
+        owner: Option<String>,
+        /// Dry run - preview transaction without sending
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Burn tokens
+    Burn {
+        /// Amount to burn
+        #[arg(short, long)]
+        amount: String,
+        /// Token type override
+        #[arg(short = 't', long, value_enum)]
+        token_type: Option<config::TokenKind>,
+        /// Owner account name
+        #[arg(short, long)]
+        owner: Option<String>,
+        /// Dry run - preview transaction without sending
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Show token info and balances
+    Info {
+        /// Owner account name
+        #[arg(short, long)]
+        owner: Option<String>,
+        /// Token type override
+        #[arg(short = 't', long, value_enum)]
+        token_type: Option<config::TokenKind>,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -129,9 +181,17 @@ pub enum AccessCommands {
     /// Show access list
     List,
     /// Add an entry
-    Add,
+    Add {
+        /// Address to add
+        #[arg(short, long)]
+        address: String,
+    },
     /// Remove an entry
-    Remove,
+    Remove {
+        /// Address to remove
+        #[arg(short, long)]
+        address: String,
+    },
 }
 
 #[derive(Subcommand, Debug)]
@@ -139,9 +199,19 @@ pub enum AuthorityCommands {
     /// Show current authority
     Show,
     /// Update authority
-    Update,
+    Update {
+        /// Authority role (mint, metadata, access)
+        #[arg(short, long)]
+        role: String,
+        /// Account name to set
+        #[arg(short, long)]
+        account: String,
+    },
     /// Drop authority (requires --yes)
     Drop {
+        /// Authority role to drop
+        #[arg(short, long)]
+        role: String,
         /// Confirm drop
         #[arg(long)]
         yes: bool,

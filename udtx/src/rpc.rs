@@ -21,16 +21,6 @@ impl std::fmt::Debug for RpcClient {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct ChainInfo {
-    pub chain: String,
-    pub median_time: u64,
-    pub epoch: String,
-    pub difficulty: String,
-    pub is_initial_block_download: bool,
-    pub alerts: Vec<String>,
-}
-
 impl RpcClient {
     pub fn new(rpc_url: &str) -> Result<Self, TokenCliError> {
         let client = CkbRpcClient::new(rpc_url);
@@ -38,6 +28,14 @@ impl RpcClient {
             inner: client,
             url: rpc_url.to_string(),
         })
+    }
+
+    pub fn inner(&self) -> &CkbRpcClient {
+        &self.inner
+    }
+
+    pub fn url(&self) -> &str {
+        &self.url
     }
 
     pub async fn get_chain_info(&self) -> Result<ChainInfo, TokenCliError> {
@@ -142,6 +140,27 @@ impl RpcClient {
         Ok(())
     }
 
+    pub async fn send_transaction(&self, tx: ckb_types::core::TransactionView) -> Result<ckb_types::H256, TokenCliError> {
+        let tx_json: ckb_jsonrpc_types::Transaction = tx.data().into();
+        let hash = self
+            .with_retry(|| async {
+                self.inner
+                    .send_transaction(tx_json.clone(), None)
+                    .map_err(|e| rpc_error(format!("send_transaction failed: {}", e)))
+            })
+            .await?;
+        Ok(hash)
+    }
+
+    pub async fn get_cells(&self, search_key: SearchKey, limit: u32, cursor: Option<ckb_jsonrpc_types::JsonBytes>) -> Result<ckb_sdk::rpc::ckb_indexer::Pagination<ckb_sdk::rpc::ckb_indexer::Cell>, TokenCliError> {
+        self.with_retry(|| async {
+            self.inner
+                .get_cells(search_key.clone(), Order::Asc, limit.into(), cursor.clone())
+                .map_err(|e| rpc_error(format!("get_cells failed: {}", e)))
+        })
+        .await
+    }
+
     async fn with_retry<F, Fut, T>(&self, f: F) -> Result<T, TokenCliError>
     where
         F: Fn() -> Fut,
@@ -197,4 +216,12 @@ impl From<ckb_sdk::rpc::RpcError> for TokenCliError {
     }
 }
 
-
+#[derive(Debug, Clone)]
+pub struct ChainInfo {
+    pub chain: String,
+    pub median_time: u64,
+    pub epoch: String,
+    pub difficulty: String,
+    pub is_initial_block_download: bool,
+    pub alerts: Vec<String>,
+}
