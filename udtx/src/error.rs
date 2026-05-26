@@ -13,6 +13,7 @@ pub mod codes {
     pub const E_OVERFLOW: i32 = 80;
     pub const E_USER_CANCELLED: i32 = 90;
     pub const E_VERIFICATION_FAILED: i32 = 100;
+    pub const E_NOT_IMPLEMENTED: i32 = 2;
     pub const E_UNKNOWN: i32 = 1;
 }
 
@@ -80,6 +81,10 @@ pub enum TokenCliError {
     /// On-chain or local verification failed.
     #[error("Verification failed: {message}\n  → Review the transaction details and try again.")]
     VerificationFailed { message: String },
+
+    /// Feature is not yet implemented.
+    #[error("Not implemented: {feature}\n  → This feature is planned but not yet available.")]
+    NotImplemented { feature: String },
 }
 
 impl TokenCliError {
@@ -97,6 +102,7 @@ impl TokenCliError {
             Self::Overflow => codes::E_OVERFLOW,
             Self::UserCancelled => codes::E_USER_CANCELLED,
             Self::VerificationFailed { .. } => codes::E_VERIFICATION_FAILED,
+            Self::NotImplemented { .. } => codes::E_NOT_IMPLEMENTED,
         }
     }
 }

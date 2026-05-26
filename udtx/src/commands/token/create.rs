@@ -89,8 +89,8 @@ pub async fn create_token(
         println!("\n[Dry Run] Token creation preview complete. No transaction sent.");
         return Ok(());
     }
-    
-    println!("\nToken creation is not yet implemented. Use --dry-run to preview.");
-    
-    Ok(())
+
+    Err(TokenCliError::NotImplemented {
+        feature: "token issue (on-chain transaction)".into(),
+    })
 }

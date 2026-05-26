@@ -70,42 +70,62 @@ async fn run() -> Result<(), TokenCliError> {
                     ).await?;
                 }
                 udtx::TokenCommands::Transfer => {
-                    println!("token: Transfer (not yet implemented)");
+                    return Err(TokenCliError::NotImplemented {
+                        feature: "token transfer".into(),
+                    });
                 }
                 udtx::TokenCommands::Mint => {
-                    println!("token: Mint (not yet implemented)");
+                    return Err(TokenCliError::NotImplemented {
+                        feature: "token mint".into(),
+                    });
                 }
                 udtx::TokenCommands::Burn => {
-                    println!("token: Burn (not yet implemented)");
+                    return Err(TokenCliError::NotImplemented {
+                        feature: "token burn".into(),
+                    });
                 }
                 udtx::TokenCommands::Info => {
-                    println!("token: Info (not yet implemented)");
+                    return Err(TokenCliError::NotImplemented {
+                        feature: "token info".into(),
+                    });
                 }
             }
         }
         Commands::Access { command } => {
             logger::debug!(?command, "Access command");
-            println!("access: {:?}", command);
+            return Err(TokenCliError::NotImplemented {
+                feature: format!("access {:?}", command).to_lowercase(),
+            });
         }
         Commands::Authority { command } => {
             logger::debug!(?command, "Authority command");
-            println!("authority: {:?}", command);
+            return Err(TokenCliError::NotImplemented {
+                feature: format!("authority {:?}", command).to_lowercase(),
+            });
         }
         Commands::Plan { config } => {
             logger::info!(?config, "Plan command");
-            println!("plan: {:?}", config);
+            return Err(TokenCliError::NotImplemented {
+                feature: "plan".into(),
+            });
         }
         Commands::Apply { config, yes } => {
             logger::info!(?config, yes, "Apply command");
-            println!("apply: {:?} yes={}", config, yes);
+            return Err(TokenCliError::NotImplemented {
+                feature: "apply".into(),
+            });
         }
         Commands::Verify { config } => {
             logger::info!(?config, "Verify command");
-            println!("verify: {:?}", config);
+            return Err(TokenCliError::NotImplemented {
+                feature: "verify".into(),
+            });
         }
         Commands::Report { format } => {
             logger::info!(?format, "Report command");
-            println!("report: {:?}", format);
+            return Err(TokenCliError::NotImplemented {
+                feature: "report".into(),
+            });
         }
     }
 
