@@ -1,13 +1,13 @@
-use crate::config::{SupplyMode, TokenKind, UdtxConfig, ProfileConfig};
-use crate::error::{tx_build_error, TokenCliError};
+use crate::config::{ProfileConfig, TokenKind, UdtxConfig};
+use crate::error::TokenCliError;
 use crate::keys::KeyManager;
 use crate::rpc::RpcClient;
 use ckb_sdk::traits::{CellCollector, DefaultCellCollector, DefaultCellDepResolver, DefaultHeaderDepResolver, DefaultTransactionDependencyProvider, Signer, SignerError};
-use ckb_sdk::tx_builder::{CapacityBalancer, CapacityProvider, TransferAction, TxBuilder, UdtTargetReceiver, UdtIssueBuilder, UdtType};
+use ckb_sdk::tx_builder::{CapacityBalancer, CapacityProvider, TransferAction, TxBuilder, UdtTargetReceiver, UdtTransferBuilder};
 use ckb_sdk::types::ScriptId;
 use ckb_sdk::unlock::SecpSighashUnlocker;
 use ckb_types::bytes::Bytes;
-use ckb_types::packed::WitnessArgs;
+use ckb_types::packed::{Byte32, Bytes as PackedBytes, Script, WitnessArgs};
 use ckb_types::prelude::*;
 use std::collections::HashMap;
 
@@ -45,12 +45,12 @@ impl<'a> Signer for KeyManagerSigner<'a> {
     }
 }
 
-pub async fn create_token(
-    token_type: TokenKind,
-    name: Option<String>,
-    symbol: Option<String>,
-    decimals: Option<u8>,
-    supply: Option<String>,
+const SECP256K1_BLAKE160_CODE_HASH: &str =
+    "0x9bd7e06f3ecf4be0f2fcd2188b23f1b9fcc88e5d4b65a8637b17723bbda3cce8";
+
+pub async fn burn_token(
+    amount: String,
+    token_type: Option<TokenKind>,
     owner: Option<String>,
     dry_run: bool,
     config: &UdtxConfig,
@@ -58,7 +58,6 @@ pub async fn create_token(
     key_manager: &mut KeyManager,
 ) -> Result<(), TokenCliError> {
     let owner_name = owner.as_deref().unwrap_or("owner");
-
     let owner_account = config.accounts.get(owner_name)
         .ok_or_else(|| TokenCliError::AuthMissing {
             role: format!("owner account '{}' not found in config", owner_name),
@@ -66,7 +65,7 @@ pub async fn create_token(
 
     let account = key_manager.load_account(owner_name, owner_account, profile)?;
 
-    let kind = token_type;
+    let kind = token_type.as_ref().unwrap_or(&config.token.kind);
 
     let contract = profile.contracts.get(match kind {
         TokenKind::Sudt => "sudt",
@@ -77,38 +76,48 @@ pub async fn create_token(
         )
     ))?;
 
-    let amount_u128 = supply.as_deref().unwrap_or("0").parse::<u128>()
-        .map_err(|e| TokenCliError::TxBuild { message: format!("invalid supply amount: {}", e) })?;
+    let amount_u128 = amount.parse::<u128>()
+        .map_err(|e| TokenCliError::TxBuild { message: format!("invalid amount: {}", e) })?;
 
     let contract_code_hash = ckb_types::packed::Byte32::from_slice(
         &hex::decode(contract.code_hash.trim_start_matches("0x"))
             .map_err(|e| TokenCliError::TxBuild { message: format!("invalid code hash: {}", e) })?
     ).map_err(|e| TokenCliError::TxBuild { message: format!("invalid code hash bytes: {}", e) })?;
 
-    let script_id = ScriptId::new(
-        contract_code_hash.unpack(),
-        match contract.hash_type.as_str() {
-            "type" => ckb_jsonrpc_types::ScriptHashType::Type,
-            "data" | "data1" => ckb_jsonrpc_types::ScriptHashType::Data,
-            _ => ckb_jsonrpc_types::ScriptHashType::Data,
-        },
-    );
+    let lock_script_hash: [u8; 32] = account.lock_script.calc_script_hash().unpack();
 
-    let udt_type = match kind {
-        TokenKind::Sudt => UdtType::Sudt,
-        TokenKind::Xudt => UdtType::Xudt(Bytes::default()),
-    };
+    let udt_type_script = ckb_types::packed::Script::new_builder()
+        .code_hash(contract_code_hash)
+        .hash_type(match contract.hash_type.as_str() {
+            "type" => ckb_types::core::ScriptHashType::Type,
+            "data" | "data1" => ckb_types::core::ScriptHashType::Data,
+            _ => ckb_types::core::ScriptHashType::Data,
+        })
+        .args(ckb_types::packed::Bytes::from(lock_script_hash.to_vec()))
+        .build();
+
+    // Burn address: secp256k1-blake160 with all-zero args (unspendable)
+    let burn_code_hash = Byte32::from_slice(
+        &hex::decode(SECP256K1_BLAKE160_CODE_HASH.trim_start_matches("0x"))
+            .map_err(|e| TokenCliError::TxBuild { message: format!("invalid code hash hex: {}", e) })?
+    )
+    .map_err(|e| TokenCliError::TxBuild { message: format!("invalid code hash bytes: {}", e) })?;
+
+    let burn_lock_script = Script::new_builder()
+        .code_hash(burn_code_hash)
+        .hash_type(ckb_types::core::ScriptHashType::Type)
+        .args(PackedBytes::from(vec![0u8; 20]))
+        .build();
 
     let receiver = UdtTargetReceiver::new(
         TransferAction::Create,
-        account.lock_script.clone(),
+        burn_lock_script,
         amount_u128,
     );
 
-    let builder = UdtIssueBuilder {
-        udt_type,
-        script_id,
-        owner: account.lock_script.clone(),
+    let builder = UdtTransferBuilder {
+        type_script: udt_type_script,
+        sender: account.lock_script.clone(),
         receivers: vec![receiver],
     };
 
@@ -174,32 +183,21 @@ pub async fn create_token(
         message: format!("unlock tx failed: {}", e),
     })?;
 
-    let token_name = name.as_deref().unwrap_or(&config.token.symbol);
-    let token_symbol = symbol.as_deref().unwrap_or(&config.token.symbol);
-    let token_decimals = decimals.unwrap_or(config.token.decimals);
-
     if dry_run {
-        println!("Token Issue Preview");
-        println!("===================");
+        println!("Token Burn Preview");
+        println!("==================");
+        println!("  Amount: {}", amount_u128);
         println!("  Token Type: {:?}", kind);
-        println!("  Name: {}", token_name);
-        println!("  Symbol: {}", token_symbol);
-        println!("  Decimals: {}", token_decimals);
-        println!("  Initial Supply: {}", amount_u128);
         println!("  Owner: {} ({})", owner_name, account.address);
         println!("  Transaction Hash: 0x{}", hex::encode(tx.hash().as_slice()));
-        println!("\n[Dry Run] Issue preview complete. No transaction sent.");
+        println!("\n[Dry Run] Burn preview complete. No transaction sent.");
         return Ok(());
     }
 
     let client = RpcClient::new(rpc_url)?;
     let hash = client.send_transaction(tx).await?;
-    println!("Token issued successfully.");
-    println!("  Token Type: {:?}", kind);
-    println!("  Name: {}", token_name);
-    println!("  Symbol: {}", token_symbol);
-    println!("  Decimals: {}", token_decimals);
-    println!("  Initial Supply: {}", amount_u128);
+    println!("Token burn submitted.");
+    println!("  Amount: {}", amount_u128);
     println!("  Owner: {} ({})", owner_name, account.address);
     println!("  Transaction Hash: 0x{}", hash);
 

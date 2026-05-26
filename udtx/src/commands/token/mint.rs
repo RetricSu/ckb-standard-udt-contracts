@@ -1,5 +1,5 @@
-use crate::config::{SupplyMode, TokenKind, UdtxConfig, ProfileConfig};
-use crate::error::{tx_build_error, TokenCliError};
+use crate::config::{ProfileConfig, TokenKind, UdtxConfig};
+use crate::error::TokenCliError;
 use crate::keys::KeyManager;
 use crate::rpc::RpcClient;
 use ckb_sdk::traits::{CellCollector, DefaultCellCollector, DefaultCellDepResolver, DefaultHeaderDepResolver, DefaultTransactionDependencyProvider, Signer, SignerError};
@@ -45,12 +45,9 @@ impl<'a> Signer for KeyManagerSigner<'a> {
     }
 }
 
-pub async fn create_token(
-    token_type: TokenKind,
-    name: Option<String>,
-    symbol: Option<String>,
-    decimals: Option<u8>,
-    supply: Option<String>,
+pub async fn mint_token(
+    amount: String,
+    token_type: Option<TokenKind>,
     owner: Option<String>,
     dry_run: bool,
     config: &UdtxConfig,
@@ -58,7 +55,6 @@ pub async fn create_token(
     key_manager: &mut KeyManager,
 ) -> Result<(), TokenCliError> {
     let owner_name = owner.as_deref().unwrap_or("owner");
-
     let owner_account = config.accounts.get(owner_name)
         .ok_or_else(|| TokenCliError::AuthMissing {
             role: format!("owner account '{}' not found in config", owner_name),
@@ -66,7 +62,7 @@ pub async fn create_token(
 
     let account = key_manager.load_account(owner_name, owner_account, profile)?;
 
-    let kind = token_type;
+    let kind = token_type.as_ref().unwrap_or(&config.token.kind);
 
     let contract = profile.contracts.get(match kind {
         TokenKind::Sudt => "sudt",
@@ -77,8 +73,8 @@ pub async fn create_token(
         )
     ))?;
 
-    let amount_u128 = supply.as_deref().unwrap_or("0").parse::<u128>()
-        .map_err(|e| TokenCliError::TxBuild { message: format!("invalid supply amount: {}", e) })?;
+    let amount_u128 = amount.parse::<u128>()
+        .map_err(|e| TokenCliError::TxBuild { message: format!("invalid amount: {}", e) })?;
 
     let contract_code_hash = ckb_types::packed::Byte32::from_slice(
         &hex::decode(contract.code_hash.trim_start_matches("0x"))
@@ -174,32 +170,21 @@ pub async fn create_token(
         message: format!("unlock tx failed: {}", e),
     })?;
 
-    let token_name = name.as_deref().unwrap_or(&config.token.symbol);
-    let token_symbol = symbol.as_deref().unwrap_or(&config.token.symbol);
-    let token_decimals = decimals.unwrap_or(config.token.decimals);
-
     if dry_run {
-        println!("Token Issue Preview");
-        println!("===================");
+        println!("Token Mint Preview");
+        println!("==================");
+        println!("  Amount: {}", amount_u128);
         println!("  Token Type: {:?}", kind);
-        println!("  Name: {}", token_name);
-        println!("  Symbol: {}", token_symbol);
-        println!("  Decimals: {}", token_decimals);
-        println!("  Initial Supply: {}", amount_u128);
         println!("  Owner: {} ({})", owner_name, account.address);
         println!("  Transaction Hash: 0x{}", hex::encode(tx.hash().as_slice()));
-        println!("\n[Dry Run] Issue preview complete. No transaction sent.");
+        println!("\n[Dry Run] Mint preview complete. No transaction sent.");
         return Ok(());
     }
 
     let client = RpcClient::new(rpc_url)?;
     let hash = client.send_transaction(tx).await?;
-    println!("Token issued successfully.");
-    println!("  Token Type: {:?}", kind);
-    println!("  Name: {}", token_name);
-    println!("  Symbol: {}", token_symbol);
-    println!("  Decimals: {}", token_decimals);
-    println!("  Initial Supply: {}", amount_u128);
+    println!("Token mint submitted.");
+    println!("  Amount: {}", amount_u128);
     println!("  Owner: {} ({})", owner_name, account.address);
     println!("  Transaction Hash: 0x{}", hash);
 

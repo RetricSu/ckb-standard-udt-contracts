@@ -81,6 +81,18 @@ impl KeyManager {
         self.accounts.get(name)
     }
 
+    pub fn sign_by_id(&self, id: &[u8], message: &[u8]) -> Result<Vec<u8>, TokenCliError> {
+        for (name, account) in &self.accounts {
+            let hash = blake2b_256(&account.lock_script.args().raw_data());
+            if hash[..20] == id[..] {
+                return self.sign(name, message);
+            }
+        }
+        Err(TokenCliError::AuthFailed {
+            role: format!("no account matches id 0x{}", hex::encode(id)),
+        })
+    }
+
     pub fn sign(&self, name: &str, message: &[u8]) -> Result<Vec<u8>, TokenCliError> {
         let account = self.accounts.get(name).ok_or_else(|| TokenCliError::AuthMissing {
             role: format!("account '{}' not loaded", name),
@@ -201,7 +213,7 @@ fn lock_script_to_address(
         })
 }
 
-fn address_to_lock_script(
+pub fn address_to_lock_script(
     address: &str,
     profile: &ProfileConfig,
 ) -> Result<Script, TokenCliError> {

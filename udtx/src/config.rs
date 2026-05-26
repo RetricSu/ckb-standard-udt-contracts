@@ -310,6 +310,12 @@ pub fn load_config_with_profile<P: AsRef<Path>>(config_path: P) -> Result<(UdtxC
     Ok((config, profile))
 }
 
+pub fn save_config<P: AsRef<Path>>(path: P, config: &UdtxConfig) -> Result<(), ConfigError> {
+    let yaml = serde_yaml::to_string(config)?;
+    fs::write(path, yaml)?;
+    Ok(())
+}
+
 pub fn default_config(project_name: &str) -> UdtxConfig {
     let mut accounts = HashMap::new();
     accounts.insert(

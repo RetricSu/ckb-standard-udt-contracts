@@ -69,43 +69,101 @@ async fn run() -> Result<(), TokenCliError> {
                         &config, &profile, &mut key_manager
                     ).await?;
                 }
-                udtx::TokenCommands::Transfer => {
-                    println!("token: Transfer (not yet implemented)");
+                udtx::TokenCommands::Transfer { to, amount, token_type, owner, dry_run } => {
+                    let (config, profile) = udtx::config::load_config_with_profile("udtx.yaml")?;
+                    let mut key_manager = udtx::keys::KeyManager::new();
+                    udtx::commands::token::transfer::transfer_token(
+                        to, amount, token_type, owner, dry_run,
+                        &config, &profile, &mut key_manager
+                    ).await?;
                 }
-                udtx::TokenCommands::Mint => {
-                    println!("token: Mint (not yet implemented)");
+                udtx::TokenCommands::Mint { amount, token_type, owner, dry_run } => {
+                    let (config, profile) = udtx::config::load_config_with_profile("udtx.yaml")?;
+                    let mut key_manager = udtx::keys::KeyManager::new();
+                    udtx::commands::token::mint::mint_token(
+                        amount, token_type, owner, dry_run,
+                        &config, &profile, &mut key_manager
+                    ).await?;
                 }
-                udtx::TokenCommands::Burn => {
-                    println!("token: Burn (not yet implemented)");
+                udtx::TokenCommands::Burn { amount, token_type, owner, dry_run } => {
+                    let (config, profile) = udtx::config::load_config_with_profile("udtx.yaml")?;
+                    let mut key_manager = udtx::keys::KeyManager::new();
+                    udtx::commands::token::burn::burn_token(
+                        amount, token_type, owner, dry_run,
+                        &config, &profile, &mut key_manager
+                    ).await?;
                 }
-                udtx::TokenCommands::Info => {
-                    println!("token: Info (not yet implemented)");
+                udtx::TokenCommands::Info { owner, token_type } => {
+                    let (config, profile) = udtx::config::load_config_with_profile("udtx.yaml")?;
+                    udtx::commands::token::info::token_info(
+                        owner, token_type,
+                        &config, &profile
+                    ).await?;
                 }
             }
         }
         Commands::Access { command } => {
-            logger::debug!(?command, "Access command");
-            println!("access: {:?}", command);
+            let config_path = "udtx.yaml";
+            match command {
+                udtx::AccessCommands::List => {
+                    let (config, _profile) = udtx::config::load_config_with_profile(config_path)?;
+                    udtx::commands::access::access_list(&config)?;
+                }
+                udtx::AccessCommands::Add { address } => {
+                    let (mut config, _profile) = udtx::config::load_config_with_profile(config_path)?;
+                    udtx::commands::access::access_add(&mut config, &address)?;
+                    udtx::config::save_config(config_path, &config)?;
+                }
+                udtx::AccessCommands::Remove { address } => {
+                    let (mut config, _profile) = udtx::config::load_config_with_profile(config_path)?;
+                    udtx::commands::access::access_remove(&mut config, &address)?;
+                    udtx::config::save_config(config_path, &config)?;
+                }
+            }
         }
         Commands::Authority { command } => {
-            logger::debug!(?command, "Authority command");
-            println!("authority: {:?}", command);
+            let config_path = "udtx.yaml";
+            match command {
+                udtx::AuthorityCommands::Show => {
+                    let (config, _profile) = udtx::config::load_config_with_profile(config_path)?;
+                    udtx::commands::authority::authority_show(&config)?;
+                }
+                udtx::AuthorityCommands::Update { role, account } => {
+                    let (mut config, _profile) = udtx::config::load_config_with_profile(config_path)?;
+                    udtx::commands::authority::authority_update(&mut config, &role, &account)?;
+                    udtx::config::save_config(config_path, &config)?;
+                }
+                udtx::AuthorityCommands::Drop { role, yes } => {
+                    let (mut config, _profile) = udtx::config::load_config_with_profile(config_path)?;
+                    udtx::commands::authority::authority_drop(&mut config, &role, yes)?;
+                    if yes {
+                        udtx::config::save_config(config_path, &config)?;
+                    }
+                }
+            }
         }
-        Commands::Plan { config } => {
-            logger::info!(?config, "Plan command");
-            println!("plan: {:?}", config);
+        Commands::Plan { config: config_path } => {
+            let path = config_path.as_deref().unwrap_or("udtx.yaml");
+            let (config, profile) = udtx::config::load_config_with_profile(path)?;
+            let mut key_manager = udtx::keys::KeyManager::new();
+            udtx::commands::plan::plan(config_path, &config, &profile, &mut key_manager).await?;
         }
-        Commands::Apply { config, yes } => {
-            logger::info!(?config, yes, "Apply command");
-            println!("apply: {:?} yes={}", config, yes);
+        Commands::Apply { config: config_path, yes } => {
+            let path = config_path.as_deref().unwrap_or("udtx.yaml");
+            let (config, profile) = udtx::config::load_config_with_profile(path)?;
+            let mut key_manager = udtx::keys::KeyManager::new();
+            udtx::commands::apply::apply(config_path, yes, &config, &profile, &mut key_manager).await?;
         }
-        Commands::Verify { config } => {
-            logger::info!(?config, "Verify command");
-            println!("verify: {:?}", config);
+        Commands::Verify { config: config_path } => {
+            let path = config_path.as_deref().unwrap_or("udtx.yaml");
+            let (config, profile) = udtx::config::load_config_with_profile(path)?;
+            let mut key_manager = udtx::keys::KeyManager::new();
+            udtx::commands::verify::verify(config_path, &config, &profile, &mut key_manager).await?;
         }
         Commands::Report { format } => {
-            logger::info!(?format, "Report command");
-            println!("report: {:?}", format);
+            let (config, profile) = udtx::config::load_config_with_profile("udtx.yaml")?;
+            let mut key_manager = udtx::keys::KeyManager::new();
+            udtx::commands::report::report(format, &config, &profile, &mut key_manager).await?;
         }
     }
 
