@@ -11,7 +11,6 @@ fn yaml_value_to_string(value: &serde_yaml::Value) -> Option<String> {
 }
 
 pub async fn apply(
-    _config_path: Option<String>,
     yes: bool,
     config: &UdtxConfig,
     profile: &ProfileConfig,

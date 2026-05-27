@@ -6,12 +6,15 @@ pub mod logger;
 pub mod rpc;
 
 use clap::{Parser, Subcommand};
+use std::path::PathBuf;
 
 #[derive(Parser)]
 #[command(name = "udtx")]
 #[command(about = "CKB UDT Token Operations CLI")]
 #[command(version)]
 pub struct Cli {
+    #[arg(short, long, global = true, default_value = "udtx.yaml")]
+    pub config: PathBuf,
     #[command(subcommand)]
     pub command: Commands,
 }
@@ -26,11 +29,11 @@ pub enum Commands {
     },
     /// Check environment and dependencies
     Doctor,
-    /// Chain operations (info, status, etc.)
-    Chain {
-        /// Subcommand for chain operations
+    /// Environment checks (RPC connectivity, etc.)
+    Env {
+        /// Subcommand for environment checks
         #[command(subcommand)]
-        command: ChainCommands,
+        command: EnvCommands,
     },
     /// Token operations (issue, transfer, mint, burn, etc.)
     Token {
@@ -51,26 +54,15 @@ pub enum Commands {
         command: AuthorityCommands,
     },
     /// Plan and preview changes
-    Plan {
-        /// Path to configuration file
-        #[arg(short, long)]
-        config: Option<String>,
-    },
+    Plan,
     /// Apply planned changes
     Apply {
-        /// Path to configuration file
-        #[arg(short, long)]
-        config: Option<String>,
         /// Skip confirmation prompt
         #[arg(long)]
         yes: bool,
     },
     /// Verify configuration or on-chain state
-    Verify {
-        /// Path to configuration file
-        #[arg(short, long)]
-        config: Option<String>,
-    },
+    Verify,
     /// Generate reports
     Report {
         /// Report format
@@ -80,23 +72,9 @@ pub enum Commands {
 }
 
 #[derive(Subcommand, Debug)]
-pub enum ChainCommands {
-    /// Start the devnet
-    Up {
-        /// Run in background (default: true)
-        #[arg(long, default_value = "true")]
-        background: bool,
-    },
-    /// Stop the devnet
-    Down,
-    /// Reset devnet data
-    Reset {
-        /// Skip confirmation prompt
-        #[arg(long)]
-        yes: bool,
-    },
-    /// Show chain status
-    Status,
+pub enum EnvCommands {
+    /// Check RPC connectivity and chain status
+    Check,
 }
 
 #[derive(Subcommand, Debug)]

@@ -428,7 +428,7 @@ async fn check_contracts(profile: &ProfileConfig) -> CheckResult {
 }
 
 async fn validate_contract_on_chain(
-    _client: &RpcClient,
+    client: &RpcClient,
     name: &str,
     contract: &ContractRef,
 ) -> Result<String, (String, String)> {
@@ -449,14 +449,30 @@ async fn validate_contract_on_chain(
         return Err((
             format!("{}: placeholder outpoint (not deployed)", name),
             format!(
-                "Deploy contract '{}' or update outpoint in profile",
+                "Contract '{}' is not deployed. Please deploy it first or obtain a valid contract outpoint.",
                 name
             ),
         ));
     }
 
-    Ok(format!(
-        "{}: deployed at tx_hash={}, index={}",
-        name, tx_hash, index
-    ))
+    match client.get_transaction(&tx_hash).await {
+        Ok(true) => Ok(format!(
+            "{}: deployed at tx_hash={}, index={}",
+            name, tx_hash, index
+        )),
+        Ok(false) => Err((
+            format!("{}: transaction not found on chain", name),
+            format!(
+                "Contract '{}' outpoint references a non-existent transaction. Please verify the outpoint in your profile.",
+                name
+            ),
+        )),
+        Err(e) => Err((
+            format!("{}: unable to verify on-chain status ({})", name, e),
+            format!(
+                "Check RPC connectivity and verify the outpoint for '{}' in your profile.",
+                name
+            ),
+        )),
+    }
 }

@@ -3,7 +3,6 @@ use crate::error::TokenCliError;
 use crate::keys::KeyManager;
 
 pub async fn plan(
-    _config_path: Option<String>,
     config: &UdtxConfig,
     _profile: &ProfileConfig,
     _key_manager: &mut KeyManager,
