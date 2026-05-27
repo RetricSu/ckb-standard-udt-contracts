@@ -362,6 +362,7 @@ pub fn default_config(project_name: &str) -> UdtxConfig {
         access_control: Some(AccessControlConfig {
             enabled: true,
             mode: AccessMode::Blacklist,
+            addresses: vec![],
         }),
         scenario: vec![],
     }
