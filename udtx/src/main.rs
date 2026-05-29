@@ -41,7 +41,7 @@ async fn run() -> Result<(), TokenCliError> {
         }
         Commands::Doctor => {
             logger::info!("Running doctor check");
-            let passed = udtx::commands::doctor::doctor_check().await?;
+            let passed = udtx::commands::doctor::doctor_check(&config_path).await?;
             if !passed {
                 std::process::exit(1);
             }
@@ -50,7 +50,7 @@ async fn run() -> Result<(), TokenCliError> {
             match command {
                 udtx::EnvCommands::Check => {
                     let (config, profile) = udtx::config::load_config_with_profile(&config_path)?;
-                    udtx::commands::env::env_check(&config, &profile).await?;
+                    udtx::commands::env::env_check(&config_path, &config, &profile).await?;
                 }
             }
         }
