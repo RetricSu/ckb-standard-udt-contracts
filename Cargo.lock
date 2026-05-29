@@ -3113,6 +3113,7 @@ checksum = "42ff0bf0c66b8238c6f3b578df37d0b7848e55df8577b3f74f92a69acceeb825"
 name = "udtx"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "bech32 0.9.1",
  "ckb-hash 0.112.1",
  "ckb-jsonrpc-types",
@@ -3122,6 +3123,7 @@ dependencies = [
  "hex",
  "secp256k1 0.29.1",
  "serde",
+ "serde_json",
  "serde_yaml",
  "standard-udt-types",
  "thiserror",

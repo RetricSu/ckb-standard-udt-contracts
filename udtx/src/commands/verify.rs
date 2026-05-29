@@ -6,7 +6,6 @@ use ckb_sdk::rpc::ckb_indexer::{ScriptType, SearchKey, SearchMode};
 use ckb_types::prelude::*;
 
 pub async fn verify(
-    _config_path: Option<String>,
     config: &UdtxConfig,
     profile: &ProfileConfig,
     key_manager: &mut KeyManager,

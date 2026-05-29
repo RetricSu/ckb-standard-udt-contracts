@@ -13,7 +13,7 @@ use zeroize::{Zeroize, ZeroizeOnDrop};
 const SECP256K1_BLAKE160_CODE_HASH: &str =
     "0x9bd7e06f3ecf4be0f2fcd2188b23f1b9fcc88e5d4b65a8637b17723bbda3cce8";
 
-#[derive(Zeroize, ZeroizeOnDrop)]
+#[derive(Zeroize, ZeroizeOnDrop, Clone)]
 pub struct AccountKey {
     #[zeroize(skip)]
     pub address: String,
@@ -22,6 +22,7 @@ pub struct AccountKey {
     pub private_key: [u8; 32],
 }
 
+#[derive(Clone)]
 pub struct KeyManager {
     accounts: HashMap<String, AccountKey>,
 }

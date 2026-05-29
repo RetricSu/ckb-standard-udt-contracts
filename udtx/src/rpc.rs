@@ -152,6 +152,42 @@ impl RpcClient {
         Ok(hash)
     }
 
+    pub async fn get_transaction(&self, tx_hash: &str) -> Result<bool, TokenCliError> {
+        let hash = ckb_types::H256::from_str(tx_hash)
+            .map_err(|e| rpc_error(format!("invalid tx_hash '{}': {}", tx_hash, e)))?;
+        let result = self
+            .with_retry(|| async {
+                self.inner
+                    .get_transaction(hash.clone())
+                    .map_err(|e| rpc_error(format!("get_transaction failed: {}", e)))
+            })
+            .await?;
+        Ok(result.is_some())
+    }
+
+    /// Get the number of outputs in a transaction. Returns `None` if the transaction is not found.
+    pub async fn get_transaction_output_count(&self, tx_hash: &str) -> Result<Option<usize>, TokenCliError> {
+        let hash = ckb_types::H256::from_str(tx_hash)
+            .map_err(|e| rpc_error(format!("invalid tx_hash '{}': {}", tx_hash, e)))?;
+        let result = self
+            .with_retry(|| async {
+                self.inner
+                    .get_transaction(hash.clone())
+                    .map_err(|e| rpc_error(format!("get_transaction failed: {}", e)))
+            })
+            .await?;
+
+        let count = result.and_then(|resp| {
+            resp.transaction.map(|tf| {
+                match tf.inner {
+                    ckb_jsonrpc_types::Either::Left(view) => view.inner.outputs.len(),
+                    ckb_jsonrpc_types::Either::Right(_) => 0,
+                }
+            })
+        });
+        Ok(count)
+    }
+
     pub async fn get_cells(&self, search_key: SearchKey, limit: u32, cursor: Option<ckb_jsonrpc_types::JsonBytes>) -> Result<ckb_sdk::rpc::ckb_indexer::Pagination<ckb_sdk::rpc::ckb_indexer::Cell>, TokenCliError> {
         self.with_retry(|| async {
             self.inner

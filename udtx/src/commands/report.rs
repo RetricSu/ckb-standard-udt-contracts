@@ -1,4 +1,5 @@
-use crate::config::{ReportFormat, UdtxConfig, ProfileConfig, TokenKind};
+use crate::config::{UdtxConfig, ProfileConfig, TokenKind};
+use crate::ReportFormat;
 use crate::error::TokenCliError;
 use crate::keys::KeyManager;
 use crate::rpc::RpcClient;

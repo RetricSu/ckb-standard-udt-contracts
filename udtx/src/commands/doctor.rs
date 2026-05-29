@@ -31,20 +31,22 @@ impl CheckResult {
     }
 }
 
-pub async fn doctor_check() -> Result<bool, TokenCliError> {
+use std::path::Path;
+
+pub async fn doctor_check(config_path: &Path) -> Result<bool, TokenCliError> {
     println!("UDTX Doctor");
     println!("===========\n");
 
     let mut all_passed = true;
     let mut results: Vec<CheckResult> = Vec::new();
 
-    let config_result = check_config().await;
+    let config_result = check_config(config_path).await;
     if !config_result.passed {
         all_passed = false;
     }
     results.push(config_result);
 
-    let config = match try_load_config().await {
+    let config = match try_load_config(config_path).await {
         Ok(pair) => Some(pair),
         Err(_) => None,
     };
@@ -99,28 +101,22 @@ fn print_check_result(result: &CheckResult) {
     println!();
 }
 
-async fn try_load_config() -> Result<(UdtxConfig, ProfileConfig), TokenCliError> {
-    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-    let config_path = cwd.join("udtx.yaml");
-
+async fn try_load_config(config_path: &Path) -> Result<(UdtxConfig, ProfileConfig), TokenCliError> {
     if !config_path.exists() {
         return Err(TokenCliError::Config(ConfigError::Validation(
-            "udtx.yaml not found in current directory".into(),
+            format!("{} not found", config_path.display()).into(),
         )));
     }
 
-    let (config, profile) = crate::config::load_config_with_profile(&config_path)?;
+    let (config, profile) = crate::config::load_config_with_profile(config_path)?;
     Ok((config, profile))
 }
 
-async fn check_config() -> CheckResult {
-    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-    let config_path = cwd.join("udtx.yaml");
-
+async fn check_config(config_path: &Path) -> CheckResult {
     if !config_path.exists() {
         return CheckResult::fail(
             "Configuration",
-            vec![format!("udtx.yaml: not found at {}", config_path.display())],
+            vec![format!("{}: not found", config_path.display())],
             vec![
                 "Run `udtx init` to create a new project".to_string(),
                 "Or ensure you are in the project root directory".to_string(),
@@ -128,16 +124,16 @@ async fn check_config() -> CheckResult {
         );
     }
 
-    let mut details = vec![format!("udtx.yaml: found at {}", config_path.display())];
+    let mut details = vec![format!("Config: found at {}", config_path.display())];
     let mut suggestions = vec![];
 
-    let config = match crate::config::load_config(&config_path) {
+    let config = match crate::config::load_config(config_path) {
         Ok(c) => c,
         Err(e) => {
             return CheckResult::fail(
                 "Configuration",
                 vec![
-                    format!("udtx.yaml: found"),
+                    format!("Config: found"),
                     format!("Error: {}", e),
                 ],
                 vec!["Check YAML syntax and required fields".to_string()],
@@ -145,6 +141,7 @@ async fn check_config() -> CheckResult {
         }
     };
 
+    let cwd = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
     let profile_path = crate::config::resolve_profile_path(&cwd, &config.network.profile);
     let profile = match crate::config::load_profile(&profile_path) {
         Ok(p) => {
@@ -158,7 +155,7 @@ async fn check_config() -> CheckResult {
             return CheckResult::fail(
                 "Configuration",
                 vec![
-                    format!("udtx.yaml: valid"),
+                    format!("Config: valid"),
                     format!(
                         "profiles/{}.yaml: error - {}",
                         config.network.profile, e
@@ -428,7 +425,7 @@ async fn check_contracts(profile: &ProfileConfig) -> CheckResult {
 }
 
 async fn validate_contract_on_chain(
-    _client: &RpcClient,
+    client: &RpcClient,
     name: &str,
     contract: &ContractRef,
 ) -> Result<String, (String, String)> {
@@ -449,14 +446,42 @@ async fn validate_contract_on_chain(
         return Err((
             format!("{}: placeholder outpoint (not deployed)", name),
             format!(
-                "Deploy contract '{}' or update outpoint in profile",
+                "Contract '{}' is not deployed. Please deploy it first or obtain a valid contract outpoint.",
                 name
             ),
         ));
     }
 
-    Ok(format!(
-        "{}: deployed at tx_hash={}, index={}",
-        name, tx_hash, index
-    ))
+    match client.get_transaction_output_count(&tx_hash).await {
+        Ok(Some(count)) => {
+            if (index as usize) < count {
+                Ok(format!(
+                    "{}: deployed at tx_hash={}, index={}",
+                    name, tx_hash, index
+                ))
+            } else {
+                Err((
+                    format!("{}: outpoint index {} exceeds transaction outputs ({})", name, index, count),
+                    format!(
+                        "Contract '{}' outpoint references a non-existent cell output. Please verify the outpoint index in your profile.",
+                        name
+                    ),
+                ))
+            }
+        }
+        Ok(None) => Err((
+            format!("{}: transaction not found on chain", name),
+            format!(
+                "Contract '{}' outpoint references a non-existent transaction. Please verify the outpoint in your profile.",
+                name
+            ),
+        )),
+        Err(e) => Err((
+            format!("{}: unable to verify on-chain status ({})", name, e),
+            format!(
+                "Check RPC connectivity and verify the outpoint for '{}' in your profile.",
+                name
+            ),
+        )),
+    }
 }

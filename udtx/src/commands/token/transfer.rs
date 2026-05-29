@@ -3,7 +3,8 @@ use crate::error::{tx_build_error, TokenCliError};
 use crate::keys::KeyManager;
 use crate::rpc::RpcClient;
 use ckb_sdk::traits::{CellCollector, DefaultCellCollector, DefaultCellDepResolver, DefaultHeaderDepResolver, DefaultTransactionDependencyProvider, Signer, SignerError};
-use ckb_sdk::tx_builder::{CapacityBalancer, CapacityProvider, TransferAction, TxBuilder, UdtTargetReceiver, UdtTransferBuilder, UdtType};
+use ckb_sdk::tx_builder::{CapacityBalancer, CapacityProvider, TransferAction, TxBuilder};
+use ckb_sdk::tx_builder::udt::{UdtTargetReceiver, UdtTransferBuilder, UdtType};
 use ckb_sdk::types::ScriptId;
 use ckb_sdk::unlock::SecpSighashUnlocker;
 use ckb_types::bytes::Bytes;
@@ -12,17 +13,17 @@ use ckb_types::packed::WitnessArgs;
 use ckb_types::prelude::*;
 use std::collections::HashMap;
 
-struct KeyManagerSigner<'a> {
-    km: &'a KeyManager,
+struct KeyManagerSigner {
+    km: KeyManager,
 }
 
-impl<'a> KeyManagerSigner<'a> {
-    fn new(km: &'a KeyManager) -> Self {
+impl KeyManagerSigner {
+    fn new(km: KeyManager) -> Self {
         Self { km }
     }
 }
 
-impl<'a> Signer for KeyManagerSigner<'a> {
+impl Signer for KeyManagerSigner {
     fn match_id(&self, id: &[u8]) -> bool {
         id.len() == 20
     }
@@ -62,7 +63,7 @@ pub async fn transfer_token(
             role: format!("owner account '{}' not found in config", owner_name),
         })?;
 
-    let account = key_manager.load_account(owner_name, owner_account, profile)?;
+    let account = key_manager.load_account(owner_name, owner_account, profile)?.clone();
 
     let kind = token_type.as_ref().unwrap_or(&config.token.kind);
 
@@ -110,6 +111,7 @@ pub async fn transfer_token(
         .map_err(|e| TokenCliError::Rpc { message: format!("get genesis block failed: {}", e) })?
         .ok_or_else(|| TokenCliError::Rpc { message: "genesis block not found".into() })?;
 
+    let genesis_block: ckb_types::core::BlockView = genesis_block.into();
     let cell_dep_resolver = DefaultCellDepResolver::from_genesis(&genesis_block)
         .map_err(|e| TokenCliError::TxBuild { message: format!("resolve cell deps failed: {}", e) })?;
 
@@ -139,7 +141,7 @@ pub async fn transfer_token(
 
     let balancer = CapacityBalancer::new_with_provider(1000, capacity_provider);
 
-    let signer = Box::new(KeyManagerSigner::new(key_manager));
+    let signer: Box<dyn Signer> = Box::new(KeyManagerSigner::new(key_manager.clone()));
     let unlocker: Box<dyn ckb_sdk::unlock::ScriptUnlocker> = Box::new(SecpSighashUnlocker::from(signer));
     let mut unlockers = HashMap::new();
     unlockers.insert(ScriptId::new_type(

@@ -362,6 +362,7 @@ pub fn default_config(project_name: &str) -> UdtxConfig {
         access_control: Some(AccessControlConfig {
             enabled: true,
             mode: AccessMode::Blacklist,
+            addresses: vec![],
         }),
         scenario: vec![],
     }
@@ -421,6 +422,114 @@ pub fn default_devnet_profile() -> ProfileConfig {
     }
 }
 
+pub fn default_testnet_profile() -> ProfileConfig {
+    let mut system_scripts = HashMap::new();
+    system_scripts.insert(
+        "secp256k1_blake160".to_string(),
+        ScriptRef {
+            code_hash: "0x9bd7e06f3ecf4be0f2fcd2188b23f1b9fcc88e5d4b65a8637b17723bbda3cce8".to_string(),
+            hash_type: "type".to_string(),
+        },
+    );
+
+    let mut contracts = HashMap::new();
+    contracts.insert(
+        "sudt".to_string(),
+        ContractRef {
+            code_hash: "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
+            hash_type: "data1".to_string(),
+            outpoint: OutpointRef {
+                tx_hash: "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
+                index: 0,
+            },
+        },
+    );
+    contracts.insert(
+        "xudt".to_string(),
+        ContractRef {
+            code_hash: "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
+            hash_type: "data1".to_string(),
+            outpoint: OutpointRef {
+                tx_hash: "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
+                index: 0,
+            },
+        },
+    );
+    contracts.insert(
+        "access_list".to_string(),
+        ContractRef {
+            code_hash: "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
+            hash_type: "data1".to_string(),
+            outpoint: OutpointRef {
+                tx_hash: "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
+                index: 0,
+            },
+        },
+    );
+
+    ProfileConfig {
+        name: "testnet".to_string(),
+        rpc_url: "https://testnet.ckb.dev".to_string(),
+        network_type: NetworkType::Testnet,
+        system_scripts,
+        contracts,
+    }
+}
+
+pub fn default_mainnet_profile() -> ProfileConfig {
+    let mut system_scripts = HashMap::new();
+    system_scripts.insert(
+        "secp256k1_blake160".to_string(),
+        ScriptRef {
+            code_hash: "0x9bd7e06f3ecf4be0f2fcd2188b23f1b9fcc88e5d4b65a8637b17723bbda3cce8".to_string(),
+            hash_type: "type".to_string(),
+        },
+    );
+
+    let mut contracts = HashMap::new();
+    contracts.insert(
+        "sudt".to_string(),
+        ContractRef {
+            code_hash: "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
+            hash_type: "data1".to_string(),
+            outpoint: OutpointRef {
+                tx_hash: "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
+                index: 0,
+            },
+        },
+    );
+    contracts.insert(
+        "xudt".to_string(),
+        ContractRef {
+            code_hash: "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
+            hash_type: "data1".to_string(),
+            outpoint: OutpointRef {
+                tx_hash: "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
+                index: 0,
+            },
+        },
+    );
+    contracts.insert(
+        "access_list".to_string(),
+        ContractRef {
+            code_hash: "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
+            hash_type: "data1".to_string(),
+            outpoint: OutpointRef {
+                tx_hash: "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
+                index: 0,
+            },
+        },
+    );
+
+    ProfileConfig {
+        name: "mainnet".to_string(),
+        rpc_url: "https://mainnet.ckb.dev".to_string(),
+        network_type: NetworkType::Mainnet,
+        system_scripts,
+        contracts,
+    }
+}
+
 pub fn init_project<P: AsRef<Path>>(project_path: P, project_name: &str) -> Result<(), ConfigError> {
     let path = project_path.as_ref();
 
@@ -431,9 +540,17 @@ pub fn init_project<P: AsRef<Path>>(project_path: P, project_name: &str) -> Resu
     let config_yaml = serde_yaml::to_string(&config)?;
     fs::write(path.join("udtx.yaml"), config_yaml)?;
 
-    let profile = default_devnet_profile();
-    let profile_yaml = serde_yaml::to_string(&profile)?;
-    fs::write(path.join("profiles").join("devnet.yaml"), profile_yaml)?;
+    let devnet = default_devnet_profile();
+    let devnet_yaml = serde_yaml::to_string(&devnet)?;
+    fs::write(path.join("profiles").join("devnet.yaml"), devnet_yaml)?;
+
+    let testnet = default_testnet_profile();
+    let testnet_yaml = serde_yaml::to_string(&testnet)?;
+    fs::write(path.join("profiles").join("testnet.yaml"), testnet_yaml)?;
+
+    let mainnet = default_mainnet_profile();
+    let mainnet_yaml = serde_yaml::to_string(&mainnet)?;
+    fs::write(path.join("profiles").join("mainnet.yaml"), mainnet_yaml)?;
 
     Ok(())
 }
