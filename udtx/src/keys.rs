@@ -201,9 +201,10 @@ fn lock_script_to_address(
     network: NetworkType,
 ) -> Result<String, TokenCliError> {
     let payload_bytes = {
-        let mut v = Vec::with_capacity(22);
-        v.push(0x01);
+        let mut v = Vec::with_capacity(54);
         v.push(0x00);
+        v.extend_from_slice(lock_script.code_hash().as_slice());
+        v.push(u8::from(lock_script.hash_type()));
         v.extend_from_slice(&lock_script.args().raw_data());
         v
     };
@@ -251,27 +252,32 @@ pub fn address_to_lock_script(
         message: format!("address base32 decode failed: {}", e),
     })?;
 
-    if bytes.len() != 22 || bytes[0] != 0x01 || bytes[1] != 0x00 {
+    if bytes.len() < 34 || bytes[0] != 0x00 {
         return Err(TokenCliError::TxBuild {
-            message: "address is not a short-format secp256k1-blake160 address".to_string(),
+            message: "address is not a full-format address".to_string(),
         });
     }
 
-    let code_hash = Byte32::from_slice(
-        &hex::decode(SECP256K1_BLAKE160_CODE_HASH.trim_start_matches("0x")).map_err(|e| {
-            TokenCliError::TxBuild {
-                message: format!("invalid code hash hex: {}", e),
-            }
-        })?,
-    )
-    .map_err(|e| TokenCliError::TxBuild {
-        message: format!("invalid code hash bytes: {}", e),
-    })?;
+    let code_hash = Byte32::from_slice(&bytes[1..33])
+        .map_err(|e| TokenCliError::TxBuild {
+            message: format!("invalid code hash bytes: {}", e),
+        })?;
+    let hash_type = match bytes[33] {
+        0x00 => ScriptHashType::Data,
+        0x01 => ScriptHashType::Type,
+        0x02 => ScriptHashType::Data1,
+        0x03 => ScriptHashType::Data2,
+        _ => {
+            return Err(TokenCliError::TxBuild {
+                message: format!("unsupported hash type: 0x{:02x}", bytes[33]),
+            })
+        }
+    };
 
     Ok(Script::new_builder()
         .code_hash(code_hash)
-        .hash_type(ScriptHashType::Type)
-        .args(Bytes::from(bytes[2..].to_vec()))
+        .hash_type(hash_type)
+        .args(Bytes::from(bytes[34..].to_vec()))
         .build())
 }
 

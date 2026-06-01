@@ -93,7 +93,9 @@ pub async fn transfer_token(
         .code_hash(contract_code_hash)
         .hash_type(match contract.hash_type.as_str() {
             "type" => ckb_types::core::ScriptHashType::Type,
-            "data" | "data1" => ckb_types::core::ScriptHashType::Data,
+            "data" => ckb_types::core::ScriptHashType::Data,
+            "data1" => ckb_types::core::ScriptHashType::Data1,
+            "data2" => ckb_types::core::ScriptHashType::Data2,
             _ => ckb_types::core::ScriptHashType::Data,
         })
         .args(ckb_types::packed::Bytes::from(lock_script_hash.to_vec()))

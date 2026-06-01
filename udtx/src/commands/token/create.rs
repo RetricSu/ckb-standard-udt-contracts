@@ -2,15 +2,35 @@ use crate::config::{SupplyMode, TokenKind, UdtxConfig, ProfileConfig};
 use crate::error::{tx_build_error, TokenCliError};
 use crate::keys::KeyManager;
 use crate::rpc::RpcClient;
-use ckb_sdk::traits::{CellCollector, DefaultCellCollector, DefaultCellDepResolver, DefaultHeaderDepResolver, DefaultTransactionDependencyProvider, Signer, SignerError};
+use ckb_sdk::traits::{CellCollector, CellDepResolver, DefaultCellCollector, DefaultCellDepResolver, DefaultHeaderDepResolver, DefaultTransactionDependencyProvider, Signer, SignerError};
 use ckb_sdk::tx_builder::{CapacityBalancer, CapacityProvider, TransferAction, TxBuilder};
 use ckb_sdk::tx_builder::udt::{UdtIssueBuilder, UdtTargetReceiver, UdtType};
 use ckb_sdk::types::ScriptId;
 use ckb_sdk::unlock::SecpSighashUnlocker;
 use ckb_types::bytes::Bytes;
-use ckb_types::packed::WitnessArgs;
+use ckb_types::packed::{CellDep, OutPoint, WitnessArgs};
 use ckb_types::prelude::*;
 use std::collections::HashMap;
+
+struct CombinedCellDepResolver {
+    genesis: DefaultCellDepResolver,
+    custom: HashMap<ScriptId, CellDep>,
+}
+
+impl CombinedCellDepResolver {
+    fn new(genesis: DefaultCellDepResolver, custom: HashMap<ScriptId, CellDep>) -> Self {
+        Self { genesis, custom }
+    }
+}
+
+impl CellDepResolver for CombinedCellDepResolver {
+    fn resolve(&self, script: &ckb_types::packed::Script) -> Option<CellDep> {
+        let script_id = ScriptId::from(script);
+        self.custom.get(&script_id).cloned().or_else(|| {
+            self.genesis.resolve(script)
+        })
+    }
+}
 
 struct KeyManagerSigner {
     km: KeyManager,
@@ -90,7 +110,9 @@ pub async fn create_token(
         contract_code_hash.unpack(),
         match contract.hash_type.as_str() {
             "type" => ckb_types::core::ScriptHashType::Type,
-            "data" | "data1" => ckb_types::core::ScriptHashType::Data,
+            "data" => ckb_types::core::ScriptHashType::Data,
+            "data1" => ckb_types::core::ScriptHashType::Data1,
+            "data2" => ckb_types::core::ScriptHashType::Data2,
             _ => ckb_types::core::ScriptHashType::Data,
         },
     );
@@ -126,8 +148,37 @@ pub async fn create_token(
         .ok_or_else(|| TokenCliError::Rpc { message: "genesis block not found".into() })?;
 
     let genesis_block: ckb_types::core::BlockView = genesis_block.into();
-    let cell_dep_resolver = DefaultCellDepResolver::from_genesis(&genesis_block)
+    let genesis_resolver = DefaultCellDepResolver::from_genesis(&genesis_block)
         .map_err(|e| TokenCliError::TxBuild { message: format!("resolve cell deps failed: {}", e) })?;
+
+    let mut custom_deps = HashMap::new();
+    for (name, contract) in &profile.contracts {
+        let code_hash = ckb_types::packed::Byte32::from_slice(
+            &hex::decode(contract.code_hash.trim_start_matches("0x"))
+                .map_err(|e| TokenCliError::TxBuild { message: format!("invalid code hash for {}: {}", name, e) })?
+        ).map_err(|e| TokenCliError::TxBuild { message: format!("invalid code hash bytes for {}: {}", name, e) })?;
+        let hash_type = match contract.hash_type.as_str() {
+            "type" => ckb_types::core::ScriptHashType::Type,
+            "data" => ckb_types::core::ScriptHashType::Data,
+            "data1" => ckb_types::core::ScriptHashType::Data1,
+            _ => ckb_types::core::ScriptHashType::Data,
+        };
+        let script_id = ScriptId::new(code_hash.unpack(), hash_type);
+        let tx_hash = ckb_types::H256::from_slice(
+            &hex::decode(contract.outpoint.tx_hash.trim_start_matches("0x"))
+                .map_err(|e| TokenCliError::TxBuild { message: format!("invalid tx_hash for {}: {}", name, e) })?
+        ).map_err(|e| TokenCliError::TxBuild { message: format!("invalid tx_hash bytes for {}: {}", name, e) })?;
+        let outpoint = OutPoint::new_builder()
+            .tx_hash(tx_hash.pack())
+            .index(contract.outpoint.index.pack())
+            .build();
+        let cell_dep = CellDep::new_builder()
+            .out_point(outpoint)
+            .build();
+        custom_deps.insert(script_id, cell_dep);
+    }
+
+    let cell_dep_resolver = CombinedCellDepResolver::new(genesis_resolver, custom_deps);
 
     let header_dep_resolver = DefaultHeaderDepResolver::new(rpc_url);
     let tx_dep_provider = DefaultTransactionDependencyProvider::new(rpc_url, 10);
