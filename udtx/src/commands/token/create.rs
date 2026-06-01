@@ -170,7 +170,7 @@ pub async fn create_token(
         ).map_err(|e| TokenCliError::TxBuild { message: format!("invalid tx_hash bytes for {}: {}", name, e) })?;
         let outpoint = OutPoint::new_builder()
             .tx_hash(tx_hash.pack())
-            .index(contract.outpoint.index.pack())
+            .index(contract.outpoint.index)
             .build();
         let cell_dep = CellDep::new_builder()
             .out_point(outpoint)
