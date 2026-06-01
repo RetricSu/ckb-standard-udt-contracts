@@ -165,7 +165,7 @@ fn xudt_mint_with_type_hash_dynamic_linking_authority(args: Bytes) -> bool {
     let mut fixture = XudtFixture::new();
     let out_point = fixture.context.create_cell(
         CellOutput::new_builder()
-            .capacity(100_000_000_000u64.pack())
+            .capacity(100_000_000_000u64)
             .lock(fixture.lock.script.clone())
             .type_(Some(fixture.lock.script.clone()).pack())
             .build(),

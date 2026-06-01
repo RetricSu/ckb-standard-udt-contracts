@@ -55,7 +55,7 @@ fn access_list_mint_authority_fallback_survives_broken_access_authority() {
     );
     let authority_out_point = context.create_cell(
         ckb_testtool::ckb_types::packed::CellOutput::new_builder()
-            .capacity(100_000_000_000u64.pack())
+            .capacity(100_000_000_000u64)
             .lock(authority.script.clone())
             .build(),
         Bytes::new(),

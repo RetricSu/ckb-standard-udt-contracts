@@ -64,7 +64,7 @@ pub(super) fn access_list_update_tx(
     if include_authority_input {
         let out_point = context.create_cell(
             ckb_testtool::ckb_types::packed::CellOutput::new_builder()
-                .capacity(100_000_000_000u64.pack())
+                .capacity(100_000_000_000u64)
                 .lock(authority.script.clone())
                 .build(),
             Bytes::new(),
@@ -145,7 +145,7 @@ pub(super) fn access_list_update_tx_with_mint_authority(
     if include_authority_input {
         let out_point = context.create_cell(
             ckb_testtool::ckb_types::packed::CellOutput::new_builder()
-                .capacity(100_000_000_000u64.pack())
+                .capacity(100_000_000_000u64)
                 .lock(authority.script.clone())
                 .build(),
             Bytes::new(),
@@ -218,7 +218,7 @@ pub(super) fn access_list_transition_tx(
     if include_authority_input {
         let out_point = context.create_cell(
             ckb_testtool::ckb_types::packed::CellOutput::new_builder()
-                .capacity(100_000_000_000u64.pack())
+                .capacity(100_000_000_000u64)
                 .lock(authority.script.clone())
                 .build(),
             Bytes::new(),
@@ -281,7 +281,7 @@ pub(super) fn access_list_update_tx_with_non_whitelisted_meta_lock(
 
     let auth_out_point = context.create_cell(
         ckb_testtool::ckb_types::packed::CellOutput::new_builder()
-            .capacity(100_000_000_000u64.pack())
+            .capacity(100_000_000_000u64)
             .lock(authority.script.clone())
             .build(),
         Bytes::new(),
@@ -346,7 +346,7 @@ where
     );
     let auth_out_point = context.create_cell(
         ckb_testtool::ckb_types::packed::CellOutput::new_builder()
-            .capacity(100_000_000_000u64.pack())
+            .capacity(100_000_000_000u64)
             .lock(authority.script.clone())
             .build(),
         Bytes::new(),
