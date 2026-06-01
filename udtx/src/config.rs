@@ -89,7 +89,7 @@ pub struct SupplyPolicyConfig {
     pub fixed_after_issue: Option<FixedAfterIssueConfig>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
 #[serde(rename_all = "lowercase")]
 pub enum SupplyMode {
     #[default]
@@ -412,6 +412,28 @@ pub fn default_devnet_profile() -> ProfileConfig {
             },
         },
     );
+    contracts.insert(
+        "sudt-meta".to_string(),
+        ContractRef {
+            code_hash: "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
+            hash_type: "data1".to_string(),
+            outpoint: OutpointRef {
+                tx_hash: "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
+                index: 0,
+            },
+        },
+    );
+    contracts.insert(
+        "xudt-meta".to_string(),
+        ContractRef {
+            code_hash: "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
+            hash_type: "data1".to_string(),
+            outpoint: OutpointRef {
+                tx_hash: "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
+                index: 0,
+            },
+        },
+    );
 
     ProfileConfig {
         name: "devnet".to_string(),
@@ -466,6 +488,28 @@ pub fn default_testnet_profile() -> ProfileConfig {
             },
         },
     );
+    contracts.insert(
+        "sudt-meta".to_string(),
+        ContractRef {
+            code_hash: "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
+            hash_type: "data1".to_string(),
+            outpoint: OutpointRef {
+                tx_hash: "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
+                index: 0,
+            },
+        },
+    );
+    contracts.insert(
+        "xudt-meta".to_string(),
+        ContractRef {
+            code_hash: "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
+            hash_type: "data1".to_string(),
+            outpoint: OutpointRef {
+                tx_hash: "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
+                index: 0,
+            },
+        },
+    );
 
     ProfileConfig {
         name: "testnet".to_string(),
@@ -511,6 +555,28 @@ pub fn default_mainnet_profile() -> ProfileConfig {
     );
     contracts.insert(
         "access_list".to_string(),
+        ContractRef {
+            code_hash: "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
+            hash_type: "data1".to_string(),
+            outpoint: OutpointRef {
+                tx_hash: "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
+                index: 0,
+            },
+        },
+    );
+    contracts.insert(
+        "sudt-meta".to_string(),
+        ContractRef {
+            code_hash: "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
+            hash_type: "data1".to_string(),
+            outpoint: OutpointRef {
+                tx_hash: "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
+                index: 0,
+            },
+        },
+    );
+    contracts.insert(
+        "xudt-meta".to_string(),
         ContractRef {
             code_hash: "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
             hash_type: "data1".to_string(),

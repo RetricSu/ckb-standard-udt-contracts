@@ -1,16 +1,17 @@
-use crate::config::{SupplyMode, TokenKind, UdtxConfig, ProfileConfig};
+use crate::config::{AccessMode, SupplyMode, TokenKind, UdtxConfig, ProfileConfig};
 use crate::error::{tx_build_error, TokenCliError};
 use crate::keys::KeyManager;
 use crate::rpc::RpcClient;
-use ckb_sdk::traits::{CellCollector, CellDepResolver, DefaultCellCollector, DefaultCellDepResolver, DefaultHeaderDepResolver, DefaultTransactionDependencyProvider, Signer, SignerError};
-use ckb_sdk::tx_builder::{CapacityBalancer, CapacityProvider, TransferAction, TxBuilder};
-use ckb_sdk::tx_builder::udt::{UdtIssueBuilder, UdtTargetReceiver, UdtType};
+use ckb_sdk::traits::{CellCollector, CellDepResolver, CellQueryOptions, DefaultCellCollector, DefaultCellDepResolver, DefaultHeaderDepResolver, DefaultTransactionDependencyProvider, Signer, SignerError, ValueRangeOption};
+use ckb_sdk::tx_builder::{CapacityBalancer, CapacityProvider, balance_tx_capacity_async, fill_placeholder_witnesses_async};
 use ckb_sdk::types::ScriptId;
 use ckb_sdk::unlock::SecpSighashUnlocker;
-use ckb_types::bytes::Bytes;
-use ckb_types::packed::{CellDep, OutPoint, WitnessArgs};
+use ckb_types::bytes::{BufMut, Bytes, BytesMut};
+use ckb_types::core::{Capacity, TransactionBuilder};
+use ckb_types::packed::{CellDep, CellInput, CellOutput, OutPoint, WitnessArgs};
 use ckb_types::prelude::*;
 use std::collections::HashMap;
+use standard_udt_types::metadata::{SudtMeta, XudtMeta, Authority, AuthorityType, CONFIG_SUPPLY_TRACKED, CONFIG_ACCESS_ENABLED, CONFIG_ACCESS_WHITELIST};
 
 struct CombinedCellDepResolver {
     genesis: DefaultCellDepResolver,
@@ -98,42 +99,72 @@ pub async fn create_token(
         )
     ))?;
 
+    let meta_contract_name = match kind {
+        TokenKind::Sudt => "sudt-meta",
+        TokenKind::Xudt => "xudt-meta",
+    };
+    let meta_contract = profile.contracts.get(meta_contract_name)
+        .ok_or_else(|| TokenCliError::Config(
+            crate::config::ConfigError::Validation(
+                format!("Contract reference for '{}' not found in profile", meta_contract_name)
+            )
+        ))?;
+
     let amount_u128 = supply.as_deref().unwrap_or("0").parse::<u128>()
         .map_err(|e| TokenCliError::TxBuild { message: format!("invalid supply amount: {}", e) })?;
+
+    let token_name = name.as_deref().unwrap_or(&config.token.symbol).to_string();
+    let token_symbol = symbol.as_deref().unwrap_or(&config.token.symbol).to_string();
+    let token_decimals = decimals.unwrap_or(config.token.decimals);
 
     let contract_code_hash = ckb_types::packed::Byte32::from_slice(
         &hex::decode(contract.code_hash.trim_start_matches("0x"))
             .map_err(|e| TokenCliError::TxBuild { message: format!("invalid code hash: {}", e) })?
     ).map_err(|e| TokenCliError::TxBuild { message: format!("invalid code hash bytes: {}", e) })?;
 
-    let script_id = ScriptId::new(
-        contract_code_hash.unpack(),
-        match contract.hash_type.as_str() {
-            "type" => ckb_types::core::ScriptHashType::Type,
-            "data" => ckb_types::core::ScriptHashType::Data,
-            "data1" => ckb_types::core::ScriptHashType::Data1,
-            "data2" => ckb_types::core::ScriptHashType::Data2,
-            _ => ckb_types::core::ScriptHashType::Data,
-        },
-    );
-
-    let udt_type = match kind {
-        TokenKind::Sudt => UdtType::Sudt,
-        TokenKind::Xudt => UdtType::Xudt(Bytes::default()),
+    let hash_type = match contract.hash_type.as_str() {
+        "type" => ckb_types::core::ScriptHashType::Type,
+        "data" => ckb_types::core::ScriptHashType::Data,
+        "data1" => ckb_types::core::ScriptHashType::Data1,
+        "data2" => ckb_types::core::ScriptHashType::Data2,
+        _ => ckb_types::core::ScriptHashType::Data,
     };
 
-    let receiver = UdtTargetReceiver::new(
-        TransferAction::Create,
-        account.lock_script.clone(),
-        amount_u128,
-    );
+    let meta_code_hash = ckb_types::packed::Byte32::from_slice(
+        &hex::decode(meta_contract.code_hash.trim_start_matches("0x"))
+            .map_err(|e| TokenCliError::TxBuild { message: format!("invalid meta code hash: {}", e) })?
+    ).map_err(|e| TokenCliError::TxBuild { message: format!("invalid meta code hash bytes: {}", e) })?;
 
-    let builder = UdtIssueBuilder {
-        udt_type,
-        script_id,
-        owner: account.lock_script.clone(),
-        receivers: vec![receiver],
+    let meta_hash_type = match meta_contract.hash_type.as_str() {
+        "type" => ckb_types::core::ScriptHashType::Type,
+        "data" => ckb_types::core::ScriptHashType::Data,
+        "data1" => ckb_types::core::ScriptHashType::Data1,
+        "data2" => ckb_types::core::ScriptHashType::Data2,
+        _ => ckb_types::core::ScriptHashType::Data,
     };
+
+    // Generate a pseudo-unique metadata type script args based on token identity
+    let mut meta_args_hasher = ckb_hash::new_blake2b();
+    meta_args_hasher.update(token_name.as_bytes());
+    meta_args_hasher.update(token_symbol.as_bytes());
+    meta_args_hasher.update(owner_name.as_bytes());
+    let mut meta_args = [0u8; 32];
+    meta_args_hasher.finalize(&mut meta_args);
+
+    let meta_type_script = ckb_types::packed::Script::new_builder()
+        .code_hash(meta_code_hash)
+        .hash_type(meta_hash_type)
+        .args(Bytes::from(meta_args.to_vec()).pack())
+        .build();
+
+    let meta_type_hash: [u8; 32] = meta_type_script.calc_script_hash().unpack();
+
+    // Build sUDT/xUDT type script with meta_type_hash as args
+    let udt_type_script = ckb_types::packed::Script::new_builder()
+        .code_hash(contract_code_hash)
+        .hash_type(hash_type)
+        .args(Bytes::from(meta_type_hash.to_vec()).pack())
+        .build();
 
     let rpc_url = &profile.rpc_url;
     let mut cell_collector = DefaultCellCollector::new(rpc_url);
@@ -161,6 +192,7 @@ pub async fn create_token(
             "type" => ckb_types::core::ScriptHashType::Type,
             "data" => ckb_types::core::ScriptHashType::Data,
             "data1" => ckb_types::core::ScriptHashType::Data1,
+            "data2" => ckb_types::core::ScriptHashType::Data2,
             _ => ckb_types::core::ScriptHashType::Data,
         };
         let script_id = ScriptId::new(code_hash.unpack(), hash_type);
@@ -183,6 +215,155 @@ pub async fn create_token(
     let header_dep_resolver = DefaultHeaderDepResolver::new(rpc_url);
     let tx_dep_provider = DefaultTransactionDependencyProvider::new(rpc_url, 10);
 
+    // Collect owner CKB cell as input
+    let owner_query = {
+        let mut query = CellQueryOptions::new_lock(account.lock_script.clone());
+        query.secondary_script_len_range = Some(ValueRangeOption::new_exact(0));
+        query.data_len_range = Some(ValueRangeOption::new_exact(0));
+        query
+    };
+
+    let (owner_cells, _) = cell_collector
+        .collect_live_cells_async(&owner_query, true)
+        .await
+        .map_err(|e| TokenCliError::TxBuild {
+            message: format!("collect owner cells failed: {}", e),
+        })?;
+
+    if owner_cells.is_empty() {
+        return Err(TokenCliError::TxBuild {
+            message: "owner cell not found (need a live CKB cell with no type script and empty data)".into(),
+        });
+    }
+
+    let inputs = vec![CellInput::new(owner_cells[0].out_point.clone(), 0)];
+
+    let owner_lock_hash: [u8; 32] = account.lock_script.calc_script_hash().unpack();
+    let owner_lock_authority = Authority {
+        authority_type: AuthorityType::InputLock,
+        script_hash: owner_lock_hash,
+        script: None,
+    };
+
+    // Build metadata output cell
+    let mut config_flags = if config.token.supply_policy.mode == SupplyMode::Tracked {
+        CONFIG_SUPPLY_TRACKED
+    } else {
+        0
+    };
+
+    if let Some(ref ac) = config.access_control {
+        if ac.enabled && matches!(kind, TokenKind::Xudt) {
+            config_flags |= CONFIG_ACCESS_ENABLED;
+            if matches!(ac.mode, AccessMode::Whitelist) {
+                config_flags |= CONFIG_ACCESS_WHITELIST;
+            }
+        }
+    }
+
+    let current_supply = if config.token.supply_policy.mode == SupplyMode::Tracked {
+        amount_u128
+    } else {
+        0
+    };
+
+    let meta_data_bytes = match kind {
+        TokenKind::Sudt => {
+            let meta = SudtMeta {
+                config_flags,
+                current_supply,
+                decimals: token_decimals,
+                name: token_name.as_bytes().to_vec(),
+                symbol: token_symbol.as_bytes().to_vec(),
+                uri: Vec::new(),
+                extra_data: Vec::new(),
+                mint_authority: Some(owner_lock_authority.clone()),
+                metadata_authority: Some(owner_lock_authority.clone()),
+            };
+            Bytes::from(meta.to_bytes().map_err(|e| TokenCliError::TxBuild {
+                message: format!("build SudtMeta bytes failed: {:?}", e),
+            })?)
+        }
+        TokenKind::Xudt => {
+            let access_authority = config.access_control
+                .as_ref()
+                .filter(|ac| ac.enabled)
+                .map(|_| owner_lock_authority.clone());
+            let meta = XudtMeta {
+                config_flags,
+                current_supply,
+                decimals: token_decimals,
+                name: token_name.as_bytes().to_vec(),
+                symbol: token_symbol.as_bytes().to_vec(),
+                uri: Vec::new(),
+                extra_data: Vec::new(),
+                mint_authority: Some(owner_lock_authority.clone()),
+                metadata_authority: Some(owner_lock_authority.clone()),
+                access_authority,
+                extensions: Vec::new(),
+            };
+            Bytes::from(meta.to_bytes().map_err(|e| TokenCliError::TxBuild {
+                message: format!("build XudtMeta bytes failed: {:?}", e),
+            })?)
+        }
+    };
+
+    let meta_output = CellOutput::new_builder()
+        .lock(account.lock_script.clone())
+        .type_(Some(meta_type_script.clone()).pack())
+        .build();
+    let meta_occupied = meta_output
+        .occupied_capacity(Capacity::bytes(meta_data_bytes.len()).unwrap())
+        .unwrap()
+        .as_u64();
+    let meta_output = meta_output.as_builder().capacity(meta_occupied).build();
+
+    // Build UDT output cell
+    let mut udt_data = BytesMut::with_capacity(16);
+    udt_data.put(&amount_u128.to_le_bytes()[..]);
+    let udt_data_bytes = udt_data.freeze();
+
+    let udt_output = CellOutput::new_builder()
+        .lock(account.lock_script.clone())
+        .type_(Some(udt_type_script.clone()).pack())
+        .build();
+    let udt_occupied = udt_output
+        .occupied_capacity(Capacity::bytes(udt_data_bytes.len()).unwrap())
+        .unwrap()
+        .as_u64();
+    let udt_output = udt_output.as_builder().capacity(udt_occupied).build();
+
+    // Resolve cell deps
+    let owner_cell_dep = cell_dep_resolver
+        .resolve(&account.lock_script)
+        .ok_or_else(|| TokenCliError::TxBuild {
+            message: "resolve owner cell dep failed".into(),
+        })?;
+    let udt_cell_dep = cell_dep_resolver
+        .resolve(&udt_type_script)
+        .ok_or_else(|| TokenCliError::TxBuild {
+            message: format!("resolve {} cell dep failed", match kind { TokenKind::Sudt => "sudt", TokenKind::Xudt => "xudt" }),
+        })?;
+    let meta_cell_dep = cell_dep_resolver
+        .resolve(&meta_type_script)
+        .ok_or_else(|| TokenCliError::TxBuild {
+            message: format!("resolve {} cell dep failed", meta_contract_name),
+        })?;
+
+    #[allow(clippy::mutable_key_type)]
+    let mut cell_deps = HashMap::new();
+    cell_deps.insert(owner_cell_dep.clone(), ());
+    cell_deps.insert(udt_cell_dep.clone(), ());
+    cell_deps.insert(meta_cell_dep.clone(), ());
+    let cell_deps_vec: Vec<CellDep> = cell_deps.into_iter().map(|(dep, _)| dep).collect();
+
+    let base_tx = TransactionBuilder::default()
+        .set_cell_deps(cell_deps_vec)
+        .set_inputs(inputs)
+        .set_outputs(vec![meta_output, udt_output])
+        .set_outputs_data(vec![meta_data_bytes.pack(), udt_data_bytes.pack()])
+        .build();
+
     let placeholder_witness = WitnessArgs::new_builder()
         .lock(Some(Bytes::from(vec![0u8; 65])).pack())
         .build();
@@ -203,19 +384,25 @@ pub async fn create_token(
         ).unwrap()
     ), unlocker);
 
-    let balanced_tx = builder
-        .build_balanced_async(
-            &mut cell_collector,
-            &cell_dep_resolver,
-            &header_dep_resolver,
-            &tx_dep_provider,
-            &balancer,
-            &unlockers,
-        )
+    let tx_filled = fill_placeholder_witnesses_async(base_tx, &tx_dep_provider, &unlockers)
         .await
         .map_err(|e| TokenCliError::TxBuild {
-            message: format!("build tx failed: {}", e),
-        })?;
+            message: format!("fill placeholder witnesses failed: {}", e),
+        })?
+        .0;
+
+    let balanced_tx = balance_tx_capacity_async(
+        &tx_filled,
+        &balancer,
+        &mut cell_collector,
+        &tx_dep_provider,
+        &cell_dep_resolver,
+        &header_dep_resolver,
+    )
+    .await
+    .map_err(|e| TokenCliError::TxBuild {
+        message: format!("balance tx capacity failed: {}", e),
+    })?;
 
     let (tx, _not_unlocked) = ckb_sdk::tx_builder::unlock_tx_async(
         balanced_tx,
@@ -227,10 +414,6 @@ pub async fn create_token(
         message: format!("unlock tx failed: {}", e),
     })?;
 
-    let token_name = name.as_deref().unwrap_or(&config.token.symbol);
-    let token_symbol = symbol.as_deref().unwrap_or(&config.token.symbol);
-    let token_decimals = decimals.unwrap_or(config.token.decimals);
-
     if dry_run {
         println!("Token Issue Preview");
         println!("===================");
@@ -240,6 +423,7 @@ pub async fn create_token(
         println!("  Decimals: {}", token_decimals);
         println!("  Initial Supply: {}", amount_u128);
         println!("  Owner: {} ({})", owner_name, account.address);
+        println!("  Metadata Type Hash: 0x{}", hex::encode(meta_type_hash));
         println!("  Transaction Hash: 0x{}", hex::encode(tx.hash().as_slice()));
         println!("\n[Dry Run] Issue preview complete. No transaction sent.");
         return Ok(());
@@ -254,6 +438,7 @@ pub async fn create_token(
     println!("  Decimals: {}", token_decimals);
     println!("  Initial Supply: {}", amount_u128);
     println!("  Owner: {} ({})", owner_name, account.address);
+    println!("  Metadata Type Hash: 0x{}", hex::encode(meta_type_hash));
     println!("  Transaction Hash: 0x{}", hash);
 
     Ok(())
