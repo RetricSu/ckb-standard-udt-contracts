@@ -266,6 +266,7 @@ pub fn address_to_lock_script(
         0x00 => ScriptHashType::Data,
         0x01 => ScriptHashType::Type,
         0x02 => ScriptHashType::Data1,
+        0x03 => ScriptHashType::Data2,
         _ => {
             return Err(TokenCliError::TxBuild {
                 message: format!("unsupported hash type: 0x{:02x}", bytes[33]),

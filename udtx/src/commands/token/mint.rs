@@ -88,6 +88,7 @@ pub async fn mint_token(
             "type" => ckb_types::core::ScriptHashType::Type,
             "data" => ckb_types::core::ScriptHashType::Data,
             "data1" => ckb_types::core::ScriptHashType::Data1,
+            "data2" => ckb_types::core::ScriptHashType::Data2,
             _ => ckb_types::core::ScriptHashType::Data,
         },
     );

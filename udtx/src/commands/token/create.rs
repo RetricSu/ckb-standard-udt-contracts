@@ -112,6 +112,7 @@ pub async fn create_token(
             "type" => ckb_types::core::ScriptHashType::Type,
             "data" => ckb_types::core::ScriptHashType::Data,
             "data1" => ckb_types::core::ScriptHashType::Data1,
+            "data2" => ckb_types::core::ScriptHashType::Data2,
             _ => ckb_types::core::ScriptHashType::Data,
         },
     );
@@ -169,7 +170,7 @@ pub async fn create_token(
         ).map_err(|e| TokenCliError::TxBuild { message: format!("invalid tx_hash bytes for {}: {}", name, e) })?;
         let outpoint = OutPoint::new_builder()
             .tx_hash(tx_hash.pack())
-            .index(contract.outpoint.index)
+            .index(contract.outpoint.index.pack())
             .build();
         let cell_dep = CellDep::new_builder()
             .out_point(outpoint)
