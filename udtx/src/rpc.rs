@@ -153,7 +153,8 @@ impl RpcClient {
     }
 
     pub async fn get_transaction(&self, tx_hash: &str) -> Result<bool, TokenCliError> {
-        let hash = ckb_types::H256::from_str(tx_hash)
+        let hash_str = tx_hash.strip_prefix("0x").unwrap_or(tx_hash);
+        let hash = ckb_types::H256::from_str(hash_str)
             .map_err(|e| rpc_error(format!("invalid tx_hash '{}': {}", tx_hash, e)))?;
         let result = self
             .with_retry(|| async {
@@ -167,7 +168,8 @@ impl RpcClient {
 
     /// Get the number of outputs in a transaction. Returns `None` if the transaction is not found.
     pub async fn get_transaction_output_count(&self, tx_hash: &str) -> Result<Option<usize>, TokenCliError> {
-        let hash = ckb_types::H256::from_str(tx_hash)
+        let hash_str = tx_hash.strip_prefix("0x").unwrap_or(tx_hash);
+        let hash = ckb_types::H256::from_str(hash_str)
             .map_err(|e| rpc_error(format!("invalid tx_hash '{}': {}", tx_hash, e)))?;
         let result = self
             .with_retry(|| async {
