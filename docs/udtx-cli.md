@@ -50,17 +50,14 @@ accounts:
 
 ### 3. 启动本地 Devnet
 
-UDTX 依赖 `@offckb/cli` 管理本地 devnet：
+使用 `@offckb/cli` 管理本地 devnet：
 
 ```bash
 npm install -g @offckb/cli
+offckb node
 ```
 
-> **注意**：`udtx chain up/down/reset/status` 命令依赖 offckb。如果 CLI 中没有 `chain` 子命令，可以直接用 offckb 管理节点：
-> ```bash
-> offckb node
-> ```
-> 第一次运行会初始化 devnet 配置，之后启动节点和 miner 即可。
+第一次运行会初始化 devnet 配置，之后启动节点和 miner 即可。
 
 启动后，确保 `profiles/devnet.yaml` 中的 `rpc_url` 指向正确的节点地址（默认 `http://127.0.0.1:8114`）。
 
