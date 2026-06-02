@@ -61,7 +61,59 @@ offckb node
 
 启动后，确保 `profiles/devnet.yaml` 中的 `rpc_url` 指向正确的节点地址（默认 `http://127.0.0.1:8114`）。
 
-### 4. 环境检查
+### 4. 部署合约并填写 Profile
+
+**devnet 的合约配置默认是占位符**，因为每个人本地启动的 devnet 都是全新的链，上面并没有预先部署任何合约。你需要先自己部署合约，然后把部署信息填回 `profiles/devnet.yaml`。
+
+#### 部署合约
+
+先构建合约：
+
+```bash
+rustup target add riscv64imac-unknown-none-elf
+make build MODE=release
+```
+
+然后使用 `ckb-cli` 或其他部署工具把合约二进制部署到本地 devnet。需要部署的合约包括：
+
+| 合约 | 二进制路径 |
+|------|-----------|
+| sudt | `build/release/sudt` |
+| xudt | `build/release/xudt` |
+| access-list | `build/release/access-list` |
+| sudt-meta | `build/release/sudt-meta` |
+| xudt-meta | `build/release/xudt-meta` |
+| always_success | `build/release/always_success` |
+
+> **注意**：`sudt-meta` 构建前需要设置 `SUDT_CODE_HASH` 环境变量（即 sudt 合约的 data_hash），`xudt-meta` 需要 `XUDT_CODE_HASH` 和 `ACCESS_LIST_CODE_HASH`。Makefile 会自动处理这些依赖，直接 `make build` 即可。
+
+#### 填写部署信息
+
+部署完成后，通过链上查询获取每个合约的 `data_hash`（即 profile 中的 `code_hash`）、`hash_type` 和 `outpoint`（tx_hash + index），填入 `profiles/devnet.yaml` 的对应字段。
+
+查询 live cell 获取 data_hash：
+
+```bash
+ckb-cli rpc get_live_cell --tx-hash <deploy_tx_hash> --index <index> --with-data
+```
+
+返回结果中的 `data_hash` 字段就是需要填入 `code_hash` 的值。
+
+**填写示例**：
+
+```yaml
+contracts:
+  sudt:
+    code_hash: '0xd74751bfcf6b3050a99d33ba3c17e86ec807b72fd4feadcf6a639c538817d0c7'
+    hash_type: data2
+    outpoint:
+      tx_hash: '0xcaeb3a9a1f8524e1fa5e08d1c49ecf27a2616e165c7e9831befa2848285eeeb8'
+      index: 0
+```
+
+所有 6 个合约都必须填写正确，`udtx doctor` 才能通过合约引用检查。
+
+### 5. 环境检查
 
 ```bash
 udtx doctor
@@ -75,7 +127,7 @@ udtx doctor
 
 如果全部通过，说明环境就绪。
 
-### 5. 发行 Token（Dry-Run 预览）
+### 6. 发行 Token（Dry-Run 预览）
 
 在实际发送交易前，强烈建议先用 `--dry-run` 预览：
 
@@ -195,28 +247,40 @@ system_scripts:
     hash_type: type
 contracts:
   sudt:
-    code_hash: '0xd74751bfcf6b3050a99d33ba3c17e86ec807b72fd4feadcf6a639c538817d0c7'
+    code_hash: '0x0000000000000000000000000000000000000000000000000000000000000000'
     hash_type: data2
     outpoint:
-      tx_hash: '0xcaeb3a9a1f8524e1fa5e08d1c49ecf27a2616e165c7e9831befa2848285eeeb8'
-      index: 0
-  sudt-meta:
-    code_hash: '0xe165280c8a086a0457a3506b499c801d028bed365288d63302e24a04fb5bb8e4'
-    hash_type: data1
-    outpoint:
-      tx_hash: '0x90d332d1dc77f057d0b3d68487ab21d0fa90b260e1a292018de63b1c7037a58e'
+      tx_hash: '0x0000000000000000000000000000000000000000000000000000000000000000'
       index: 0
   xudt:
-    code_hash: '0x7ee92e0eb758a9b2e19aafbc4e0a1a0fd902a258b32a1edecb82116f8c9bb12f'
+    code_hash: '0x0000000000000000000000000000000000000000000000000000000000000000'
     hash_type: data2
     outpoint:
-      tx_hash: '0xc52a9f737ce6f8abc61d412f7657bc7d742cb525db9b797a715cd0e29cbad679'
+      tx_hash: '0x0000000000000000000000000000000000000000000000000000000000000000'
       index: 0
   access_list:
-    code_hash: '0x9f4755b9e74098f09d6fc0674d26f932d7b848aa02f0c5eb3306d3f57a81dde9'
+    code_hash: '0x0000000000000000000000000000000000000000000000000000000000000000'
     hash_type: data1
     outpoint:
-      tx_hash: '0xc0666b72bfe573843d3c255a3e3ace75b67a2f0c24c4f499a825ff2306854d8f'
+      tx_hash: '0x0000000000000000000000000000000000000000000000000000000000000000'
+      index: 0
+  sudt-meta:
+    code_hash: '0x0000000000000000000000000000000000000000000000000000000000000000'
+    hash_type: data1
+    outpoint:
+      tx_hash: '0x0000000000000000000000000000000000000000000000000000000000000000'
+      index: 0
+  xudt-meta:
+    code_hash: '0x0000000000000000000000000000000000000000000000000000000000000000'
+    hash_type: data1
+    outpoint:
+      tx_hash: '0x0000000000000000000000000000000000000000000000000000000000000000'
+      index: 0
+  always_success:
+    code_hash: '0x0000000000000000000000000000000000000000000000000000000000000000'
+    hash_type: data2
+    outpoint:
+      tx_hash: '0x0000000000000000000000000000000000000000000000000000000000000000'
       index: 0
 ```
 
@@ -224,6 +288,9 @@ contracts:
 - `contracts.<name>.code_hash`：合约的 **CKB data_hash**（注意不是文件 raw hash）。
 - `contracts.<name>.hash_type`：`data1`（VM v1，B 扩展指令）或 `data2`（VM v2）。
 - `contracts.<name>.outpoint`：合约部署交易的 tx_hash 和 output index。
+
+**devnet 占位符说明**：
+devnet 的合约配置默认全部是 `0x0000...` 占位符，因为每个人本地启动的 devnet 都是全新的链，合约需要自行部署后才能使用。部署完成后，请通过链上查询获取真实的 `code_hash`、`hash_type` 和 `outpoint` 填入 profile。testnet 和 mainnet 同理，只是它们的合约通常由项目方或社区统一部署，用户只需获取并填写公开信息即可。
 
 ## 命令参考
 
@@ -335,7 +402,7 @@ profile 中的 `code_hash` 必须是 **CKB 节点的 data_hash**（使用 `blake
 
 | 现象 | 可能原因 | 解决方法 |
 |------|----------|----------|
-| `doctor` 报合约引用失败 | `code_hash` 错误或 `hash_type` 不匹配 | 从链上重新查询正确的 data_hash 和 hash_type |
+| `doctor` 报合约引用失败 | 合约未部署，或 `code_hash` / `hash_type` / `outpoint` 错误 | 先部署合约到链上，然后从链上查询正确的 data_hash、hash_type 和 outpoint 填入 profile |
 | `ScriptNotFound` | hash_type 与链上实际不符，或 code_hash 是 raw hash 而非 CKB data_hash | 同上 |
 | `MetaMissing` (41) | 交易缺少 metadata cell | token issue 需要同时构造 metadata output；检查 CLI 版本是否支持 |
 | `InvalidSupply` (31) | supply delta 与 metadata 不一致 | 检查 token 参数和 metadata 中的 supply_policy |
