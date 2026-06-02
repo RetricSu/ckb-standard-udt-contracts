@@ -383,7 +383,7 @@ pub fn default_devnet_profile() -> ProfileConfig {
         "sudt".to_string(),
         ContractRef {
             code_hash: "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
-            hash_type: "data1".to_string(),
+            hash_type: "data2".to_string(),
             outpoint: OutpointRef {
                 tx_hash: "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
                 index: 0,
@@ -394,7 +394,7 @@ pub fn default_devnet_profile() -> ProfileConfig {
         "xudt".to_string(),
         ContractRef {
             code_hash: "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
-            hash_type: "data1".to_string(),
+            hash_type: "data2".to_string(),
             outpoint: OutpointRef {
                 tx_hash: "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
                 index: 0,
@@ -428,6 +428,17 @@ pub fn default_devnet_profile() -> ProfileConfig {
         ContractRef {
             code_hash: "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
             hash_type: "data1".to_string(),
+            outpoint: OutpointRef {
+                tx_hash: "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
+                index: 0,
+            },
+        },
+    );
+    contracts.insert(
+        "always_success".to_string(),
+        ContractRef {
+            code_hash: "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
+            hash_type: "data2".to_string(),
             outpoint: OutpointRef {
                 tx_hash: "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
                 index: 0,
@@ -459,7 +470,7 @@ pub fn default_testnet_profile() -> ProfileConfig {
         "sudt".to_string(),
         ContractRef {
             code_hash: "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
-            hash_type: "data1".to_string(),
+            hash_type: "data2".to_string(),
             outpoint: OutpointRef {
                 tx_hash: "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
                 index: 0,
@@ -470,7 +481,7 @@ pub fn default_testnet_profile() -> ProfileConfig {
         "xudt".to_string(),
         ContractRef {
             code_hash: "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
-            hash_type: "data1".to_string(),
+            hash_type: "data2".to_string(),
             outpoint: OutpointRef {
                 tx_hash: "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
                 index: 0,
@@ -504,6 +515,17 @@ pub fn default_testnet_profile() -> ProfileConfig {
         ContractRef {
             code_hash: "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
             hash_type: "data1".to_string(),
+            outpoint: OutpointRef {
+                tx_hash: "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
+                index: 0,
+            },
+        },
+    );
+    contracts.insert(
+        "always_success".to_string(),
+        ContractRef {
+            code_hash: "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
+            hash_type: "data2".to_string(),
             outpoint: OutpointRef {
                 tx_hash: "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
                 index: 0,
@@ -535,7 +557,7 @@ pub fn default_mainnet_profile() -> ProfileConfig {
         "sudt".to_string(),
         ContractRef {
             code_hash: "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
-            hash_type: "data1".to_string(),
+            hash_type: "data2".to_string(),
             outpoint: OutpointRef {
                 tx_hash: "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
                 index: 0,
@@ -546,7 +568,7 @@ pub fn default_mainnet_profile() -> ProfileConfig {
         "xudt".to_string(),
         ContractRef {
             code_hash: "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
-            hash_type: "data1".to_string(),
+            hash_type: "data2".to_string(),
             outpoint: OutpointRef {
                 tx_hash: "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
                 index: 0,
@@ -580,6 +602,17 @@ pub fn default_mainnet_profile() -> ProfileConfig {
         ContractRef {
             code_hash: "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
             hash_type: "data1".to_string(),
+            outpoint: OutpointRef {
+                tx_hash: "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
+                index: 0,
+            },
+        },
+    );
+    contracts.insert(
+        "always_success".to_string(),
+        ContractRef {
+            code_hash: "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
+            hash_type: "data2".to_string(),
             outpoint: OutpointRef {
                 tx_hash: "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
                 index: 0,

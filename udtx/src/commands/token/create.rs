@@ -143,29 +143,6 @@ pub async fn create_token(
         _ => ckb_types::core::ScriptHashType::Data,
     };
 
-    // Generate a pseudo-unique metadata type script args based on token identity
-    let mut meta_args_hasher = ckb_hash::new_blake2b();
-    meta_args_hasher.update(token_name.as_bytes());
-    meta_args_hasher.update(token_symbol.as_bytes());
-    meta_args_hasher.update(owner_name.as_bytes());
-    let mut meta_args = [0u8; 32];
-    meta_args_hasher.finalize(&mut meta_args);
-
-    let meta_type_script = ckb_types::packed::Script::new_builder()
-        .code_hash(meta_code_hash)
-        .hash_type(meta_hash_type)
-        .args(Bytes::from(meta_args.to_vec()).pack())
-        .build();
-
-    let meta_type_hash: [u8; 32] = meta_type_script.calc_script_hash().unpack();
-
-    // Build sUDT/xUDT type script with meta_type_hash as args
-    let udt_type_script = ckb_types::packed::Script::new_builder()
-        .code_hash(contract_code_hash)
-        .hash_type(hash_type)
-        .args(Bytes::from(meta_type_hash.to_vec()).pack())
-        .build();
-
     let rpc_url = &profile.rpc_url;
     let mut cell_collector = DefaultCellCollector::new(rpc_url);
     cell_collector.check_ckb_chain().map_err(|e| TokenCliError::TxBuild {
@@ -210,6 +187,9 @@ pub async fn create_token(
         custom_deps.insert(script_id, cell_dep);
     }
 
+    // always_success cell dep is required for metadata cell lock;
+    // it is added automatically from profile.contracts if present.
+
     let cell_dep_resolver = CombinedCellDepResolver::new(genesis_resolver, custom_deps);
 
     let header_dep_resolver = DefaultHeaderDepResolver::new(rpc_url);
@@ -237,6 +217,30 @@ pub async fn create_token(
     }
 
     let inputs = vec![CellInput::new(owner_cells[0].out_point.clone(), 0)];
+
+    // Calculate type_id for metadata type script
+    // type_id = blake2b(first_input.as_slice() || output_index.to_le_bytes())
+    let first_input = inputs[0].clone();
+    let mut meta_args_hasher = ckb_hash::new_blake2b();
+    meta_args_hasher.update(first_input.as_slice());
+    meta_args_hasher.update(&0u64.to_le_bytes());
+    let mut meta_args = [0u8; 32];
+    meta_args_hasher.finalize(&mut meta_args);
+
+    let meta_type_script = ckb_types::packed::Script::new_builder()
+        .code_hash(meta_code_hash)
+        .hash_type(meta_hash_type)
+        .args(Bytes::from(meta_args.to_vec()).pack())
+        .build();
+
+    let meta_type_hash: [u8; 32] = meta_type_script.calc_script_hash().unpack();
+
+    // Build sUDT/xUDT type script with meta_type_hash as args
+    let udt_type_script = ckb_types::packed::Script::new_builder()
+        .code_hash(contract_code_hash)
+        .hash_type(hash_type)
+        .args(Bytes::from(meta_type_hash.to_vec()).pack())
+        .build();
 
     let owner_lock_hash: [u8; 32] = account.lock_script.calc_script_hash().unpack();
     let owner_lock_authority = Authority {
@@ -308,8 +312,32 @@ pub async fn create_token(
         }
     };
 
+    // sudt-meta contract requires the metadata cell lock to be always_success (Data2)
+    let always_success_contract = profile.contracts.get("always_success")
+        .ok_or_else(|| TokenCliError::Config(
+            crate::config::ConfigError::Validation(
+                "Contract reference for 'always_success' not found in profile (required for metadata cell lock)".into()
+            )
+        ))?;
+    let always_success_code_hash = ckb_types::packed::Byte32::from_slice(
+        &hex::decode(always_success_contract.code_hash.trim_start_matches("0x"))
+            .map_err(|e| TokenCliError::TxBuild { message: format!("invalid always_success code hash: {}", e) })?
+    ).map_err(|e| TokenCliError::TxBuild { message: format!("invalid always_success code hash bytes: {}", e) })?;
+    let always_success_hash_type = match always_success_contract.hash_type.as_str() {
+        "type" => ckb_types::core::ScriptHashType::Type,
+        "data" => ckb_types::core::ScriptHashType::Data,
+        "data1" => ckb_types::core::ScriptHashType::Data1,
+        "data2" => ckb_types::core::ScriptHashType::Data2,
+        _ => ckb_types::core::ScriptHashType::Data,
+    };
+    let always_success_lock = ckb_types::packed::Script::new_builder()
+        .code_hash(always_success_code_hash)
+        .hash_type(always_success_hash_type)
+        .args(Bytes::new().pack())
+        .build();
+
     let meta_output = CellOutput::new_builder()
-        .lock(account.lock_script.clone())
+        .lock(always_success_lock.clone())
         .type_(Some(meta_type_script.clone()).pack())
         .build();
     let meta_occupied = meta_output
@@ -349,12 +377,18 @@ pub async fn create_token(
         .ok_or_else(|| TokenCliError::TxBuild {
             message: format!("resolve {} cell dep failed", meta_contract_name),
         })?;
+    let always_success_cell_dep = cell_dep_resolver
+        .resolve(&always_success_lock)
+        .ok_or_else(|| TokenCliError::TxBuild {
+            message: "resolve always_success cell dep failed".into(),
+        })?;
 
     #[allow(clippy::mutable_key_type)]
     let mut cell_deps = HashMap::new();
     cell_deps.insert(owner_cell_dep.clone(), ());
     cell_deps.insert(udt_cell_dep.clone(), ());
     cell_deps.insert(meta_cell_dep.clone(), ());
+    cell_deps.insert(always_success_cell_dep.clone(), ());
     let cell_deps_vec: Vec<CellDep> = cell_deps.into_iter().map(|(dep, _)| dep).collect();
 
     let base_tx = TransactionBuilder::default()
