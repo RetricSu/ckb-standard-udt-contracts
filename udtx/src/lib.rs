@@ -69,6 +69,12 @@ pub enum Commands {
         #[arg(short, long, value_enum, default_value = "markdown")]
         format: ReportFormat,
     },
+    /// Sync profile contract references from offckb deployment artifacts
+    Sync {
+        /// Path to the offckb deployment artifacts directory
+        #[arg(short, long, default_value = "./deployment")]
+        artifacts: PathBuf,
+    },
 }
 
 #[derive(Subcommand, Debug)]

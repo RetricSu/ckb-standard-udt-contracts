@@ -155,6 +155,22 @@ async fn run() -> Result<(), TokenCliError> {
             let mut key_manager = udtx::keys::KeyManager::new();
             udtx::commands::report::report(format, &config, &profile, &mut key_manager).await?;
         }
+        Commands::Sync { artifacts } => {
+            let (config, mut profile) = udtx::config::load_config_with_profile(&config_path)?;
+            let project_root = config_path.parent().unwrap_or_else(|| std::path::Path::new("."));
+            let updated = udtx::commands::sync::sync_profile_from_deployment(
+                project_root,
+                &mut profile,
+                &artifacts,
+            )?;
+            let profile_path = udtx::config::resolve_profile_path(project_root, &config.network.profile);
+            udtx::config::save_profile(&profile_path, &profile)?;
+            println!("Profile '{}' synced from deployment artifacts.", profile.name);
+            println!("Updated contracts:");
+            for line in updated {
+                println!("  {}", line);
+            }
+        }
     }
 
     Ok(())

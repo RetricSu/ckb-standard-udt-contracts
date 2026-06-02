@@ -97,19 +97,51 @@ offckb deploy --target build/release --network devnet --output deployment
 
 部署完成后，`deployment/` 目录下会生成记录文件，包含每个合约的 `tx_hash`、`index` 和 `data_hash`（即 profile 中的 `code_hash`）。
 
-#### 填写部署信息
+#### 自动同步部署信息到 Profile（推荐）
 
-将部署得到的 `data_hash`、`hash_type` 和 `outpoint`（tx_hash + index）填入 `profiles/devnet.yaml` 的对应字段。
+`udtx` 提供了 `sync` 命令，可以自动读取 `offckb deploy` 生成的部署记录，并填充到 `profiles/devnet.yaml`：
 
-**填写示例**：
+```bash
+udtx sync
+```
+
+默认读取 `./deployment/scripts.json`（与 `offckb deploy` 的默认输出路径一致）。如果使用了自定义输出目录，可通过 `--artifacts` 指定：
+
+```bash
+udtx sync --artifacts ./my-deployment
+```
+
+执行后，`udtx sync` 会自动：
+- 匹配 `deployment/scripts.json` 中的合约名称与 profile 中的占位符
+- 更新 `code_hash`（优先使用 migration JSON 中的真实 `data_hash`）
+- 更新 `hash_type`（当部署为 `data1`/`data2` 时同步；`type_id` 部署则保留 profile 原有值）
+- 更新 `outpoint`（`tx_hash` + `index`）
+
+**示例输出**：
+
+```
+Profile 'devnet' synced from deployment artifacts.
+Updated contracts:
+  sudt: code_hash=0x857a135e..510dd6, hash_type=data2, outpoint=0x4aeb795f:0
+  sudt-meta: code_hash=0xe701283f..e1ed6a, hash_type=data2, outpoint=0xc6a01ac8:0
+  xudt: code_hash=0x5b4771ae..8f26f5, hash_type=data2, outpoint=0x1af38024:0
+  xudt-meta: code_hash=0xb1bc145e..ad80b9, hash_type=data2, outpoint=0x0b59e27a:0
+  access_list: code_hash=0xfd45be49..1064d9, hash_type=data2, outpoint=0x496d3757:0
+```
+
+> **注意**：`always_success` 不在 `offckb deploy` 的部署范围内（它是系统脚本），因此 `udtx sync` 不会更新它。如果你需要 `always_success`（例如 `sudt-meta` 要求 metadata cell 使用 always_success lock），请手动部署兼容版本并填入 profile，或参考下文「always_success 说明」。
+
+#### 手动填写部署信息（备选）
+
+如果你不想使用 `udtx sync`，也可以手动将部署得到的 `data_hash`、`hash_type` 和 `outpoint` 填入 `profiles/devnet.yaml`：
 
 ```yaml
 contracts:
   sudt:
-    code_hash: '0xd74751bfcf6b3050a99d33ba3c17e86ec807b72fd4feadcf6a639c538817d0c7'
+    code_hash: '0x857a135ec85592774b7d2eb84728f36cbfc3b4ce276f18dd9f1ff0748f510dd6'
     hash_type: data2
     outpoint:
-      tx_hash: '0xcaeb3a9a1f8524e1fa5e08d1c49ecf27a2616e165c7e9831befa2848285eeeb8'
+      tx_hash: '0x4aeb795febb80b48db93f66ce7ea10d57b1109da7eb9bca625df99ca1b964bad'
       index: 0
 ```
 
