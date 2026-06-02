@@ -332,6 +332,7 @@ devnet 的合约配置默认全部是 `0x0000...` 占位符，因为每个人本
 |------|------|
 | `udtx init [--name <name>]` | 初始化项目配置 |
 | `udtx doctor` | 环境、配置、链上合约引用综合检查 |
+| `udtx sync [--artifacts <path>]` | 从 offckb 部署记录自动同步合约信息到 profile |
 | `udtx env check` | 检查 RPC 连通性和链状态 |
 | `udtx token issue [选项]` | 发行新 token |
 | `udtx token transfer [选项]` | 转移 token |
