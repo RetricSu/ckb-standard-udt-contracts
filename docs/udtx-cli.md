@@ -65,16 +65,16 @@ offckb node
 
 **devnet 的合约配置默认是占位符**，因为每个人本地启动的 devnet 都是全新的链，上面并没有预先部署任何合约。你需要先自己部署合约，然后把部署信息填回 `profiles/devnet.yaml`。
 
-#### 部署合约
-
-先构建合约：
+#### 构建合约
 
 ```bash
 rustup target add riscv64imac-unknown-none-elf
 make build MODE=release
 ```
 
-然后使用 `ckb-cli` 或其他部署工具把合约二进制部署到本地 devnet。需要部署的合约包括：
+> **注意**：`sudt-meta` 构建前需要设置 `SUDT_CODE_HASH` 环境变量（即 sudt 合约的 data_hash），`xudt-meta` 需要 `XUDT_CODE_HASH` 和 `ACCESS_LIST_CODE_HASH`。Makefile 会自动处理这些依赖，直接 `make build` 即可。
+
+构建完成后，合约二进制位于 `build/release/`：
 
 | 合约 | 二进制路径 |
 |------|-----------|
@@ -83,21 +83,23 @@ make build MODE=release
 | access-list | `build/release/access-list` |
 | sudt-meta | `build/release/sudt-meta` |
 | xudt-meta | `build/release/xudt-meta` |
-| always_success | `build/release/always_success` |
 
-> **注意**：`sudt-meta` 构建前需要设置 `SUDT_CODE_HASH` 环境变量（即 sudt 合约的 data_hash），`xudt-meta` 需要 `XUDT_CODE_HASH` 和 `ACCESS_LIST_CODE_HASH`。Makefile 会自动处理这些依赖，直接 `make build` 即可。
+> **注意**：`always_success` 不是本仓库的合约，它是 CKB 生态中常见的无验证脚本。如果你需要部署它（例如 `sudt-meta` 要求 metadata cell 使用 always_success lock），可以从 [ckb-system-scripts](https://github.com/nervosnetwork/ckb-system-scripts) 获取对应二进制，或使用 offckb 内置的 always_success 脚本。
+
+#### 使用 offckb 部署（推荐）
+
+[offckb](https://github.com/nervosnetwork/offckb) 提供了更便捷的部署命令，支持批量部署并自动记录部署结果：
+
+```bash
+npm install -g @offckb/cli
+offckb deploy --target build/release --network devnet --output deployment
+```
+
+部署完成后，`deployment/` 目录下会生成记录文件，包含每个合约的 `tx_hash`、`index` 和 `data_hash`（即 profile 中的 `code_hash`）。
 
 #### 填写部署信息
 
-部署完成后，通过链上查询获取每个合约的 `data_hash`（即 profile 中的 `code_hash`）、`hash_type` 和 `outpoint`（tx_hash + index），填入 `profiles/devnet.yaml` 的对应字段。
-
-查询 live cell 获取 data_hash：
-
-```bash
-ckb-cli rpc get_live_cell --tx-hash <deploy_tx_hash> --index <index> --with-data
-```
-
-返回结果中的 `data_hash` 字段就是需要填入 `code_hash` 的值。
+将部署得到的 `data_hash`、`hash_type` 和 `outpoint`（tx_hash + index）填入 `profiles/devnet.yaml` 的对应字段。
 
 **填写示例**：
 
@@ -111,7 +113,7 @@ contracts:
       index: 0
 ```
 
-所有 6 个合约都必须填写正确，`udtx doctor` 才能通过合约引用检查。
+所有合约配置都必须填写正确，`udtx doctor` 才能通过合约引用检查。
 
 ### 5. 环境检查
 
@@ -165,13 +167,13 @@ udtx token issue \
   --owner owner
 ```
 
-### 6. 查询 Token 信息
+### 7. 查询 Token 信息
 
 ```bash
 udtx token info --owner owner
 ```
 
-### 7. 转移 Token
+### 8. 转移 Token
 
 ```bash
 udtx token transfer \
@@ -181,7 +183,7 @@ udtx token transfer \
   --dry-run
 ```
 
-### 8. Mint 增发
+### 9. Mint 增发
 
 ```bash
 udtx token mint \
@@ -190,7 +192,7 @@ udtx token mint \
   --dry-run
 ```
 
-### 9. Burn 销毁
+### 10. Burn 销毁
 
 ```bash
 udtx token burn \
@@ -243,7 +245,7 @@ rpc_url: http://127.0.0.1:8114
 network_type: devnet
 system_scripts:
   secp256k1_blake160:
-    code_hash: 0x9bd7e06f3ecf4be0f2fcd2188b23f1b9fcc88e5d4b65a8637b17723bbda3cce8
+    code_hash: '0x9bd7e06f3ecf4be0f2fcd2188b23f1b9fcc88e5d4b65a8637b17723bbda3cce8'
     hash_type: type
 contracts:
   sudt:
