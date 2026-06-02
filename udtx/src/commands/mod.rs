@@ -5,5 +5,6 @@ pub mod doctor;
 pub mod env;
 pub mod plan;
 pub mod report;
+pub mod sync;
 pub mod token;
 pub mod verify;

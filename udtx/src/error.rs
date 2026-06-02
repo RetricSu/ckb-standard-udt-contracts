@@ -1,3 +1,4 @@
+use crate::commands::sync::SyncError;
 use crate::config::ConfigError;
 
 /// Product-level error codes for CLI exit status and user guidance.
@@ -126,6 +127,12 @@ pub fn rpc_error(message: impl Into<String>) -> TokenCliError {
 pub fn tx_build_error(message: impl Into<String>) -> TokenCliError {
     TokenCliError::TxBuild {
         message: message.into(),
+    }
+}
+
+impl From<SyncError> for TokenCliError {
+    fn from(err: SyncError) -> Self {
+        Self::Config(ConfigError::Validation(err.to_string()))
     }
 }
 
