@@ -1,0 +1,81 @@
+{
+  "devnet": {},
+  "testnet": {
+    "access-list": {
+      "codeHash": "0xd51544784c699d3b4abcdadbe1ce6b2bfca80e049e919fafb19075c7e9977d96",
+      "hashType": "data2",
+      "cellDeps": [
+        {
+          "cellDep": {
+            "outPoint": {
+              "txHash": "0xdfb96244db7602791567d3cf36dd273526042a2bec618055f01397d6164537e0",
+              "index": 0
+            },
+            "depType": "code"
+          }
+        }
+      ]
+    },
+    "sudt": {
+      "codeHash": "0x8d8f48cbbb5c734abb029aee26685faa3ecd7e221faaba6574a547069e997308",
+      "hashType": "data2",
+      "cellDeps": [
+        {
+          "cellDep": {
+            "outPoint": {
+              "txHash": "0xa0d1deee9316b79320108a3c81402d672eef36efaa95d175826020121fb4174f",
+              "index": 0
+            },
+            "depType": "code"
+          }
+        }
+      ]
+    },
+    "sudt-meta": {
+      "codeHash": "0xbe6111bfc23e3fc893aff5593d82802677fe65d61305c66349d813db347fad83",
+      "hashType": "data2",
+      "cellDeps": [
+        {
+          "cellDep": {
+            "outPoint": {
+              "txHash": "0x5572bf22963955ca96462437ba73f064209354f9476449f540a89a1f4462ca55",
+              "index": 0
+            },
+            "depType": "code"
+          }
+        }
+      ]
+    },
+    "xudt": {
+      "codeHash": "0x65c66ceded17387a2ae5b3af1ce2125e4f04dd8fbf3756fb6e967c3899fe213f",
+      "hashType": "data2",
+      "cellDeps": [
+        {
+          "cellDep": {
+            "outPoint": {
+              "txHash": "0x1aaf2c4638e9af8002a2f3b5f36f8b9f4278f835f9d9187fec205afc74f3a8fc",
+              "index": 0
+            },
+            "depType": "code"
+          }
+        }
+      ]
+    },
+    "xudt-meta": {
+      "codeHash": "0x6365972572e133e83e0311e2e527ba93b433cf6ad4d0494e4e4ffed26dec2c9a",
+      "hashType": "data2",
+      "cellDeps": [
+        {
+          "cellDep": {
+            "outPoint": {
+              "txHash": "0xdfe369557dd66b5cb99b030b844e55a5782f4e4abb0c8b94264d51182c53e973",
+              "index": 0
+            },
+            "depType": "code"
+          }
+        }
+      ]
+    }
+  },
+  "mainnet": {}
+}

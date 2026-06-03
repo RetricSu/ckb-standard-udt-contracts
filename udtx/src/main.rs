@@ -22,7 +22,7 @@ async fn run() -> Result<(), TokenCliError> {
     let config_path = cli.config;
 
     match cli.command {
-        Commands::Init { name } => {
+        Commands::Init { name, network } => {
             let project_name = name.unwrap_or_else(|| {
                 env::current_dir()
                     .ok()
@@ -30,10 +30,15 @@ async fn run() -> Result<(), TokenCliError> {
                     .unwrap_or_else(|| "udtx-project".to_string())
             });
             let project_path = env::current_dir().unwrap_or_else(|_| PathBuf::from("."));
-            config::init_project(&project_path, &project_name)?;
+            let profile_name = match network {
+                config::NetworkType::Devnet => "devnet",
+                config::NetworkType::Testnet => "testnet",
+                config::NetworkType::Mainnet => "mainnet",
+            };
+            config::init_project(&project_path, &project_name, profile_name)?;
             logger::info!(project = %project_name, path = %project_path.display(), "Initialized UDTX project");
             println!("Initialized UDTX project '{}' at {}", project_name, project_path.display());
-            println!("  udtx.yaml");
+            println!("  udtx.yaml (profile: {})", profile_name);
             println!("  profiles/devnet.yaml");
             println!("  profiles/testnet.yaml");
             println!("  profiles/mainnet.yaml");

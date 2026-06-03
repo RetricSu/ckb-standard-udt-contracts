@@ -26,9 +26,13 @@ cargo build --bin udtx --release
 udtx init --name my-token
 ```
 
-这会生成两个文件：
+这会生成以下文件：
 - `udtx.yaml` — 项目级配置（网络、账户、token 默认参数）
-- `profiles/devnet.yaml` — devnet 专用的 RPC 和合约引用配置
+- `profiles/devnet.yaml` — **devnet 配置（默认）**，需自行部署合约
+- `profiles/testnet.yaml` — 测试网配置，包含已部署的合约引用
+- `profiles/mainnet.yaml` — 主网配置（占位符）
+
+**默认使用 devnet**：新初始化的项目默认指向 devnet，需要自行部署合约后使用。如需使用测试网，添加 `--network testnet` 参数即可。
 
 ### 2. 配置账户
 
@@ -48,7 +52,9 @@ accounts:
     address: "ckt1..."
 ```
 
-### 3. 启动本地 Devnet
+### 3. 使用本地 Devnet（默认）
+
+默认初始化使用 devnet，需要自行部署合约：
 
 使用 `@offckb/cli` 管理本地 devnet：
 
@@ -60,8 +66,6 @@ offckb node
 第一次运行会初始化 devnet 配置，之后启动节点和 miner 即可。
 
 启动后，确保 `profiles/devnet.yaml` 中的 `rpc_url` 指向正确的节点地址（默认 `http://127.0.0.1:8114`）。
-
-### 4. 部署合约并填写 Profile
 
 **devnet 的合约配置默认是占位符**，因为每个人本地启动的 devnet 都是全新的链，上面并没有预先部署任何合约。你需要先自己部署合约，然后把部署信息填回 `profiles/devnet.yaml`。
 
@@ -146,6 +150,22 @@ contracts:
 ```
 
 所有合约配置都必须填写正确，`udtx doctor` 才能通过合约引用检查。
+
+### 4. 使用测试网（可选）
+
+如需直接使用测试网，无需自行部署合约：
+
+```bash
+udtx init --name my-token --network testnet
+```
+
+测试网合约已由项目方预先部署，初始化后即可使用：
+
+```bash
+export OWNER_PRIVKEY=0x...
+udtx doctor
+udtx token issue --token-type xudt --name "My Token" --symbol "MTK" --dry-run
+```
 
 ### 5. 环境检查
 
@@ -242,7 +262,7 @@ version: 1
 project:
   name: my-token
 network:
-  profile: devnet          # 引用 profiles/ 下的网络配置
+  profile: devnet          # 默认使用 devnet（引用 profiles/devnet.yaml）
   rpc: null                # 可覆盖 profile 中的 RPC 地址
 accounts:
   owner:
@@ -250,21 +270,21 @@ accounts:
 contracts:
   source:
     mode: deployed-artifacts
-    scripts_json: ./artifacts/devnet-scripts.json
+    scripts_json: ./artifacts/devnet-scripts.json   # devnet 合约配置
 token:
-  kind: sudt               # 默认 token 类型：sudt 或 xudt
+  kind: xudt               # 默认 token 类型：sudt 或 xudt
   symbol: MTK
   decimals: 8
   supply_policy:
     mode: tracked          # tracked / untracked
     fixed_after_issue:
-      enabled: false
+      enabled: true
   authorities:
     mint: owner
     metadata: owner
     access: owner
 access_control:
-  enabled: false
+  enabled: true
   mode: blacklist          # blacklist / whitelist
   addresses: []
 ```
@@ -323,8 +343,10 @@ contracts:
 - `contracts.<name>.hash_type`：`data1`（VM v1，B 扩展指令）或 `data2`（VM v2）。
 - `contracts.<name>.outpoint`：合约部署交易的 tx_hash 和 output index。
 
-**devnet 占位符说明**：
-devnet 的合约配置默认全部是 `0x0000...` 占位符，因为每个人本地启动的 devnet 都是全新的链，合约需要自行部署后才能使用。部署完成后，请通过链上查询获取真实的 `code_hash`、`hash_type` 和 `outpoint` 填入 profile。testnet 和 mainnet 同理，只是它们的合约通常由项目方或社区统一部署，用户只需获取并填写公开信息即可。
+**网络配置说明**：
+- **devnet（默认）**：合约配置默认是 `0x0000...` 占位符，需要自行部署合约后使用 `udtx sync` 同步或手动填写
+- **testnet**：已内置项目方部署的合约引用，开箱即用，无需自行部署。使用 `--network testnet` 初始化
+- **mainnet**：合约配置默认是 `0x0000...` 占位符，需要获取社区部署的合约信息后手动填写
 
 ## 命令参考
 

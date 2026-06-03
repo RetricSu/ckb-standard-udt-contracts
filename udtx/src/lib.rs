@@ -21,11 +21,11 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
-    /// Initialize a new UDTX project or configuration
     Init {
-        /// Project name
         #[arg(short, long)]
         name: Option<String>,
+        #[arg(short = 'N', long, value_enum, default_value = "devnet")]
+        network: config::NetworkType,
     },
     /// Check environment and dependencies
     Doctor,
