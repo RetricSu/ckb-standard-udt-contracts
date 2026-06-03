@@ -13,10 +13,10 @@ contracts:
       tx_hash: 0xdfb96244db7602791567d3cf36dd273526042a2bec618055f01397d6164537e0
       index: 0
   always_success:
-    code_hash: 0xbb4469004225b39e983929db71fe2253cba1d49a76223e9e1d212cdca1f79f28
-    hash_type: type
+    code_hash: 0x3b521cc4b552f109d092d8cc468a8048acb53c5952dbe769d2b2f9cf6e47f7f1
+    hash_type: data1
     outpoint:
-      tx_hash: 0x1bb87da347a776a927ab6593e1e10304ca195f8e24279f039008d5e3115b1bf7
+      tx_hash: 0xb4f171c9c9caf7401f54a8e56225ae21d95032150a87a4678eac3f66a3137b93
       index: 0
   sudt-meta:
     code_hash: 0xbe6111bfc23e3fc893aff5593d82802677fe65d61305c66349d813db347fad83
