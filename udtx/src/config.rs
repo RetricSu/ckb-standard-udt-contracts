@@ -530,10 +530,10 @@ pub fn default_testnet_profile() -> ProfileConfig {
     contracts.insert(
         "always_success".to_string(),
         ContractRef {
-            code_hash: "0xbb4469004225b39e983929db71fe2253cba1d49a76223e9e1d212cdca1f79f28".to_string(),
-            hash_type: "type".to_string(),
+            code_hash: "0x3b521cc4b552f109d092d8cc468a8048acb53c5952dbe769d2b2f9cf6e47f7f1".to_string(),
+            hash_type: "data1".to_string(),
             outpoint: OutpointRef {
-                tx_hash: "0x1bb87da347a776a927ab6593e1e10304ca195f8e24279f039008d5e3115b1bf7".to_string(),
+                tx_hash: "0xb4f171c9c9caf7401f54a8e56225ae21d95032150a87a4678eac3f66a3137b93".to_string(),
                 index: 0,
             },
         },
