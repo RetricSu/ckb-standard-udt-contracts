@@ -2,9 +2,9 @@
   "cell_recipes": [
     {
       "name": "access-list",
-      "tx_hash": "0xbc8d2bb5152e04d1d6e1420b0a5d2346c163668256fd1d31bc63e7a6205d9ebf",
+      "tx_hash": "0xdfb96244db7602791567d3cf36dd273526042a2bec618055f01397d6164537e0",
       "index": 0,
-      "occupied_capacity": 8283700000000,
+      "occupied_capacity": 8277600000000,
       "data_hash": "0xd51544784c699d3b4abcdadbe1ce6b2bfca80e049e919fafb19075c7e9977d96"
     }
   ],
