@@ -147,7 +147,7 @@ pub struct ProfileConfig {
     pub contracts: HashMap<String, ContractRef>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, clap::ValueEnum)]
 #[serde(rename_all = "lowercase")]
 pub enum NetworkType {
     Devnet,
@@ -475,10 +475,10 @@ pub fn default_testnet_profile() -> ProfileConfig {
     contracts.insert(
         "sudt".to_string(),
         ContractRef {
-            code_hash: "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
+            code_hash: "0x8d8f48cbbb5c734abb029aee26685faa3ecd7e221faaba6574a547069e997308".to_string(),
             hash_type: "data2".to_string(),
             outpoint: OutpointRef {
-                tx_hash: "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
+                tx_hash: "0xa0d1deee9316b79320108a3c81402d672eef36efaa95d175826020121fb4174f".to_string(),
                 index: 0,
             },
         },
@@ -486,10 +486,10 @@ pub fn default_testnet_profile() -> ProfileConfig {
     contracts.insert(
         "xudt".to_string(),
         ContractRef {
-            code_hash: "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
+            code_hash: "0x65c66ceded17387a2ae5b3af1ce2125e4f04dd8fbf3756fb6e967c3899fe213f".to_string(),
             hash_type: "data2".to_string(),
             outpoint: OutpointRef {
-                tx_hash: "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
+                tx_hash: "0x1aaf2c4638e9af8002a2f3b5f36f8b9f4278f835f9d9187fec205afc74f3a8fc".to_string(),
                 index: 0,
             },
         },
@@ -497,10 +497,10 @@ pub fn default_testnet_profile() -> ProfileConfig {
     contracts.insert(
         "access_list".to_string(),
         ContractRef {
-            code_hash: "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
-            hash_type: "data1".to_string(),
+            code_hash: "0xd51544784c699d3b4abcdadbe1ce6b2bfca80e049e919fafb19075c7e9977d96".to_string(),
+            hash_type: "data2".to_string(),
             outpoint: OutpointRef {
-                tx_hash: "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
+                tx_hash: "0xdfb96244db7602791567d3cf36dd273526042a2bec618055f01397d6164537e0".to_string(),
                 index: 0,
             },
         },
@@ -508,10 +508,10 @@ pub fn default_testnet_profile() -> ProfileConfig {
     contracts.insert(
         "sudt-meta".to_string(),
         ContractRef {
-            code_hash: "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
-            hash_type: "data1".to_string(),
+            code_hash: "0xbe6111bfc23e3fc893aff5593d82802677fe65d61305c66349d813db347fad83".to_string(),
+            hash_type: "data2".to_string(),
             outpoint: OutpointRef {
-                tx_hash: "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
+                tx_hash: "0x5572bf22963955ca96462437ba73f064209354f9476449f540a89a1f4462ca55".to_string(),
                 index: 0,
             },
         },
@@ -519,10 +519,10 @@ pub fn default_testnet_profile() -> ProfileConfig {
     contracts.insert(
         "xudt-meta".to_string(),
         ContractRef {
-            code_hash: "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
-            hash_type: "data1".to_string(),
+            code_hash: "0x6365972572e133e83e0311e2e527ba93b433cf6ad4d0494e4e4ffed26dec2c9a".to_string(),
+            hash_type: "data2".to_string(),
             outpoint: OutpointRef {
-                tx_hash: "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
+                tx_hash: "0xdfe369557dd66b5cb99b030b844e55a5782f4e4abb0c8b94264d51182c53e973".to_string(),
                 index: 0,
             },
         },
@@ -530,10 +530,10 @@ pub fn default_testnet_profile() -> ProfileConfig {
     contracts.insert(
         "always_success".to_string(),
         ContractRef {
-            code_hash: "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
-            hash_type: "data2".to_string(),
+            code_hash: "0xbb4469004225b39e983929db71fe2253cba1d49a76223e9e1d212cdca1f79f28".to_string(),
+            hash_type: "type".to_string(),
             outpoint: OutpointRef {
-                tx_hash: "0x0000000000000000000000000000000000000000000000000000000000000000".to_string(),
+                tx_hash: "0x1bb87da347a776a927ab6593e1e10304ca195f8e24279f039008d5e3115b1bf7".to_string(),
                 index: 0,
             },
         },
@@ -635,13 +635,25 @@ pub fn default_mainnet_profile() -> ProfileConfig {
     }
 }
 
-pub fn init_project<P: AsRef<Path>>(project_path: P, project_name: &str) -> Result<(), ConfigError> {
+pub fn init_project<P: AsRef<Path>>(project_path: P, project_name: &str, profile_name: &str) -> Result<(), ConfigError> {
     let path = project_path.as_ref();
 
     fs::create_dir_all(path.join("profiles"))?;
     fs::create_dir_all(path.join("artifacts"))?;
 
-    let config = default_config(project_name);
+    let mut config = default_config(project_name);
+    config.network.profile = profile_name.to_string();
+    config.contracts.source = match profile_name {
+        "testnet" => ContractSourceConfig::DeployedArtifacts {
+            scripts_json: "./artifacts/testnet-scripts.json".to_string(),
+        },
+        "mainnet" => ContractSourceConfig::DeployedArtifacts {
+            scripts_json: "./artifacts/mainnet-scripts.json".to_string(),
+        },
+        _ => ContractSourceConfig::DeployedArtifacts {
+            scripts_json: "./artifacts/devnet-scripts.json".to_string(),
+        },
+    };
     let config_yaml = serde_yaml::to_string(&config)?;
     fs::write(path.join("udtx.yaml"), config_yaml)?;
 
