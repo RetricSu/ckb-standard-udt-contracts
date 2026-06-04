@@ -1,0 +1,12 @@
+{
+  "cell_recipes": [
+    {
+      "name": "access-list",
+      "tx_hash": "0x6ffa23a11c7ca064b41f35372626a006fa09a5d2cf90c4abe45ce554bcc676d8",
+      "index": 0,
+      "occupied_capacity": 8277600000000,
+      "data_hash": "0xb194c8fe75a54bab8ceebcb80ac56dd680b4922d645959be6cdbd80131223ee2"
+    }
+  ],
+  "dep_group_recipes": []
+}

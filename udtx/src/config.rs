@@ -486,10 +486,10 @@ pub fn default_testnet_profile() -> ProfileConfig {
     contracts.insert(
         "xudt".to_string(),
         ContractRef {
-            code_hash: "0x65c66ceded17387a2ae5b3af1ce2125e4f04dd8fbf3756fb6e967c3899fe213f".to_string(),
+            code_hash: "0x9270a2c6baca3da69e4369187e93354756048b81476e6b937ce71ad86a183e5c".to_string(),
             hash_type: "data2".to_string(),
             outpoint: OutpointRef {
-                tx_hash: "0x1aaf2c4638e9af8002a2f3b5f36f8b9f4278f835f9d9187fec205afc74f3a8fc".to_string(),
+                tx_hash: "0xe7570355f5e41f6d4ecb3d5a9f360eed3a6542b2b93793be3e7d7d66436c1df2".to_string(),
                 index: 0,
             },
         },
@@ -497,10 +497,10 @@ pub fn default_testnet_profile() -> ProfileConfig {
     contracts.insert(
         "access_list".to_string(),
         ContractRef {
-            code_hash: "0xd51544784c699d3b4abcdadbe1ce6b2bfca80e049e919fafb19075c7e9977d96".to_string(),
+            code_hash: "0xb194c8fe75a54bab8ceebcb80ac56dd680b4922d645959be6cdbd80131223ee2".to_string(),
             hash_type: "data2".to_string(),
             outpoint: OutpointRef {
-                tx_hash: "0xdfb96244db7602791567d3cf36dd273526042a2bec618055f01397d6164537e0".to_string(),
+                tx_hash: "0x6ffa23a11c7ca064b41f35372626a006fa09a5d2cf90c4abe45ce554bcc676d8".to_string(),
                 index: 0,
             },
         },
@@ -508,10 +508,10 @@ pub fn default_testnet_profile() -> ProfileConfig {
     contracts.insert(
         "sudt-meta".to_string(),
         ContractRef {
-            code_hash: "0xbe6111bfc23e3fc893aff5593d82802677fe65d61305c66349d813db347fad83".to_string(),
+            code_hash: "0x40dee066dc42af4a6cd0b45448201c7372033983a5ea23e7337fd0ad393672f0".to_string(),
             hash_type: "data2".to_string(),
             outpoint: OutpointRef {
-                tx_hash: "0x5572bf22963955ca96462437ba73f064209354f9476449f540a89a1f4462ca55".to_string(),
+                tx_hash: "0xbed6c7c9cfc1b91b7e9cf7a14f19bd0279fcdc5b3aae1bf88535486c338c9125".to_string(),
                 index: 0,
             },
         },
@@ -519,10 +519,10 @@ pub fn default_testnet_profile() -> ProfileConfig {
     contracts.insert(
         "xudt-meta".to_string(),
         ContractRef {
-            code_hash: "0x6365972572e133e83e0311e2e527ba93b433cf6ad4d0494e4e4ffed26dec2c9a".to_string(),
+            code_hash: "0x2fe77f2d0d1eb8773b6c2af6767c49ae925cd16e8e15da502c94af6f7be445cf".to_string(),
             hash_type: "data2".to_string(),
             outpoint: OutpointRef {
-                tx_hash: "0xdfe369557dd66b5cb99b030b844e55a5782f4e4abb0c8b94264d51182c53e973".to_string(),
+                tx_hash: "0x4f307922214d0e4b99039328a16c5c4dc617e67b062500744901e98fd483d06b".to_string(),
                 index: 0,
             },
         },

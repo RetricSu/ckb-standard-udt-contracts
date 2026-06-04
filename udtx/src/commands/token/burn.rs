@@ -1,8 +1,12 @@
 use crate::config::{ProfileConfig, TokenKind, UdtxConfig};
+use crate::commands::token::resolve::{
+    append_missing_cell_deps, build_profile_cell_dep_resolver, resolve_bound_token_context_deps,
+    resolve_bound_udt_type_script_for_owner,
+};
 use crate::error::TokenCliError;
 use crate::keys::KeyManager;
 use crate::rpc::RpcClient;
-use ckb_sdk::traits::{CellCollector, DefaultCellCollector, DefaultCellDepResolver, DefaultHeaderDepResolver, DefaultTransactionDependencyProvider, Signer, SignerError};
+use ckb_sdk::traits::{DefaultCellCollector, DefaultHeaderDepResolver, DefaultTransactionDependencyProvider, Signer, SignerError};
 use ckb_sdk::tx_builder::{CapacityBalancer, CapacityProvider, TransferAction, TxBuilder};
 use ckb_sdk::tx_builder::udt::{UdtTargetReceiver, UdtTransferBuilder};
 use ckb_sdk::types::ScriptId;
@@ -80,24 +84,19 @@ pub async fn burn_token(
     let amount_u128 = amount.parse::<u128>()
         .map_err(|e| TokenCliError::TxBuild { message: format!("invalid amount: {}", e) })?;
 
-    let contract_code_hash = ckb_types::packed::Byte32::from_slice(
-        &hex::decode(contract.code_hash.trim_start_matches("0x"))
-            .map_err(|e| TokenCliError::TxBuild { message: format!("invalid code hash: {}", e) })?
-    ).map_err(|e| TokenCliError::TxBuild { message: format!("invalid code hash bytes: {}", e) })?;
-
-    let lock_script_hash: [u8; 32] = account.lock_script.calc_script_hash().unpack();
-
-    let udt_type_script = ckb_types::packed::Script::new_builder()
-        .code_hash(contract_code_hash)
-        .hash_type(match contract.hash_type.as_str() {
-            "type" => ckb_types::core::ScriptHashType::Type,
-            "data" => ckb_types::core::ScriptHashType::Data,
-            "data1" => ckb_types::core::ScriptHashType::Data1,
-            "data2" => ckb_types::core::ScriptHashType::Data2,
-            _ => ckb_types::core::ScriptHashType::Data,
-        })
-        .args(ckb_types::packed::Bytes::from(lock_script_hash.to_vec()))
-        .build();
+    let rpc_url = &profile.rpc_url;
+    let client = RpcClient::new(rpc_url)?;
+    let udt_type_script = resolve_bound_udt_type_script_for_owner(
+        &client,
+        profile,
+        kind,
+        &account.lock_script,
+        contract,
+        Some(&config.token.symbol),
+    )
+    .await?;
+    let mut meta_type_hash = [0u8; 32];
+    meta_type_hash.copy_from_slice(udt_type_script.args().raw_data().as_ref());
 
     // Burn address: secp256k1-blake160 with all-zero args (unspendable)
     let burn_code_hash = Byte32::from_slice(
@@ -124,7 +123,6 @@ pub async fn burn_token(
         receivers: vec![receiver],
     };
 
-    let rpc_url = &profile.rpc_url;
     let mut cell_collector = DefaultCellCollector::new(rpc_url);
     cell_collector.check_ckb_chain().map_err(|e| TokenCliError::TxBuild {
         message: format!("cell collector check failed: {}", e),
@@ -137,8 +135,7 @@ pub async fn burn_token(
         .ok_or_else(|| TokenCliError::Rpc { message: "genesis block not found".into() })?;
 
     let genesis_block: ckb_types::core::BlockView = genesis_block.into();
-    let cell_dep_resolver = DefaultCellDepResolver::from_genesis(&genesis_block)
-        .map_err(|e| TokenCliError::TxBuild { message: format!("resolve cell deps failed: {}", e) })?;
+    let cell_dep_resolver = build_profile_cell_dep_resolver(profile, &genesis_block)?;
 
     let header_dep_resolver = DefaultHeaderDepResolver::new(rpc_url);
     let tx_dep_provider = DefaultTransactionDependencyProvider::new(rpc_url, 10);
@@ -152,7 +149,7 @@ pub async fn burn_token(
         placeholder_witness,
     )]);
 
-    let balancer = CapacityBalancer::new_with_provider(1000, capacity_provider);
+    let balancer = CapacityBalancer::new_with_provider(3000, capacity_provider);
 
     let signer: Box<dyn Signer> = Box::new(KeyManagerSigner::new(key_manager.clone()));
     let unlocker: Box<dyn ckb_sdk::unlock::ScriptUnlocker> = Box::new(SecpSighashUnlocker::from(signer));
@@ -177,6 +174,21 @@ pub async fn burn_token(
             message: format!("build tx failed: {}", e),
         })?;
 
+    let extra_deps = resolve_bound_token_context_deps(
+        &client,
+        profile,
+        kind,
+        &meta_type_hash,
+        matches!(kind, TokenKind::Xudt)
+            && config
+                .access_control
+                .as_ref()
+                .map(|ac| ac.enabled)
+                .unwrap_or(false),
+    )
+    .await?;
+    let balanced_tx = append_missing_cell_deps(balanced_tx, &extra_deps);
+
     let (tx, _not_unlocked) = ckb_sdk::tx_builder::unlock_tx_async(
         balanced_tx,
         &tx_dep_provider,
@@ -198,7 +210,6 @@ pub async fn burn_token(
         return Ok(());
     }
 
-    let client = RpcClient::new(rpc_url)?;
     let hash = client.send_transaction(tx).await?;
     println!("Token burn submitted.");
     println!("  Amount: {}", amount_u128);
