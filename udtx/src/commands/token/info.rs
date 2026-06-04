@@ -1,4 +1,5 @@
 use crate::config::{ProfileConfig, TokenKind, UdtxConfig};
+use crate::commands::token::resolve::resolve_bound_udt_type_script_for_owner;
 use crate::error::TokenCliError;
 use crate::keys::KeyManager;
 use crate::rpc::RpcClient;
@@ -31,26 +32,17 @@ pub async fn token_info(
         )
     ))?;
 
-    let contract_code_hash = ckb_types::packed::Byte32::from_slice(
-        &hex::decode(contract.code_hash.trim_start_matches("0x"))
-            .map_err(|e| TokenCliError::TxBuild { message: format!("invalid code hash: {}", e) })?
-    ).map_err(|e| TokenCliError::TxBuild { message: format!("invalid code hash bytes: {}", e) })?;
-
-    let lock_script_hash: [u8; 32] = account.lock_script.calc_script_hash().unpack();
-
-    let udt_type_script = ckb_types::packed::Script::new_builder()
-        .code_hash(contract_code_hash)
-        .hash_type(match contract.hash_type.as_str() {
-            "type" => ckb_types::core::ScriptHashType::Type,
-            "data" => ckb_types::core::ScriptHashType::Data,
-            "data1" => ckb_types::core::ScriptHashType::Data1,
-            "data2" => ckb_types::core::ScriptHashType::Data2,
-            _ => ckb_types::core::ScriptHashType::Data,
-        })
-        .args(ckb_types::packed::Bytes::from(lock_script_hash.to_vec()))
-        .build();
-
     let client = RpcClient::new(&profile.rpc_url)?;
+    let udt_type_script = resolve_bound_udt_type_script_for_owner(
+        &client,
+        profile,
+        kind,
+        &account.lock_script,
+        contract,
+        Some(&config.token.symbol),
+    )
+    .await?;
+    let lock_script_hash: [u8; 32] = account.lock_script.calc_script_hash().unpack();
 
     let search_key = SearchKey {
         script: udt_type_script.clone().into(),

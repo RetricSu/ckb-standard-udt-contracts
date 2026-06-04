@@ -6,11 +6,29 @@ system_scripts:
     code_hash: 0x9bd7e06f3ecf4be0f2fcd2188b23f1b9fcc88e5d4b65a8637b17723bbda3cce8
     hash_type: type
 contracts:
-  access_list:
-    code_hash: 0xd51544784c699d3b4abcdadbe1ce6b2bfca80e049e919fafb19075c7e9977d96
+  sudt:
+    code_hash: 0x8d8f48cbbb5c734abb029aee26685faa3ecd7e221faaba6574a547069e997308
     hash_type: data2
     outpoint:
-      tx_hash: 0xdfb96244db7602791567d3cf36dd273526042a2bec618055f01397d6164537e0
+      tx_hash: 0xa0d1deee9316b79320108a3c81402d672eef36efaa95d175826020121fb4174f
+      index: 0
+  xudt:
+    code_hash: 0x9270a2c6baca3da69e4369187e93354756048b81476e6b937ce71ad86a183e5c
+    hash_type: data2
+    outpoint:
+      tx_hash: 0xe7570355f5e41f6d4ecb3d5a9f360eed3a6542b2b93793be3e7d7d66436c1df2
+      index: 0
+  sudt-meta:
+    code_hash: 0x40dee066dc42af4a6cd0b45448201c7372033983a5ea23e7337fd0ad393672f0
+    hash_type: data2
+    outpoint:
+      tx_hash: 0xbed6c7c9cfc1b91b7e9cf7a14f19bd0279fcdc5b3aae1bf88535486c338c9125
+      index: 0
+  access_list:
+    code_hash: 0xb194c8fe75a54bab8ceebcb80ac56dd680b4922d645959be6cdbd80131223ee2
+    hash_type: data2
+    outpoint:
+      tx_hash: 0x6ffa23a11c7ca064b41f35372626a006fa09a5d2cf90c4abe45ce554bcc676d8
       index: 0
   always_success:
     code_hash: 0x3b521cc4b552f109d092d8cc468a8048acb53c5952dbe769d2b2f9cf6e47f7f1
@@ -18,27 +36,9 @@ contracts:
     outpoint:
       tx_hash: 0xb4f171c9c9caf7401f54a8e56225ae21d95032150a87a4678eac3f66a3137b93
       index: 0
-  sudt-meta:
-    code_hash: 0xbe6111bfc23e3fc893aff5593d82802677fe65d61305c66349d813db347fad83
-    hash_type: data2
-    outpoint:
-      tx_hash: 0x5572bf22963955ca96462437ba73f064209354f9476449f540a89a1f4462ca55
-      index: 0
-  sudt:
-    code_hash: 0x8d8f48cbbb5c734abb029aee26685faa3ecd7e221faaba6574a547069e997308
-    hash_type: data2
-    outpoint:
-      tx_hash: 0xa0d1deee9316b79320108a3c81402d672eef36efaa95d175826020121fb4174f
-      index: 0
   xudt-meta:
-    code_hash: 0x6365972572e133e83e0311e2e527ba93b433cf6ad4d0494e4e4ffed26dec2c9a
+    code_hash: 0x2fe77f2d0d1eb8773b6c2af6767c49ae925cd16e8e15da502c94af6f7be445cf
     hash_type: data2
     outpoint:
-      tx_hash: 0xdfe369557dd66b5cb99b030b844e55a5782f4e4abb0c8b94264d51182c53e973
-      index: 0
-  xudt:
-    code_hash: 0x65c66ceded17387a2ae5b3af1ce2125e4f04dd8fbf3756fb6e967c3899fe213f
-    hash_type: data2
-    outpoint:
-      tx_hash: 0x1aaf2c4638e9af8002a2f3b5f36f8b9f4278f835f9d9187fec205afc74f3a8fc
+      tx_hash: 0x4f307922214d0e4b99039328a16c5c4dc617e67b062500744901e98fd483d06b
       index: 0

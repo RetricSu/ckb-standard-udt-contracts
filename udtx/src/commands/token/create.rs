@@ -1,5 +1,5 @@
 use crate::config::{AccessMode, SupplyMode, TokenKind, UdtxConfig, ProfileConfig};
-use crate::error::{tx_build_error, TokenCliError};
+use crate::error::TokenCliError;
 use crate::keys::KeyManager;
 use crate::rpc::RpcClient;
 use ckb_sdk::traits::{CellCollector, CellDepResolver, CellQueryOptions, DefaultCellCollector, DefaultCellDepResolver, DefaultHeaderDepResolver, DefaultTransactionDependencyProvider, Signer, SignerError, ValueRangeOption};
@@ -11,7 +11,10 @@ use ckb_types::core::{Capacity, TransactionBuilder};
 use ckb_types::packed::{CellDep, CellInput, CellOutput, OutPoint, WitnessArgs};
 use ckb_types::prelude::*;
 use std::collections::HashMap;
-use standard_udt_types::metadata::{SudtMeta, XudtMeta, Authority, AuthorityType, CONFIG_SUPPLY_TRACKED, CONFIG_ACCESS_ENABLED, CONFIG_ACCESS_WHITELIST};
+use standard_udt_types::metadata::{
+    AccessListRange, AccessListShard, Authority, AuthorityType, SudtMeta, XudtMeta,
+    CONFIG_ACCESS_ENABLED, CONFIG_ACCESS_WHITELIST, CONFIG_SUPPLY_TRACKED,
+};
 
 struct CombinedCellDepResolver {
     genesis: DefaultCellDepResolver,
@@ -361,6 +364,98 @@ pub async fn create_token(
         .as_u64();
     let udt_output = udt_output.as_builder().capacity(udt_occupied).build();
 
+    let mut access_list_type_script = None;
+    let mut access_list_output = None;
+    let mut access_list_data_bytes = None;
+
+    if matches!(kind, TokenKind::Xudt)
+        && config
+            .access_control
+            .as_ref()
+            .is_some_and(|ac| ac.enabled)
+    {
+        let access_list_contract = profile.contracts.get("access_list").ok_or_else(|| {
+            TokenCliError::Config(crate::config::ConfigError::Validation(
+                "Contract reference for 'access_list' not found in profile (required when access_control.enabled=true)".into(),
+            ))
+        })?;
+
+        let access_list_hash_type = match access_list_contract.hash_type.as_str() {
+            "type" => ckb_types::core::ScriptHashType::Type,
+            "data" => ckb_types::core::ScriptHashType::Data,
+            "data1" => ckb_types::core::ScriptHashType::Data1,
+            "data2" => ckb_types::core::ScriptHashType::Data2,
+            _ => ckb_types::core::ScriptHashType::Data,
+        };
+
+        if access_list_hash_type != ckb_types::core::ScriptHashType::Data2 {
+            return Err(TokenCliError::TxBuild {
+                message: format!(
+                    "access_list hash_type must be data2, got '{}'",
+                    access_list_contract.hash_type
+                ),
+            });
+        }
+
+        let access_list_code_hash = ckb_types::packed::Byte32::from_slice(
+            &hex::decode(access_list_contract.code_hash.trim_start_matches("0x")).map_err(|e| {
+                TokenCliError::TxBuild {
+                    message: format!("invalid access_list code hash: {}", e),
+                }
+            })?,
+        )
+        .map_err(|e| TokenCliError::TxBuild {
+            message: format!("invalid access_list code hash bytes: {}", e),
+        })?;
+
+        let access_script = ckb_types::packed::Script::new_builder()
+            .code_hash(access_list_code_hash)
+            .hash_type(access_list_hash_type)
+            .args(Bytes::from(meta_type_hash.to_vec()).pack())
+            .build();
+
+        let mut access_entries = Vec::<[u8; 32]>::new();
+        if let Some(ac) = config.access_control.as_ref() {
+            access_entries.reserve(ac.addresses.len());
+            for address in &ac.addresses {
+                let lock_script = crate::keys::address_to_lock_script(address, profile)?;
+                let lock_hash: [u8; 32] = lock_script.calc_script_hash().unpack();
+                access_entries.push(lock_hash);
+            }
+        }
+        access_entries.sort();
+        access_entries.dedup();
+
+        let shard = AccessListShard {
+            range: AccessListRange {
+                start: [0u8; 32],
+                end: [0xffu8; 32],
+            },
+            entries: access_entries,
+        };
+
+        let shard_data = Bytes::from(shard.to_bytes().map_err(|e| TokenCliError::TxBuild {
+            message: format!("build access list shard bytes failed: {:?}", e),
+        })?);
+
+        let shard_output = CellOutput::new_builder()
+            .lock(always_success_lock.clone())
+            .type_(Some(access_script.clone()).pack())
+            .build();
+        let shard_occupied = shard_output
+            .occupied_capacity(Capacity::bytes(shard_data.len()).unwrap())
+            .unwrap()
+            .as_u64();
+        let shard_output = shard_output
+            .as_builder()
+            .capacity(shard_occupied)
+            .build();
+
+        access_list_type_script = Some(access_script);
+        access_list_output = Some(shard_output);
+        access_list_data_bytes = Some(shard_data);
+    }
+
     // Resolve cell deps
     let owner_cell_dep = cell_dep_resolver
         .resolve(&account.lock_script)
@@ -389,13 +484,32 @@ pub async fn create_token(
     cell_deps.insert(udt_cell_dep.clone(), ());
     cell_deps.insert(meta_cell_dep.clone(), ());
     cell_deps.insert(always_success_cell_dep.clone(), ());
+
+    if let Some(access_script) = access_list_type_script.as_ref() {
+        let access_list_cell_dep = cell_dep_resolver
+            .resolve(access_script)
+            .ok_or_else(|| TokenCliError::TxBuild {
+                message: "resolve access_list cell dep failed".into(),
+            })?;
+        cell_deps.insert(access_list_cell_dep, ());
+    }
+
     let cell_deps_vec: Vec<CellDep> = cell_deps.into_iter().map(|(dep, _)| dep).collect();
+
+    let mut outputs = vec![meta_output, udt_output];
+    let mut outputs_data = vec![meta_data_bytes.pack(), udt_data_bytes.pack()];
+    if let Some(shard_output) = access_list_output {
+        outputs.push(shard_output);
+    }
+    if let Some(shard_data) = access_list_data_bytes {
+        outputs_data.push(shard_data.pack());
+    }
 
     let base_tx = TransactionBuilder::default()
         .set_cell_deps(cell_deps_vec)
         .set_inputs(inputs)
-        .set_outputs(vec![meta_output, udt_output])
-        .set_outputs_data(vec![meta_data_bytes.pack(), udt_data_bytes.pack()])
+        .set_outputs(outputs)
+        .set_outputs_data(outputs_data)
         .build();
 
     let placeholder_witness = WitnessArgs::new_builder()

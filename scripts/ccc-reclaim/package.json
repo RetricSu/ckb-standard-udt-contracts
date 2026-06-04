@@ -1,0 +1,9 @@
+{
+  "name": "ccc-reclaim-tools",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "dependencies": {
+    "@ckb-ccc/core": "^1.6.1"
+  }
+}

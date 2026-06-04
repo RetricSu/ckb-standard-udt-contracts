@@ -82,7 +82,7 @@ fn validate_group_output_locks() -> Result<(), Error> {
             Ok(lock) => {
                 let code_hash: [u8; 32] = lock.code_hash().unpack();
                 let hash_type = lock.hash_type();
-                let is_valid_hash_type = hash_type == ScriptHashType::Data2.into() || hash_type == ScriptHashType::Type.into();
+                let is_valid_hash_type = hash_type == ScriptHashType::Data2.into() || hash_type == ScriptHashType::Data1.into() || hash_type == ScriptHashType::Type.into();
                 if !is_valid_hash_type
                     || !is_allowed_always_success_lock_code_hash(&code_hash)
                 {
