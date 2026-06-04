@@ -267,22 +267,25 @@ pub async fn resolve_bound_udt_type_script_for_owner(
 
     let mut candidate_vec: Vec<([u8; 32], u64)> = candidates.into_iter().collect();
 
-    if candidate_vec.len() > 1 {
-        if let Some(symbol) = symbol_hint {
-            let mut filtered = Vec::new();
-            for (hash, height) in &candidate_vec {
-                if resolve_metadata_symbol_for_meta_hash(client, profile, kind, hash)
-                    .await?
-                    .as_deref()
-                    == Some(symbol)
-                {
-                    filtered.push((*hash, *height));
-                }
-            }
-            if !filtered.is_empty() {
-                candidate_vec = filtered;
+    if let Some(symbol) = symbol_hint {
+        let mut filtered = Vec::new();
+        for (hash, height) in &candidate_vec {
+            if resolve_metadata_symbol_for_meta_hash(client, profile, kind, hash)
+                .await?
+                .as_deref()
+                == Some(symbol)
+            {
+                filtered.push((*hash, *height));
             }
         }
+
+        if filtered.is_empty() {
+            return Err(TokenCliError::TxBuild {
+                message: format!("no token cells found matching the symbol '{}'", symbol),
+            });
+        }
+
+        candidate_vec = filtered;
     }
 
     candidate_vec.sort_by_key(|(_, height)| *height);

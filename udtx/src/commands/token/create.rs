@@ -495,16 +495,6 @@ pub async fn create_token(
     }
 
     let cell_deps_vec: Vec<CellDep> = cell_deps.into_iter().map(|(dep, _)| dep).collect();
-    
-    println!("DEBUG: Cell deps count: {}", cell_deps_vec.len());
-    for (i, dep) in cell_deps_vec.iter().enumerate() {
-        println!("DEBUG: Cell dep {}: tx_hash={}, index={}, dep_type={:?}", 
-            i,
-            hex::encode(dep.out_point().tx_hash().as_slice()),
-            ckb_types::prelude::Unpack::<u32>::unpack(&dep.out_point().index()),
-            dep.dep_type()
-        );
-    }
 
     let mut outputs = vec![meta_output, udt_output];
     let mut outputs_data = vec![meta_data_bytes.pack(), udt_data_bytes.pack()];
@@ -571,18 +561,6 @@ pub async fn create_token(
     .map_err(|e| TokenCliError::TxBuild {
         message: format!("unlock tx failed: {}", e),
     })?;
-    
-    println!("DEBUG: Final tx cell deps count: {}", tx.cell_deps().len());
-    for (i, dep) in tx.cell_deps().into_iter().enumerate() {
-        println!("DEBUG: Final cell dep {}: tx_hash={}, index={}, dep_type={:?}", 
-            i,
-            hex::encode(dep.out_point().tx_hash().as_slice()),
-            ckb_types::prelude::Unpack::<u32>::unpack(&dep.out_point().index()),
-            dep.dep_type()
-        );
-    }
-    println!("DEBUG: Final tx inputs count: {}", tx.inputs().len());
-    println!("DEBUG: Final tx outputs count: {}", tx.outputs().len());
 
     if dry_run {
         println!("Token Issue Preview");
