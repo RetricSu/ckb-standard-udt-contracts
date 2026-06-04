@@ -167,6 +167,116 @@ udtx doctor
 udtx token issue --token-type xudt --name "My Token" --symbol "MTK" --dry-run
 ```
 
+#### 测试网 xUDT 实操（含 access list）
+
+下面这组命令是推荐流程，适合第一次在 testnet 上跑通 xUDT：
+
+```bash
+# 1) 初始化 testnet 工程
+udtx init --name xudt-testnet-demo --network testnet
+
+# 2) 准备 owner 私钥（建议使用环境变量，不写入配置文件）
+export OWNER_PRIVKEY=0x...
+
+# 3) 先做环境检查
+udtx env check
+udtx doctor
+
+# 4) 先 dry-run，再正式 issue
+udtx token issue \
+  --token-type xudt \
+  --name "My XUDT" \
+  --symbol "MXD" \
+  --decimals 8 \
+  --supply 100000 \
+  --owner owner \
+  --dry-run
+
+udtx token issue \
+  --token-type xudt \
+  --name "My XUDT" \
+  --symbol "MXD" \
+  --decimals 8 \
+  --supply 100000 \
+  --owner owner
+
+# 5) 查询 owner 的 xUDT 信息
+udtx token info --token-type xudt --owner owner
+
+# 6) 查看/修改 access list
+udtx access list
+udtx access add --address ckt1...
+udtx access remove --address ckt1...
+udtx access list
+```
+
+如果你用 `offckb` 的第一个测试账户做 owner，可直接查看账户列表后手动复制第一个账户私钥到 `OWNER_PRIVKEY`：
+
+```bash
+offckb accounts
+export OWNER_PRIVKEY=0x<account-0-private-key>
+```
+
+#### 常见模式命令演示
+
+以下是最常用的三种 `access_control` 模式（在 `udtx.yaml` 中调整）：
+
+1) `enabled: false`（关闭访问控制）
+
+```yaml
+access_control:
+  enabled: false
+```
+
+```bash
+udtx token issue --token-type xudt --name "Open Token" --symbol "OPEN" --supply 100000 --owner owner
+udtx token transfer --token-type xudt --to ckt1... --amount 100 --owner owner
+```
+
+2) `enabled: true` + `mode: blacklist`（黑名单）
+
+```yaml
+access_control:
+  enabled: true
+  mode: blacklist
+  addresses:
+    - ckt1blacklisted...
+```
+
+```bash
+# 维护黑名单
+udtx access list
+udtx access add --address ckt1newblocked...
+udtx access remove --address ckt1newblocked...
+
+# 业务命令照常执行
+udtx token info --token-type xudt --owner owner
+udtx token transfer --token-type xudt --to ckt1... --amount 100 --owner owner --dry-run
+```
+
+3) `enabled: true` + `mode: whitelist`（白名单）
+
+```yaml
+access_control:
+  enabled: true
+  mode: whitelist
+  addresses:
+    - ckt1allowed...
+```
+
+```bash
+# 维护白名单
+udtx access list
+udtx access add --address ckt1newallowed...
+udtx access remove --address ckt1newallowed...
+
+# 常见操作
+udtx token transfer --token-type xudt --to ckt1allowed... --amount 100 --owner owner --dry-run
+udtx token burn --token-type xudt --amount 10 --owner owner --dry-run
+```
+
+> 建议：每次发送交易前先跑 `--dry-run`，尤其是刚切换 `blacklist/whitelist` 模式时。
+
 ### 5. 环境检查
 
 ```bash
